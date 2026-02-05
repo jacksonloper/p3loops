@@ -1,6 +1,6 @@
 # P3 Loops Path Editor
 
-A React/Vite web application for creating and managing non-crossing paths on a bowed square with edge identifications.
+A React/Vite web application for creating and managing non-crossing paths on a bowed square with edge identifications.  View live at https://main--p3loops.netlify.app/
 
 ## Features
 
