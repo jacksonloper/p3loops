@@ -205,3 +205,91 @@ export function getNextEdgeStartPoints(edges) {
     { side: identifiedSide, t: endPoint.t }
   ];
 }
+
+/**
+ * Autospace: Redistribute all points evenly within each side.
+ * For each side, collect all unique t values used by edges, sort them, 
+ * and redistribute them evenly from 0 to 1 (with padding from edges).
+ */
+export function autospaceEdges(edges) {
+  if (edges.length === 0) return [];
+  
+  // Collect all unique t values per side (using normalized points)
+  const pointsBySide = { north: new Set(), east: new Set(), south: new Set(), west: new Set() };
+  
+  for (const edge of edges) {
+    // Normalize points to their canonical sides
+    const fromNorm = normalizePoint(edge.from);
+    const toNorm = normalizePoint(edge.to);
+    
+    pointsBySide[fromNorm.side].add(fromNorm.t);
+    pointsBySide[toNorm.side].add(toNorm.t);
+  }
+  
+  // Create mapping from old t to new t for each side
+  const tMapping = {};
+  for (const side of SIDES) {
+    const uniqueTs = Array.from(pointsBySide[side]).sort((a, b) => a - b);
+    const count = uniqueTs.length;
+    
+    if (count === 0) {
+      tMapping[side] = {};
+      continue;
+    }
+    
+    // Distribute evenly with padding (e.g., if 3 points, put at 0.25, 0.5, 0.75)
+    const mapping = {};
+    for (let i = 0; i < count; i++) {
+      const oldT = uniqueTs[i];
+      const newT = (i + 1) / (count + 1);
+      mapping[oldT.toFixed(6)] = newT;
+    }
+    tMapping[side] = mapping;
+  }
+  
+  // Apply mapping to all edges
+  const newEdges = edges.map(edge => {
+    const fromNorm = normalizePoint(edge.from);
+    const toNorm = normalizePoint(edge.to);
+    
+    const newFromT = tMapping[fromNorm.side][fromNorm.t.toFixed(6)] ?? edge.from.t;
+    const newToT = tMapping[toNorm.side][toNorm.t.toFixed(6)] ?? edge.to.t;
+    
+    return {
+      from: { side: edge.from.side, t: newFromT },
+      to: { side: edge.to.side, t: newToT }
+    };
+  });
+  
+  return newEdges;
+}
+
+/**
+ * Find a random valid position for the next edge.
+ * Samples random points on all sides and tests if an edge to that point would be valid.
+ * Returns null if no valid position found after many attempts.
+ */
+export function findValidRandomEdge(edges, startPoint) {
+  if (!startPoint) return null;
+  
+  const maxAttempts = 1000;
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // Pick a random side and random t value
+    const randomSide = SIDES[Math.floor(Math.random() * SIDES.length)];
+    const randomT = Math.random();
+    
+    const candidateEdge = {
+      from: startPoint,
+      to: { side: randomSide, t: randomT }
+    };
+    
+    // Check if this would be a valid edge
+    const validation = canAddEdge(candidateEdge, edges);
+    if (validation.valid) {
+      return candidateEdge;
+    }
+  }
+  
+  return null; // No valid position found
+}

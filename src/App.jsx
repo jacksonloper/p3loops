@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import './App.css'
 import BowedSquare from './components/BowedSquare.jsx'
-import { validatePath } from './utils/pathLogic.js'
+import { validatePath, autospaceEdges, findValidRandomEdge, getNextEdgeStartPoints } from './utils/pathLogic.js'
 
 function getMessageStyleClass(message) {
   const errorIndicators = ['Error', 'Invalid', 'Failed', 'Cannot']
@@ -72,6 +72,39 @@ function PathEditorApp() {
     setValidationMessage(errorMessage)
   }, [])
 
+  const handleAutospace = useCallback(() => {
+    if (pathEdges.length === 0) return
+    const newEdges = autospaceEdges(pathEdges)
+    setPathEdges(newEdges)
+    setActiveStartPoint(null)
+    setValidationMessage('Points redistributed evenly!')
+  }, [pathEdges])
+
+  const handleAutoplace = useCallback(() => {
+    if (pathEdges.length === 0) {
+      setValidationMessage('Cannot autoplace: add at least one edge first')
+      return
+    }
+    
+    // Get the start point for the next edge (complementary of last endpoint)
+    const startPoints = getNextEdgeStartPoints(pathEdges)
+    if (!startPoints || startPoints.length === 0) {
+      setValidationMessage('Cannot autoplace: no valid start point')
+      return
+    }
+    
+    const startPoint = startPoints[0]
+    const newEdge = findValidRandomEdge(pathEdges, startPoint)
+    
+    if (newEdge) {
+      setPathEdges(currentEdges => [...currentEdges, newEdge])
+      setActiveStartPoint(null)
+      setValidationMessage('Edge placed randomly!')
+    } else {
+      setValidationMessage('Cannot autoplace: no valid position found')
+    }
+  }, [pathEdges])
+
   const currentPathJson = JSON.stringify(pathEdges, null, 2)
 
   return (
@@ -122,6 +155,23 @@ function PathEditorApp() {
               className="control-btn secondary-btn"
             >
               {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
+            </button>
+          </div>
+
+          <div className="button-row">
+            <button 
+              onClick={handleAutospace}
+              disabled={pathEdges.length === 0}
+              className="control-btn primary-btn"
+            >
+              Autospace
+            </button>
+            <button 
+              onClick={handleAutoplace}
+              disabled={pathEdges.length === 0}
+              className="control-btn primary-btn"
+            >
+              Autoplace Next
             </button>
           </div>
 
