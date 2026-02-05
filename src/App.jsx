@@ -4,7 +4,7 @@ import BowedSquare from './components/BowedSquare.jsx'
 import { validatePath } from './utils/pathLogic.js'
 
 function getMessageStyleClass(message) {
-  const errorIndicators = ['Error', 'Invalid', 'Failed']
+  const errorIndicators = ['Error', 'Invalid', 'Failed', 'Cannot']
   const isError = errorIndicators.some(indicator => message.includes(indicator))
   return isError ? 'error-message' : 'success-message'
 }
@@ -66,6 +66,10 @@ function PathEditorApp() {
     })
   }, [pathEdges])
 
+  const handleEdgeError = useCallback((errorMessage) => {
+    setValidationMessage(errorMessage)
+  }, [])
+
   const currentPathJson = JSON.stringify(pathEdges, null, 2)
 
   return (
@@ -80,9 +84,9 @@ function PathEditorApp() {
           <BowedSquare
             edges={pathEdges}
             onAddEdge={appendEdgeToPath}
-            onDeleteLastEdge={removeLastEdge}
             selectedStartPoint={activeStartPoint}
             onSelectStartPoint={setActiveStartPoint}
+            onError={handleEdgeError}
           />
         </section>
 

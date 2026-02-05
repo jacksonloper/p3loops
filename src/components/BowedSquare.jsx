@@ -10,7 +10,7 @@ import {
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints } from '../utils/pathLogic.js';
 import './BowedSquare.css';
 
-function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint }) {
+function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError }) {
   const [hoverPoint, setHoverPoint] = useState(null);
   
   const size = getSize();
@@ -65,7 +65,8 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint 
         
         // Check if it's a valid edge (not going to the same point)
         if (pointsAreEqual(selectedStartPoint, clickedPoint)) {
-          alert('Cannot create an edge to the same point');
+          onError('Cannot create an edge to the same point');
+          onSelectStartPoint(null);
           return;
         }
         
@@ -107,14 +108,15 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint 
       // Check if valid
       const validation = canAddEdge(newEdge, edges);
       if (!validation.valid) {
-        alert(validation.error);
+        onError(validation.error);
+        onSelectStartPoint(null);
         return;
       }
       
       onAddEdge(newEdge);
       onSelectStartPoint(null);
     }
-  }, [edges, selectedStartPoint, onAddEdge, onSelectStartPoint, size, padding]);
+  }, [edges, selectedStartPoint, onAddEdge, onSelectStartPoint, onError, size, padding]);
   
   // Render the edges
   const edgeElements = edges.map((edge, index) => {
