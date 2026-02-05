@@ -42,7 +42,7 @@ export function pointsAreEqual(p1, p2) {
 // Configuration for the bowed square
 const SIZE = 300;
 const CENTER = SIZE / 2;
-const BOW = 20; // How much the sides bow out
+const BOW = 60; // How much the sides bow out (increased for more circular appearance)
 
 // Get the (x, y) coordinates for a point on a side at percentage t
 export function getPointOnSide(side, t) {

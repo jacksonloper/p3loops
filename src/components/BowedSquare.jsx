@@ -5,7 +5,8 @@ import {
   getSize,
   getBow,
   findClosestPointOnBoundary,
-  pointsAreEqual
+  pointsAreEqual,
+  getIdentifiedSide
 } from '../utils/geometry.js';
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints } from '../utils/pathLogic.js';
 import './BowedSquare.css';
@@ -273,15 +274,35 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
     />
   ) : null;
   
-  // Render hover point
-  const hoverElement = hoverPoint ? (
-    <circle
-      cx={getPointOnSide(hoverPoint.side, hoverPoint.t).x}
-      cy={getPointOnSide(hoverPoint.side, hoverPoint.t).y}
-      r="6"
-      className="hover-point"
-    />
-  ) : null;
+  // Render hover point and its complementary version
+  const hoverElements = [];
+  if (hoverPoint) {
+    const hoverCoords = getPointOnSide(hoverPoint.side, hoverPoint.t);
+    const complementarySide = getIdentifiedSide(hoverPoint.side);
+    const complementaryCoords = getPointOnSide(complementarySide, hoverPoint.t);
+    
+    // Primary hover point
+    hoverElements.push(
+      <circle
+        key="hover-primary"
+        cx={hoverCoords.x}
+        cy={hoverCoords.y}
+        r="6"
+        className="hover-point"
+      />
+    );
+    
+    // Complementary hover point (on the identified side)
+    hoverElements.push(
+      <circle
+        key="hover-complementary"
+        cx={complementaryCoords.x}
+        cy={complementaryCoords.y}
+        r="6"
+        className="hover-point-complementary"
+      />
+    );
+  }
   
   // Preview line from selected start to hover
   const previewLine = selectedStartPoint && hoverPoint ? (
@@ -380,8 +401,8 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
         {/* Preview line */}
         {previewLine}
         
-        {/* Hover point */}
-        {hoverElement}
+        {/* Hover points (both primary and complementary) */}
+        {hoverElements}
       </svg>
       
       <div className="square-instructions">
@@ -392,7 +413,7 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
           <p>Now click on another point to create your first edge.</p>
         )}
         {edges.length > 0 && !selectedStartPoint && (
-          <p>Click on one of the highlighted points to continue the path, or use the controls below.</p>
+          <p>Click on the highlighted point to continue the path, or use the controls below.</p>
         )}
         {edges.length > 0 && selectedStartPoint && (
           <p>Click on a point to create the next edge. The edge must not cross existing edges.</p>

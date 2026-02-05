@@ -190,7 +190,9 @@ export function canAddEdge(newEdge, existingEdges) {
   return { valid: true };
 }
 
-// Get the two possible starting points for a new edge (the two versions of the last endpoint)
+// Get the starting point for a new edge (the complementary/identified version of the last endpoint)
+// If the last edge ended on north, the next edge must start from east (and vice versa)
+// If the last edge ended on south, the next edge must start from west (and vice versa)
 export function getNextEdgeStartPoints(edges) {
   if (edges.length === 0) return null;
   
@@ -198,8 +200,8 @@ export function getNextEdgeStartPoints(edges) {
   const endPoint = lastEdge.to;
   const identifiedSide = getIdentifiedSide(endPoint.side);
   
+  // Only return the complementary point (not the same side)
   return [
-    { side: endPoint.side, t: endPoint.t },
     { side: identifiedSide, t: endPoint.t }
   ];
 }
