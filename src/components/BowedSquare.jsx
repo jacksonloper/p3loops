@@ -43,6 +43,16 @@ function getPositionOnPath(edges, proportion) {
   };
 }
 
+/**
+ * BowedSquare component - renders the bowed square visualization with edges and animated beads.
+ * @param {Object[]} edges - Array of edge objects defining the path
+ * @param {function} onAddEdge - Callback when a new edge is added
+ * @param {Object|null} selectedStartPoint - Currently selected start point for next edge
+ * @param {function} onSelectStartPoint - Callback to set selected start point
+ * @param {function} onError - Callback for error messages
+ * @param {number} beadCount - Number of animated beads to display (0-10)
+ * @param {number} beadSpeed - Animation speed in cycles per second (how many times a bead completes the path per second)
+ */
 function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError, beadCount = 3, beadSpeed = 0.5 }) {
   const [hoverPoint, setHoverPoint] = useState(null);
   const [beadPhase, setBeadPhase] = useState(0);
@@ -61,7 +71,7 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
   
   useEffect(() => {
     if (!shouldAnimate) {
-      // Cancel any existing animation but don't reset phase synchronously
+      // Cancel any existing animation when path is empty or no beads
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
@@ -78,7 +88,6 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
       const deltaTime = timestamp - lastTimeRef.current;
       lastTimeRef.current = timestamp;
       
-      // beadSpeed is cycles per second (how many times a bead completes the path per second)
       const phaseIncrement = (beadSpeed * deltaTime) / 1000;
       
       setBeadPhase(prev => (prev + phaseIncrement) % 1);
