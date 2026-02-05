@@ -217,6 +217,9 @@ export function autospaceEdges(edges) {
   // Collect all unique t values per side (using normalized points)
   const pointsBySide = { north: new Set(), east: new Set(), south: new Set(), west: new Set() };
   
+  // Precision for floating point key comparison
+  const T_PRECISION_DIGITS = 6;
+  
   for (const edge of edges) {
     // Normalize points to their canonical sides
     const fromNorm = normalizePoint(edge.from);
@@ -242,7 +245,7 @@ export function autospaceEdges(edges) {
     for (let i = 0; i < count; i++) {
       const oldT = uniqueTs[i];
       const newT = (i + 1) / (count + 1);
-      mapping[oldT.toFixed(6)] = newT;
+      mapping[oldT.toFixed(T_PRECISION_DIGITS)] = newT;
     }
     tMapping[side] = mapping;
   }
@@ -252,8 +255,8 @@ export function autospaceEdges(edges) {
     const fromNorm = normalizePoint(edge.from);
     const toNorm = normalizePoint(edge.to);
     
-    const newFromT = tMapping[fromNorm.side][fromNorm.t.toFixed(6)] ?? edge.from.t;
-    const newToT = tMapping[toNorm.side][toNorm.t.toFixed(6)] ?? edge.to.t;
+    const newFromT = tMapping[fromNorm.side][fromNorm.t.toFixed(T_PRECISION_DIGITS)] ?? edge.from.t;
+    const newToT = tMapping[toNorm.side][toNorm.t.toFixed(T_PRECISION_DIGITS)] ?? edge.to.t;
     
     return {
       from: { side: edge.from.side, t: newFromT },
@@ -264,6 +267,9 @@ export function autospaceEdges(edges) {
   return newEdges;
 }
 
+// Maximum random placement attempts before giving up
+const MAX_RANDOM_PLACEMENT_ATTEMPTS = 1000;
+
 /**
  * Find a random valid position for the next edge.
  * Samples random points on all sides and tests if an edge to that point would be valid.
@@ -272,9 +278,7 @@ export function autospaceEdges(edges) {
 export function findValidRandomEdge(edges, startPoint) {
   if (!startPoint) return null;
   
-  const maxAttempts = 1000;
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  for (let attempt = 0; attempt < MAX_RANDOM_PLACEMENT_ATTEMPTS; attempt++) {
     // Pick a random side and random t value
     const randomSide = SIDES[Math.floor(Math.random() * SIDES.length)];
     const randomT = Math.random();
