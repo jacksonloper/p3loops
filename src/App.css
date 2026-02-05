@@ -1,0 +1,223 @@
+.path-editor-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  color: #e0e0e0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.app-header {
+  padding: 2rem 1rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.app-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  margin: 0;
+  opacity: 0.7;
+  font-size: 0.95rem;
+}
+
+.editor-main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.visualization-section {
+  margin-bottom: 1.5rem;
+}
+
+.controls-section {
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.control-btn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.control-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.primary-btn {
+  background: #667eea;
+  color: white;
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: #5a6fd6;
+}
+
+.secondary-btn {
+  background: rgba(255,255,255,0.15);
+  color: #e0e0e0;
+}
+
+.secondary-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.25);
+}
+
+.danger-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.warning-btn {
+  background: #fd7e14;
+  color: white;
+}
+
+.warning-btn:hover:not(:disabled) {
+  background: #e96b02;
+}
+
+.message-box {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  text-align: center;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.error-message {
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.4);
+  color: #ff6b7a;
+}
+
+.success-message {
+  background: rgba(40, 167, 69, 0.2);
+  border: 1px solid rgba(40, 167, 69, 0.4);
+  color: #5dd879;
+}
+
+.path-info {
+  text-align: center;
+}
+
+.edge-counter {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.json-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.json-section h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #a0a0a0;
+}
+
+.json-input-area textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.75rem;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  background: rgba(0,0,0,0.3);
+  color: #e0e0e0;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+  box-sizing: border-box;
+}
+
+.json-input-area textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.json-display {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  overflow: auto;
+  max-height: 200px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.info-section {
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.info-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #a0a0a0;
+}
+
+.info-section h3:not(:first-child) {
+  margin-top: 1rem;
+}
+
+.info-section ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.info-section li {
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+@media (max-width: 700px) {
+  .json-section {
+    grid-template-columns: 1fr;
+  }
+  
+  .button-row {
+    flex-direction: column;
+  }
+  
+  .control-btn {
+    width: 100%;
+  }
+}
