@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   getSquarePath,
   getPointOnSide,
@@ -10,8 +10,44 @@ import {
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints } from '../utils/pathLogic.js';
 import './BowedSquare.css';
 
-function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError }) {
+// Pastel colors for beads
+const PASTEL_COLORS = [
+  '#FFB3BA', // pastel pink
+  '#BAFFC9', // pastel green
+  '#BAE1FF', // pastel blue
+  '#FFFFBA', // pastel yellow
+  '#FFDFBA', // pastel orange
+  '#E0BBE4', // pastel purple
+  '#D4F0F0', // pastel cyan
+  '#FCE1E4', // pastel rose
+];
+
+// Calculate position along the path given a proportion (0-1)
+function getPositionOnPath(edges, proportion) {
+  if (edges.length === 0) return null;
+  
+  // Each edge takes equal time to traverse (regardless of length)
+  const edgeCount = edges.length;
+  const scaledProportion = proportion * edgeCount;
+  const edgeIndex = Math.min(Math.floor(scaledProportion), edgeCount - 1);
+  const withinEdgeProportion = scaledProportion - edgeIndex;
+  
+  const edge = edges[edgeIndex];
+  const fromCoords = getPointOnSide(edge.from.side, edge.from.t);
+  const toCoords = getPointOnSide(edge.to.side, edge.to.t);
+  
+  // Linear interpolation along the edge
+  return {
+    x: fromCoords.x + (toCoords.x - fromCoords.x) * withinEdgeProportion,
+    y: fromCoords.y + (toCoords.y - fromCoords.y) * withinEdgeProportion
+  };
+}
+
+function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError, beadCount = 3, beadSpeed = 0.5 }) {
   const [hoverPoint, setHoverPoint] = useState(null);
+  const [beadPhase, setBeadPhase] = useState(0);
+  const animationRef = useRef(null);
+  const lastTimeRef = useRef(null);
   
   const size = getSize();
   const bow = getBow();
@@ -19,6 +55,46 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
   const viewBox = `${-padding} ${-padding} ${size + 2 * padding} ${size + 2 * padding}`;
   
   const squarePath = getSquarePath();
+  
+  // Animate beads - only run animation when there are edges and beads
+  const shouldAnimate = edges.length > 0 && beadCount > 0;
+  
+  useEffect(() => {
+    if (!shouldAnimate) {
+      // Cancel any existing animation but don't reset phase synchronously
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      lastTimeRef.current = null;
+      return;
+    }
+    
+    const animate = (timestamp) => {
+      if (lastTimeRef.current === null) {
+        lastTimeRef.current = timestamp;
+      }
+      
+      const deltaTime = timestamp - lastTimeRef.current;
+      lastTimeRef.current = timestamp;
+      
+      // beadSpeed is cycles per second (how many times a bead completes the path per second)
+      const phaseIncrement = (beadSpeed * deltaTime) / 1000;
+      
+      setBeadPhase(prev => (prev + phaseIncrement) % 1);
+      
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      lastTimeRef.current = null;
+    };
+  }, [shouldAnimate, beadSpeed]);
   
   // Handle mouse move to track hover position on the boundary
   const handleMouseMove = useCallback((e) => {
@@ -220,6 +296,28 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
     { side: 'west', x: -labelOffset - 10, y: size / 2, label: 'West (N→S)' }
   ];
   
+  // Render animated beads
+  const beadElements = [];
+  if (edges.length > 0 && beadCount > 0) {
+    for (let i = 0; i < beadCount; i++) {
+      // Distribute beads evenly along the path, offset by beadPhase
+      const beadProportion = ((i / beadCount) + beadPhase) % 1;
+      const pos = getPositionOnPath(edges, beadProportion);
+      if (pos) {
+        beadElements.push(
+          <circle
+            key={`bead-${i}`}
+            cx={pos.x}
+            cy={pos.y}
+            r="6"
+            fill={PASTEL_COLORS[i % PASTEL_COLORS.length]}
+            className="path-bead"
+          />
+        );
+      }
+    }
+  }
+  
   return (
     <div className="bowed-square-container">
       <svg
@@ -257,6 +355,9 @@ function BowedSquare({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint,
         
         {/* Edges */}
         {edgeElements}
+        
+        {/* Animated beads on path */}
+        {beadElements}
         
         {/* Edge endpoints */}
         {pointElements}

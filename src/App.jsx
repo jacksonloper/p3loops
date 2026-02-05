@@ -15,6 +15,8 @@ function PathEditorApp() {
   const [jsonInputText, setJsonInputText] = useState('')
   const [validationMessage, setValidationMessage] = useState('')
   const [showJsonPanel, setShowJsonPanel] = useState(false)
+  const [beadCount, setBeadCount] = useState(3)
+  const [beadSpeed, setBeadSpeed] = useState(0.3)
 
   const appendEdgeToPath = useCallback((newEdge) => {
     setPathEdges(currentEdges => [...currentEdges, newEdge])
@@ -87,6 +89,8 @@ function PathEditorApp() {
             selectedStartPoint={activeStartPoint}
             onSelectStartPoint={setActiveStartPoint}
             onError={handleEdgeError}
+            beadCount={beadCount}
+            beadSpeed={beadSpeed}
           />
         </section>
 
@@ -129,6 +133,35 @@ function PathEditorApp() {
 
           <div className="path-info">
             <span className="edge-counter">Edges in path: {pathEdges.length}</span>
+          </div>
+
+          <div className="bead-settings">
+            <h4>Direction Beads</h4>
+            <div className="setting-row">
+              <label htmlFor="bead-count">Number of beads:</label>
+              <input
+                id="bead-count"
+                type="range"
+                min="0"
+                max="10"
+                value={beadCount}
+                onChange={(e) => setBeadCount(parseInt(e.target.value, 10))}
+              />
+              <span className="setting-value">{beadCount}</span>
+            </div>
+            <div className="setting-row">
+              <label htmlFor="bead-speed">Speed:</label>
+              <input
+                id="bead-speed"
+                type="range"
+                min="0.05"
+                max="2"
+                step="0.05"
+                value={beadSpeed}
+                onChange={(e) => setBeadSpeed(parseFloat(e.target.value))}
+              />
+              <span className="setting-value">{beadSpeed.toFixed(2)}</span>
+            </div>
           </div>
         </section>
 
