@@ -1,16 +1,41 @@
-# React + Vite
+# P3 Loops Path Editor
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React/Vite web application for creating and managing non-crossing paths on a bowed square with edge identifications.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Bowed Square Visualization**: An SVG-based square with slightly bowed out sides and 4 cusps
+- **Edge Identifications**: 
+  - North ≡ East (a point at t% along North is the same as t% along East)
+  - South ≡ West (a point at t% along South is the same as t% along West)
+- **Path Creation**: Click-to-add edges with visual feedback showing the two possible continuation points
+- **Path Validation**: 
+  - Edges must chain together (endpoint of one = startpoint of next)
+  - Edges cannot cross each other
+  - No loops allowed (cannot return to a point already in the path)
+- **JSON Import/Export**: Import paths from JSON and copy current path as JSON
+- **Controls**: Remove last edge, clear all, and toggle JSON panel
 
-## React Compiler
+## Edge Directions
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **North**: West → East (left to right at top)
+- **East**: South → North (bottom to top at right)  
+- **South**: East → West (right to left at bottom)
+- **West**: North → South (top to bottom at left)
 
-## Expanding the ESLint configuration
+## Development
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm install
+npm run dev
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+## Deployment
+
+This project is configured for Netlify deployment. Simply connect your repository to Netlify and it will automatically build and deploy.

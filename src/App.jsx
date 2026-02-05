@@ -3,6 +3,12 @@ import './App.css'
 import BowedSquare from './components/BowedSquare.jsx'
 import { validatePath } from './utils/pathLogic.js'
 
+function getMessageStyleClass(message) {
+  const errorIndicators = ['Error', 'Invalid', 'Failed']
+  const isError = errorIndicators.some(indicator => message.includes(indicator))
+  return isError ? 'error-message' : 'success-message'
+}
+
 function PathEditorApp() {
   const [pathEdges, setPathEdges] = useState([])
   const [activeStartPoint, setActiveStartPoint] = useState(null)
@@ -112,7 +118,7 @@ function PathEditorApp() {
           </div>
 
           {validationMessage && (
-            <div className={`message-box ${validationMessage.includes('Error') || validationMessage.includes('Invalid') || validationMessage.includes('Failed') ? 'error-message' : 'success-message'}`}>
+            <div className={`message-box ${getMessageStyleClass(validationMessage)}`}>
               {validationMessage}
             </div>
           )}
