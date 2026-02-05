@@ -137,7 +137,7 @@ def _get_boundary_coordinate(point: Point) -> float:
         return 200 + point.position
     else:  # WEST
         # West goes N→S (down), boundary goes S→N (up) from SW corner
-        # position 0 is at north end = boundary 400, position 100 is at south end = boundary 300
+        # position 0 is at north end = boundary 400 (≡ 0 mod 400), position 100 is at south end = boundary 300
         return 300 + (100 - point.position)
 
 
