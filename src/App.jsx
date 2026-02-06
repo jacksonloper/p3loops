@@ -1,11 +1,16 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import './App.css'
-import BowedSquare from './components/BowedSquare.jsx'
-import { validatePath, autospaceEdges, findValidRandomEdge, getNextEdgeStartPoints } from './utils/pathLogic.js'
+import Rhombus from './components/Rhombus.jsx'
+import { validatePath } from './utils/pathLogic.js'
 
+/**
+ * Determine message style class based on content.
+ */
 function getMessageStyleClass(message) {
-  const errorIndicators = ['Error', 'Invalid', 'Failed', 'Cannot']
-  const isError = errorIndicators.some(indicator => message.includes(indicator))
+  const errorIndicators = ['Error', 'Invalid', 'Failed', 'Cannot', 'forbidden', 'cross', 'loop']
+  const isError = errorIndicators.some(indicator => 
+    message.toLowerCase().includes(indicator.toLowerCase())
+  )
   return isError ? 'error-message' : 'success-message'
 }
 
@@ -15,16 +20,24 @@ function PathEditorApp() {
   const [jsonInputText, setJsonInputText] = useState('')
   const [validationMessage, setValidationMessage] = useState('')
   const [showJsonPanel, setShowJsonPanel] = useState(false)
-  const [beadCount, setBeadCount] = useState(3)
-  const [beadSpeed, setBeadSpeed] = useState(0.3)
+  const [interiorMode, setInteriorMode] = useState(true)
+  const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null)
+
+  // Clear highlighted edge after timeout
+  useEffect(() => {
+    if (highlightedEdgeIndex !== null) {
+      const timeout = setTimeout(() => setHighlightedEdgeIndex(null), 2000)
+      return () => clearTimeout(timeout)
+    }
+  }, [highlightedEdgeIndex])
 
   const appendEdgeToPath = useCallback((newEdge) => {
-    setPathEdges(currentEdges => [...currentEdges, newEdge])
+    setPathEdges(current => [...current, newEdge])
     setValidationMessage('')
   }, [])
 
   const removeLastEdge = useCallback(() => {
-    setPathEdges(currentEdges => currentEdges.slice(0, -1))
+    setPathEdges(current => current.slice(0, -1))
     setActiveStartPoint(null)
     setValidationMessage('')
   }, [])
@@ -68,62 +81,30 @@ function PathEditorApp() {
     })
   }, [pathEdges])
 
-  const handleEdgeError = useCallback((errorMessage) => {
+  const handleEdgeError = useCallback((errorMessage, crossingEdgeIndex = null) => {
     setValidationMessage(errorMessage)
+    if (crossingEdgeIndex !== null) {
+      setHighlightedEdgeIndex(crossingEdgeIndex)
+    }
   }, [])
-
-  const handleAutospace = useCallback(() => {
-    if (pathEdges.length === 0) return
-    const newEdges = autospaceEdges(pathEdges)
-    setPathEdges(newEdges)
-    setActiveStartPoint(null)
-    setValidationMessage('Points redistributed evenly!')
-  }, [pathEdges])
-
-  const handleAutoplace = useCallback(() => {
-    if (pathEdges.length === 0) {
-      setValidationMessage('Cannot autoplace: add at least one edge first')
-      return
-    }
-    
-    // Get the start point for the next edge (complementary of last endpoint)
-    const startPoints = getNextEdgeStartPoints(pathEdges)
-    if (!startPoints || startPoints.length === 0) {
-      setValidationMessage('Cannot autoplace: no valid start point')
-      return
-    }
-    
-    const startPoint = startPoints[0]
-    const newEdge = findValidRandomEdge(pathEdges, startPoint)
-    
-    if (newEdge) {
-      setPathEdges(currentEdges => [...currentEdges, newEdge])
-      setActiveStartPoint(null)
-      setValidationMessage('Edge placed randomly!')
-    } else {
-      setValidationMessage('Cannot autoplace: no valid position found')
-    }
-  }, [pathEdges])
-
-  const currentPathJson = JSON.stringify(pathEdges, null, 2)
 
   return (
     <div className="path-editor-container">
       <header className="app-header">
         <h1>P3 Loops Path Editor</h1>
-        <p className="subtitle">Create non-crossing paths on a bowed square with edge identifications</p>
+        <p className="subtitle">Create non-crossing paths on a 120/60/120/60 rhombus with edge identifications</p>
       </header>
 
       <main className="editor-main">
         <section className="visualization-section">
-          <BowedSquare
+          <Rhombus
             edges={pathEdges}
             onAddEdge={appendEdgeToPath}
             selectedStartPoint={activeStartPoint}
             onSelectStartPoint={setActiveStartPoint}
             onError={handleEdgeError}
-            beadCount={beadCount}
-            beadSpeed={beadSpeed}
+            interiorMode={interiorMode}
+            highlightedEdgeIndex={highlightedEdgeIndex}
           />
         </section>
 
@@ -158,23 +139,6 @@ function PathEditorApp() {
             </button>
           </div>
 
-          <div className="button-row">
-            <button 
-              onClick={handleAutospace}
-              disabled={pathEdges.length === 0}
-              className="control-btn primary-btn"
-            >
-              Autospace
-            </button>
-            <button 
-              onClick={handleAutoplace}
-              disabled={pathEdges.length === 0}
-              className="control-btn primary-btn"
-            >
-              Autoplace Next
-            </button>
-          </div>
-
           {validationMessage && (
             <div className={`message-box ${getMessageStyleClass(validationMessage)}`}>
               {validationMessage}
@@ -185,32 +149,16 @@ function PathEditorApp() {
             <span className="edge-counter">Edges in path: {pathEdges.length}</span>
           </div>
 
-          <div className="bead-settings">
-            <h4>Direction Beads</h4>
+          <div className="settings-panel">
             <div className="setting-row">
-              <label htmlFor="bead-count">Number of beads:</label>
+              <label htmlFor="interior-mode">Interior points:</label>
               <input
-                id="bead-count"
-                type="range"
-                min="0"
-                max="10"
-                value={beadCount}
-                onChange={(e) => setBeadCount(parseInt(e.target.value, 10))}
+                id="interior-mode"
+                type="checkbox"
+                checked={interiorMode}
+                onChange={(e) => setInteriorMode(e.target.checked)}
               />
-              <span className="setting-value">{beadCount}</span>
-            </div>
-            <div className="setting-row">
-              <label htmlFor="bead-speed">Speed:</label>
-              <input
-                id="bead-speed"
-                type="range"
-                min="0.05"
-                max="2"
-                step="0.05"
-                value={beadSpeed}
-                onChange={(e) => setBeadSpeed(parseFloat(e.target.value))}
-              />
-              <span className="setting-value">{beadSpeed.toFixed(2)}</span>
+              <span className="setting-value">{interiorMode ? 'Enabled' : 'Disabled'}</span>
             </div>
           </div>
         </section>
@@ -232,14 +180,15 @@ function PathEditorApp() {
 
             <div className="json-output-area">
               <h3>Current Path JSON</h3>
-              <pre className="json-display">{currentPathJson}</pre>
+              <pre className="json-display">{JSON.stringify(pathEdges, null, 2)}</pre>
             </div>
           </section>
         )}
 
         <section className="info-section">
-          <h3>About Edge Identifications</h3>
+          <h3>About the Rhombus</h3>
           <ul>
+            <li><strong>Shape:</strong> 120/60/120/60 degree rhombus (NE/SW corners are 120°, NW/SE corners are 60°)</li>
             <li><strong>North ≡ East:</strong> A point at t% along North is the same as t% along East</li>
             <li><strong>South ≡ West:</strong> A point at t% along South is the same as t% along West</li>
           </ul>
@@ -247,6 +196,8 @@ function PathEditorApp() {
           <ul>
             <li>Edges must chain together (endpoint of one = startpoint of next)</li>
             <li>Edges cannot cross each other</li>
+            <li><strong>Same-side edges are forbidden</strong> (e.g., north to north, but north to east is allowed)</li>
+            <li>Interior points are allowed when enabled</li>
             <li>No loops allowed (cannot return to a point already in the path)</li>
           </ul>
         </section>

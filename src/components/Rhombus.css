@@ -1,11 +1,11 @@
-.bowed-square-container {
+.rhombus-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin: 20px 0;
 }
 
-.bowed-square-svg {
+.rhombus-svg {
   width: 100%;
   max-width: 500px;
   height: auto;
@@ -15,7 +15,7 @@
   border-radius: 8px;
 }
 
-.square-path {
+.rhombus-path {
   fill: #16213e;
   stroke: #4a90d9;
   stroke-width: 2;
@@ -26,8 +26,36 @@
   stroke-linecap: round;
 }
 
+.edge-line-problem {
+  stroke: #ff0000;
+  stroke-linecap: round;
+  animation: problem-flash 0.5s ease-in-out 3;
+}
+
+@keyframes problem-flash {
+  0%, 100% {
+    stroke: #ff0000;
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke: #ffff00;
+    stroke-opacity: 0.7;
+  }
+}
+
+.edge-arrow {
+  fill: #fff;
+  pointer-events: none;
+}
+
 .edge-point {
   fill: #e94560;
+}
+
+.interior-point {
+  fill: #ff9f43;
+  stroke: #fff;
+  stroke-width: 1;
 }
 
 .next-start-point {
@@ -57,6 +85,13 @@
   pointer-events: none;
 }
 
+.hover-point-interior {
+  fill: rgba(255, 159, 67, 0.6);
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 .preview-line {
   stroke: rgba(255, 255, 255, 0.5);
   pointer-events: none;
@@ -74,7 +109,13 @@
   font-weight: bold;
 }
 
-.square-instructions {
+.angle-text {
+  fill: #666;
+  font-family: sans-serif;
+  font-style: italic;
+}
+
+.rhombus-instructions {
   margin-top: 10px;
   padding: 10px;
   background: rgba(74, 144, 217, 0.1);
@@ -85,15 +126,8 @@
   max-width: 400px;
 }
 
-.square-instructions p {
+.rhombus-instructions p {
   margin: 0;
-}
-
-.path-bead {
-  stroke: rgba(255, 255, 255, 0.6);
-  stroke-width: 1.5;
-  pointer-events: none;
-  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
 }
 
 @keyframes pulse {
