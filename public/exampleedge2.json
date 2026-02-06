@@ -1,0 +1,250 @@
+[
+  {
+    "from": {
+      "side": "north",
+      "t": 0.456
+    },
+    "to": {
+      "side": "west",
+      "t": 0.611
+    }
+  },
+  {
+    "from": {
+      "side": "south",
+      "t": 0.611
+    },
+    "to": {
+      "side": "north",
+      "t": 0.72
+    }
+  },
+  {
+    "from": {
+      "side": "east",
+      "t": 0.72
+    },
+    "to": {
+      "side": "south",
+      "t": 0.375
+    }
+  },
+  {
+    "from": {
+      "side": "west",
+      "t": 0.375
+    },
+    "to": {
+      "side": "north",
+      "t": 0.207
+    }
+  },
+  {
+    "from": {
+      "side": "east",
+      "t": 0.207
+    },
+    "to": {
+      "interior": true,
+      "southward": 0.744567501122939,
+      "eastward": 0.8517552568425605
+    }
+  },
+  {
+    "from": {
+      "interior": true,
+      "southward": 0.744567501122939,
+      "eastward": 0.8517552568425605
+    },
+    "to": {
+      "side": "east",
+      "t": 0.573
+    }
+  },
+  {
+    "from": {
+      "side": "north",
+      "t": 0.573
+    },
+    "to": {
+      "side": "south",
+      "t": 0.8
+    }
+  },
+  {
+    "from": {
+      "side": "west",
+      "t": 0.8
+    },
+    "to": {
+      "side": "north",
+      "t": 0.493
+    }
+  },
+  {
+    "from": {
+      "side": "east",
+      "t": 0.493
+    },
+    "to": {
+      "interior": true,
+      "southward": 0.7006217782649108,
+      "eastward": 0.9076982694047433
+    }
+  },
+  {
+    "from": {
+      "interior": true,
+      "southward": 0.7006217782649108,
+      "eastward": 0.9076982694047433
+    },
+    "to": {
+      "side": "east",
+      "t": 0.276
+    }
+  },
+  {
+    "from": {
+      "side": "north",
+      "t": 0.276
+    },
+    "to": {
+      "side": "west",
+      "t": 0.503
+    }
+  },
+  {
+    "from": {
+      "side": "south",
+      "t": 0.503
+    },
+    "to": {
+      "side": "north",
+      "t": 0.858
+    }
+  },
+  {
+    "from": {
+      "side": "east",
+      "t": 0.858
+    },
+    "to": {
+      "side": "south",
+      "t": 0.433
+    }
+  },
+  {
+    "from": {
+      "side": "west",
+      "t": 0.433
+    },
+    "to": {
+      "side": "north",
+      "t": 0.246
+    }
+  },
+  {
+    "from": {
+      "side": "east",
+      "t": 0.246
+    },
+    "to": {
+      "interior": true,
+      "southward": 0.7120858798800486,
+      "eastward": 0.8819726312259965
+    }
+  },
+  {
+    "from": {
+      "interior": true,
+      "southward": 0.7120858798800486,
+      "eastward": 0.8819726312259965
+    },
+    "to": {
+      "side": "east",
+      "t": 0.541
+    }
+  },
+  {
+    "from": {
+      "side": "north",
+      "t": 0.541
+    },
+    "to": {
+      "side": "west",
+      "t": 0.895
+    }
+  },
+  {
+    "from": {
+      "side": "south",
+      "t": 0.895
+    },
+    "to": {
+      "side": "north",
+      "t": 0.555
+    }
+  },
+  {
+    "from": {
+      "side": "east",
+      "t": 0.555
+    },
+    "to": {
+      "interior": true,
+      "southward": 0.7235499814951863,
+      "eastward": 0.8638897274573418
+    }
+  },
+  {
+    "from": {
+      "interior": true,
+      "southward": 0.7235499814951863,
+      "eastward": 0.8638897274573418
+    },
+    "to": {
+      "side": "east",
+      "t": 0.227
+    }
+  },
+  {
+    "from": {
+      "side": "north",
+      "t": 0.227
+    },
+    "to": {
+      "side": "west",
+      "t": 0.4
+    }
+  },
+  {
+    "from": {
+      "side": "south",
+      "t": 0.4
+    },
+    "to": {
+      "side": "east",
+      "t": 0.773
+    }
+  },
+  {
+    "from": {
+      "side": "north",
+      "t": 0.773
+    },
+    "to": {
+      "side": "south",
+      "t": 0.551
+    }
+  },
+  {
+    "from": {
+      "side": "west",
+      "t": 0.551
+    },
+    "to": {
+      "side": "north",
+      "t": 0.418
+    }
+  }
+]
