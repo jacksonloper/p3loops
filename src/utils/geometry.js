@@ -65,7 +65,9 @@ export function pointsAreEqual(p1, p2) {
 
 // Configuration for the rhombus
 const SIZE = 300;
-// Shear amount for 60/120 degree angles: tan(30°) = 1/√3 ≈ 0.577
+// Shear amount for 60/120 degree angles.
+// For a 30° shear angle: tan(30°) = 1/√3 ≈ 0.577
+// SHEAR = SIZE * tan(30°) = SIZE / √3, which gives the horizontal offset
 // This creates a rhombus where NW/SE corners are 60° and NE/SW corners are 120°
 const SHEAR = SIZE / Math.sqrt(3);
 

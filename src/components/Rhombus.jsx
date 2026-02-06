@@ -181,7 +181,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       // If no start point selected, select this as the start (only boundary points for first)
       if (!selectedStartPoint) {
         if (isInteriorPoint(clickedPoint)) {
-          onError('First point must be on the boundary');
+          onError('First point must be on the boundary (interior points are only allowed after the first edge)');
           return;
         }
         onSelectStartPoint(clickedPoint);

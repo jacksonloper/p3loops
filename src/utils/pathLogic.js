@@ -120,15 +120,18 @@ export function isNonCrossing(edges) {
   return true;
 }
 
-// Check if an edge is a same-side edge (both endpoints on the same side, which is forbidden)
+// Check if an edge is a same-side edge (both endpoints on the same side or identified sides, which is forbidden)
 export function isSameSideEdge(edge) {
   // If either endpoint is interior, it's not a same-side edge
   if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
     return false;
   }
   // Check if both endpoints are on the same side (or identified sides)
+  // This covers all cases since identified sides are symmetric:
+  // north↔east and south↔west
   return edge.from.side === edge.to.side || 
-         edge.from.side === getIdentifiedSide(edge.to.side);
+         edge.from.side === getIdentifiedSide(edge.to.side) ||
+         edge.to.side === getIdentifiedSide(edge.from.side);
 }
 
 // Helper to format point for error messages
