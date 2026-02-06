@@ -1,9 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { getPointPaperCoordinates } from '../utils/geometry.js';
 import { interpolateEdge3D, getFlatTriangleVertices, getDirectionAtPoint } from '../utils/geometry3d.js';
 import './ThreeDViewer.css';
+
+// Scale factor for the black triangle (80% of original size)
+const TRIANGLE_SCALE = 0.8;
 
 /**
  * ThreeDViewer component - renders the path on puffed 3D triangles.
@@ -15,6 +18,16 @@ function ThreeDViewer({ edges, onClose }) {
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
   const animationIdRef = useRef(null);
+  const beadRef = useRef(null);
+  const pathPointsRef = useRef([]);
+  const beadProgressRef = useRef(0);
+  const speedRef = useRef(0.5);
+  const [speed, setSpeed] = useState(0.5);
+  
+  // Update speed ref when state changes
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
   
   useEffect(() => {
     if (!containerRef.current) return;
@@ -59,13 +72,13 @@ function ThreeDViewer({ edges, onClose }) {
     directionalLight2.position.set(-5, -5, -5);
     scene.add(directionalLight2);
     
-    // Create flat black triangle base
+    // Create flat black triangle base (scaled to 80% of original size)
     const triangleVertices = getFlatTriangleVertices();
     const triangleGeometry = new THREE.BufferGeometry();
     const trianglePositions = new Float32Array([
-      triangleVertices[0].x, triangleVertices[0].y, triangleVertices[0].z,
-      triangleVertices[1].x, triangleVertices[1].y, triangleVertices[1].z,
-      triangleVertices[2].x, triangleVertices[2].y, triangleVertices[2].z
+      triangleVertices[0].x * TRIANGLE_SCALE, triangleVertices[0].y * TRIANGLE_SCALE, triangleVertices[0].z,
+      triangleVertices[1].x * TRIANGLE_SCALE, triangleVertices[1].y * TRIANGLE_SCALE, triangleVertices[1].z,
+      triangleVertices[2].x * TRIANGLE_SCALE, triangleVertices[2].y * TRIANGLE_SCALE, triangleVertices[2].z
     ]);
     triangleGeometry.setAttribute('position', new THREE.BufferAttribute(trianglePositions, 3));
     triangleGeometry.computeVertexNormals();
@@ -145,6 +158,22 @@ function ThreeDViewer({ edges, onClose }) {
           pathPoints[pathPoints.length - 1].z
         );
         scene.add(endSphere);
+        
+        // Store path points for bead animation
+        pathPointsRef.current = pathPoints;
+        
+        // Create the animated bead
+        const beadGeometry = new THREE.SphereGeometry(0.04, 24, 24);
+        const beadMaterial = new THREE.MeshPhongMaterial({ 
+          color: 0x00ffff,
+          emissive: 0x005555,
+          shininess: 100
+        });
+        const bead = new THREE.Mesh(beadGeometry, beadMaterial);
+        bead.position.set(pathPoints[0].x, pathPoints[0].y, pathPoints[0].z);
+        scene.add(bead);
+        beadRef.current = bead;
+        beadProgressRef.current = 0;
       }
       
       // Create direction cones
@@ -170,8 +199,43 @@ function ThreeDViewer({ edges, onClose }) {
     }
     
     // Animation loop
+    let lastTime = performance.now();
+    
     function animate() {
       animationIdRef.current = requestAnimationFrame(animate);
+      
+      const currentTime = performance.now();
+      const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+      lastTime = currentTime;
+      
+      // Animate the bead along the path
+      const pathPoints = pathPointsRef.current;
+      if (beadRef.current && pathPoints.length > 1) {
+        // Speed is in "path lengths per second" (0.05 = 20 seconds for full path, 2 = 0.5 seconds)
+        const progress = beadProgressRef.current + deltaTime * speedRef.current;
+        
+        // Loop back to beginning when reaching end
+        beadProgressRef.current = progress % 1;
+        
+        // Calculate position along path
+        const totalSegments = pathPoints.length - 1;
+        const exactIndex = beadProgressRef.current * totalSegments;
+        const index = Math.floor(exactIndex);
+        const t = exactIndex - index;
+        
+        // Clamp to valid range
+        const i = Math.min(index, totalSegments - 1);
+        const p1 = pathPoints[i];
+        const p2 = pathPoints[i + 1];
+        
+        // Interpolate between points
+        const x = p1.x + t * (p2.x - p1.x);
+        const y = p1.y + t * (p2.y - p1.y);
+        const z = p1.z + t * (p2.z - p1.z);
+        
+        beadRef.current.position.set(x, y, z);
+      }
+      
       controls.update();
       renderer.render(scene, camera);
     }
@@ -220,8 +284,22 @@ function ThreeDViewer({ edges, onClose }) {
           <button onClick={onClose} className="three-d-close-btn">×</button>
         </div>
         <div className="three-d-canvas-container" ref={containerRef}></div>
+        <div className="three-d-controls">
+          <label className="speed-control">
+            <span>Bead Speed:</span>
+            <input 
+              type="range" 
+              min="0.05" 
+              max="2" 
+              step="0.05" 
+              value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+            />
+            <span className="speed-value">{speed.toFixed(2)}x</span>
+          </label>
+        </div>
         <div className="three-d-instructions">
-          <p>Drag to rotate • Scroll to zoom • Path shown on puffed triangle surface</p>
+          <p>Drag to rotate • Scroll to zoom • Bead travels along path</p>
         </div>
       </div>
     </div>

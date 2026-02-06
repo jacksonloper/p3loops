@@ -85,3 +85,33 @@
   font-size: 0.85rem;
   color: #888;
 }
+
+.three-d-controls {
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.speed-control input[type="range"] {
+  width: 150px;
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+.speed-value {
+  min-width: 50px;
+  text-align: right;
+  color: #667eea;
+  font-family: 'Fira Code', 'Consolas', monospace;
+}
