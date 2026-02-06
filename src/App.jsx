@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import './App.css'
 import Rhombus from './components/Rhombus.jsx'
 import ThreeDViewer from './components/ThreeDViewer.jsx'
+import WallpaperViewer from './components/WallpaperViewer.jsx'
 import { validatePath } from './utils/pathLogic.js'
 
 /**
@@ -22,6 +23,7 @@ function PathEditorApp() {
   const [validationMessage, setValidationMessage] = useState('')
   const [showJsonPanel, setShowJsonPanel] = useState(false)
   const [show3DViewer, setShow3DViewer] = useState(false)
+  const [showWallpaperViewer, setShowWallpaperViewer] = useState(false)
   const [interiorMode, setInteriorMode] = useState(true)
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null)
 
@@ -146,6 +148,13 @@ function PathEditorApp() {
             >
               Render in 3D
             </button>
+            <button 
+              onClick={() => setShowWallpaperViewer(true)}
+              disabled={pathEdges.length === 0}
+              className="control-btn primary-btn"
+            >
+              View as P3 Wallpaper
+            </button>
           </div>
 
           {validationMessage && (
@@ -216,6 +225,13 @@ function PathEditorApp() {
         <ThreeDViewer 
           edges={pathEdges}
           onClose={() => setShow3DViewer(false)}
+        />
+      )}
+
+      {showWallpaperViewer && (
+        <WallpaperViewer 
+          edges={pathEdges}
+          onClose={() => setShowWallpaperViewer(false)}
         />
       )}
     </div>
