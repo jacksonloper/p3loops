@@ -2,7 +2,25 @@ import { useState, useCallback, useEffect } from 'react'
 import './App.css'
 import Rhombus from './components/Rhombus.jsx'
 import ThreeDViewer from './components/ThreeDViewer.jsx'
+import WallpaperViewer from './components/WallpaperViewer.jsx'
 import { validatePath } from './utils/pathLogic.js'
+
+// Example path from public/exampleedge.json - pre-loaded so users see something interesting
+const EXAMPLE_PATH = [
+  { from: { side: 'north', t: 0.368 }, to: { side: 'west', t: 0.473 } },
+  { from: { side: 'south', t: 0.473 }, to: { side: 'north', t: 0.67 } },
+  { from: { side: 'east', t: 0.67 }, to: { side: 'south', t: 0.313 } },
+  { from: { side: 'west', t: 0.313 }, to: { side: 'north', t: 0.185 } },
+  { from: { side: 'east', t: 0.185 }, to: { side: 'east', t: 0.603 } },
+  { from: { side: 'north', t: 0.603 }, to: { side: 'south', t: 0.861 } },
+  { from: { side: 'west', t: 0.861 }, to: { side: 'north', t: 0.487 } },
+  { from: { side: 'east', t: 0.487 }, to: { side: 'east', t: 0.273 } },
+  { from: { side: 'north', t: 0.273 }, to: { side: 'west', t: 0.397 } },
+  { from: { side: 'south', t: 0.397 }, to: { side: 'north', t: 0.804 } },
+  { from: { side: 'east', t: 0.804 }, to: { side: 'south', t: 0.36 } },
+  { from: { side: 'west', t: 0.36 }, to: { side: 'north', t: 0.216 } },
+  { from: { side: 'east', t: 0.216 }, to: { side: 'east', t: 0.548 } }
+];
 
 /**
  * Determine message style class based on content.
@@ -16,12 +34,13 @@ function getMessageStyleClass(message) {
 }
 
 function PathEditorApp() {
-  const [pathEdges, setPathEdges] = useState([])
+  const [pathEdges, setPathEdges] = useState(EXAMPLE_PATH)
   const [activeStartPoint, setActiveStartPoint] = useState(null)
   const [jsonInputText, setJsonInputText] = useState('')
   const [validationMessage, setValidationMessage] = useState('')
   const [showJsonPanel, setShowJsonPanel] = useState(false)
   const [show3DViewer, setShow3DViewer] = useState(false)
+  const [showWallpaperViewer, setShowWallpaperViewer] = useState(false)
   const [interiorMode, setInteriorMode] = useState(true)
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null)
 
@@ -146,6 +165,13 @@ function PathEditorApp() {
             >
               Render in 3D
             </button>
+            <button 
+              onClick={() => setShowWallpaperViewer(true)}
+              disabled={pathEdges.length === 0}
+              className="control-btn primary-btn"
+            >
+              View as P3 Wallpaper
+            </button>
           </div>
 
           {validationMessage && (
@@ -216,6 +242,13 @@ function PathEditorApp() {
         <ThreeDViewer 
           edges={pathEdges}
           onClose={() => setShow3DViewer(false)}
+        />
+      )}
+
+      {showWallpaperViewer && (
+        <WallpaperViewer 
+          edges={pathEdges}
+          onClose={() => setShowWallpaperViewer(false)}
         />
       )}
     </div>
