@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import './App.css'
 import Rhombus from './components/Rhombus.jsx'
+import ThreeDViewer from './components/ThreeDViewer.jsx'
 import { validatePath } from './utils/pathLogic.js'
 
 /**
@@ -20,6 +21,7 @@ function PathEditorApp() {
   const [jsonInputText, setJsonInputText] = useState('')
   const [validationMessage, setValidationMessage] = useState('')
   const [showJsonPanel, setShowJsonPanel] = useState(false)
+  const [show3DViewer, setShow3DViewer] = useState(false)
   const [interiorMode, setInteriorMode] = useState(true)
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null)
 
@@ -137,6 +139,13 @@ function PathEditorApp() {
             >
               {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
             </button>
+            <button 
+              onClick={() => setShow3DViewer(true)}
+              disabled={pathEdges.length === 0}
+              className="control-btn primary-btn"
+            >
+              Render in 3D
+            </button>
           </div>
 
           {validationMessage && (
@@ -202,6 +211,13 @@ function PathEditorApp() {
           </ul>
         </section>
       </main>
+
+      {show3DViewer && (
+        <ThreeDViewer 
+          edges={pathEdges}
+          onClose={() => setShow3DViewer(false)}
+        />
+      )}
     </div>
   )
 }
