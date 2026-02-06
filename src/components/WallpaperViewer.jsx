@@ -33,6 +33,43 @@ function generateAllEdgesPathString(edges, frame) {
   return pathParts.join(' ');
 }
 
+// Tolerance for comparing frame positions (to handle floating point errors)
+const FRAME_TOLERANCE = 0.1;
+
+/**
+ * Create a unique key for a reference frame based on its transformation values.
+ * Two frames are considered the same if their translation and rotation are equal
+ * (within floating point tolerance).
+ * @param {Object} frame - Reference frame { a, b, c, d, tx, ty }
+ * @returns {string} - A string key representing the frame's position
+ */
+function getFrameKey(frame) {
+  // Round to reasonable precision to handle floating point errors
+  const round = (v) => Math.round(v / FRAME_TOLERANCE) * FRAME_TOLERANCE;
+  return `${round(frame.a)},${round(frame.b)},${round(frame.c)},${round(frame.d)},${round(frame.tx)},${round(frame.ty)}`;
+}
+
+/**
+ * Deduplicate rhombus frames to avoid rendering the same position multiple times.
+ * This prevents brightness stacking from overlapping semi-transparent elements.
+ * @param {Array} frames - Array of reference frame objects
+ * @returns {Array} - Deduplicated array of frames
+ */
+function deduplicateFrames(frames) {
+  const seen = new Set();
+  const unique = [];
+  
+  for (const frame of frames) {
+    const key = getFrameKey(frame);
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(frame);
+    }
+  }
+  
+  return unique;
+}
+
 /**
  * Generate the wallpaper data: path points and rhombus frames visited.
  * @param {Array} edges - Array of edge objects with from/to points
@@ -122,9 +159,15 @@ function WallpaperViewer({ edges, onClose }) {
     [edges]
   );
   
+  // Deduplicate rhombus frames to avoid brightness stacking from overlapping elements
+  const uniqueRhombusFrames = useMemo(() => 
+    deduplicateFrames(rhombusFrames),
+    [rhombusFrames]
+  );
+  
   // Calculate bounding box with padding
   const viewBox = useMemo(() => {
-    if (pathPoints.length === 0 && rhombusFrames.length === 0) {
+    if (pathPoints.length === 0 && uniqueRhombusFrames.length === 0) {
       return '-400 -400 800 800';
     }
     
@@ -139,7 +182,7 @@ function WallpaperViewer({ edges, onClose }) {
     }
     
     // Include all rhombus corners
-    for (const frame of rhombusFrames) {
+    for (const frame of uniqueRhombusFrames) {
       const corners = getRhombusCorners(frame);
       for (const corner of [corners.ne, corners.nw, corners.se, corners.sw]) {
         minX = Math.min(minX, corner.x);
@@ -160,7 +203,7 @@ function WallpaperViewer({ edges, onClose }) {
     const height = maxY - minY;
     
     return `${minX} ${minY} ${width} ${height}`;
-  }, [pathPoints, rhombusFrames]);
+  }, [pathPoints, uniqueRhombusFrames]);
   
   // Create path string for the trajectory
   const pathString = useMemo(() => {
@@ -180,8 +223,8 @@ function WallpaperViewer({ edges, onClose }) {
         
         <div className="wallpaper-canvas-container">
           <svg viewBox={viewBox} className="wallpaper-svg">
-            {/* Draw rhombi first (subtle background) */}
-            {rhombusFrames.map((frame, index) => {
+            {/* Draw rhombi first (subtle background) - deduplicated to avoid brightness stacking */}
+            {uniqueRhombusFrames.map((frame, index) => {
               const markerInfo = getNorthMarkerInfo(frame);
               const ghostPathString = generateAllEdgesPathString(edges, frame);
               return (
@@ -270,7 +313,7 @@ function WallpaperViewer({ edges, onClose }) {
         
         <div className="wallpaper-info">
           <p>
-            Path unfolded onto R² • {pathPoints.length} points • {rhombusFrames.length} {rhombusFrames.length === 1 ? 'rhombus' : 'rhombi'}
+            Path unfolded onto R² • {pathPoints.length} points • {uniqueRhombusFrames.length} unique {uniqueRhombusFrames.length === 1 ? 'rhombus' : 'rhombi'}
           </p>
         </div>
       </div>
