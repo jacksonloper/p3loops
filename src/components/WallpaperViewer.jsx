@@ -90,7 +90,7 @@ function getNorthMarkerInfo(frame) {
 }
 
 /**
- * WallpaperViewer component - renders the path unfolded on R² with reference rhombii.
+ * WallpaperViewer component - renders the path unfolded on R² with reference rhombi.
  * @param {Object[]} edges - Array of edge objects defining the path
  * @param {function} onClose - Callback to close the viewer
  */
@@ -159,7 +159,7 @@ function WallpaperViewer({ edges, onClose }) {
         
         <div className="wallpaper-canvas-container">
           <svg viewBox={viewBox} className="wallpaper-svg">
-            {/* Draw rhombii first (subtle background) */}
+            {/* Draw rhombi first (subtle background) */}
             {rhombusFrames.map((frame, index) => {
               const markerInfo = getNorthMarkerInfo(frame);
               return (
@@ -195,17 +195,23 @@ function WallpaperViewer({ edges, onClose }) {
             )}
             
             {/* Draw path vertices */}
-            {pathPoints.map((pt, index) => (
-              <circle
-                key={index}
-                cx={pt.x}
-                cy={pt.y}
-                r="5"
-                className={index === 0 ? 'trajectory-start' : 
-                          index === pathPoints.length - 1 ? 'trajectory-end' : 
-                          'trajectory-point'}
-              />
-            ))}
+            {pathPoints.map((pt, index) => {
+              const isStart = index === 0;
+              const isEnd = index === pathPoints.length - 1;
+              const radius = (isStart || isEnd) ? 8 : 5;
+              const className = isStart ? 'trajectory-start' : 
+                               isEnd ? 'trajectory-end' : 
+                               'trajectory-point';
+              return (
+                <circle
+                  key={index}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={radius}
+                  className={className}
+                />
+              );
+            })}
             
             {/* Draw direction arrows along the path */}
             {pathPoints.length >= 2 && pathPoints.slice(0, -1).map((pt, index) => {

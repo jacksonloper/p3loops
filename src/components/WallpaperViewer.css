@@ -115,14 +115,12 @@
   fill: #28a745;
   stroke: white;
   stroke-width: 2;
-  r: 8;
 }
 
 .trajectory-end {
   fill: #ffc107;
   stroke: white;
   stroke-width: 2;
-  r: 8;
 }
 
 .trajectory-arrow {
