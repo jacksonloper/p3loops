@@ -2,131 +2,83 @@
   {
     "from": {
       "side": "north",
-      "t": 0.368
+      "t": 0.456
     },
     "to": {
       "side": "west",
-      "t": 0.473
+      "t": 0.611
     }
   },
   {
     "from": {
       "side": "south",
-      "t": 0.473
+      "t": 0.611
     },
     "to": {
       "side": "north",
-      "t": 0.67
+      "t": 0.72
     }
   },
   {
     "from": {
       "side": "east",
-      "t": 0.67
+      "t": 0.72
     },
     "to": {
       "side": "south",
-      "t": 0.313
+      "t": 0.375
     }
   },
   {
     "from": {
       "side": "west",
-      "t": 0.313
+      "t": 0.375
     },
     "to": {
       "side": "north",
-      "t": 0.185
+      "t": 0.207
     }
   },
   {
     "from": {
       "side": "east",
-      "t": 0.185
+      "t": 0.207
+    },
+    "to": {
+      "interior": true,
+      "southward": 0.744567501122939,
+      "eastward": 0.8517552568425605
+    }
+  },
+  {
+    "from": {
+      "interior": true,
+      "southward": 0.744567501122939,
+      "eastward": 0.8517552568425605
     },
     "to": {
       "side": "east",
-      "t": 0.603
+      "t": 0.573
     }
   },
   {
     "from": {
       "side": "north",
-      "t": 0.603
+      "t": 0.573
     },
     "to": {
       "side": "south",
-      "t": 0.861
+      "t": 0.8
     }
   },
   {
     "from": {
       "side": "west",
-      "t": 0.861
+      "t": 0.8
     },
     "to": {
       "side": "north",
-      "t": 0.487
-    }
-  },
-  {
-    "from": {
-      "side": "east",
-      "t": 0.487
-    },
-    "to": {
-      "side": "east",
-      "t": 0.273
-    }
-  },
-  {
-    "from": {
-      "side": "north",
-      "t": 0.273
-    },
-    "to": {
-      "side": "west",
-      "t": 0.397
-    }
-  },
-  {
-    "from": {
-      "side": "south",
-      "t": 0.397
-    },
-    "to": {
-      "side": "north",
-      "t": 0.804
-    }
-  },
-  {
-    "from": {
-      "side": "east",
-      "t": 0.804
-    },
-    "to": {
-      "side": "south",
-      "t": 0.36
-    }
-  },
-  {
-    "from": {
-      "side": "west",
-      "t": 0.36
-    },
-    "to": {
-      "side": "north",
-      "t": 0.216
-    }
-  },
-  {
-    "from": {
-      "side": "east",
-      "t": 0.216
-    },
-    "to": {
-      "side": "east",
-      "t": 0.548
+      "t": 0.493
     }
   }
 ]
