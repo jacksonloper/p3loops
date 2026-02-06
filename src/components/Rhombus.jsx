@@ -15,6 +15,17 @@ import {
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints, isSameSideEdge } from '../utils/pathLogic.js';
 import './Rhombus.css';
 
+// Snap radius for boundary detection (in SVG units)
+const SNAP_RADIUS = 20;
+
+/**
+ * Check if an interior point is within valid bounds [0,1]^2.
+ */
+function isValidInteriorPoint(interior) {
+  return interior.southward >= 0 && interior.southward <= 1 && 
+         interior.eastward >= 0 && interior.eastward <= 1;
+}
+
 /**
  * Calculate direction arrow symbol and rotation for an edge.
  * Returns { symbol: '▶', rotation: degrees }
@@ -62,10 +73,20 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   // Handle mouse move for hover feedback
   const handleMouseMove = useCallback((e) => {
     const { x, y } = getMouseCoords(e);
+    const forceInterior = e.shiftKey && interiorMode && selectedStartPoint;
+    
+    // If shift is held and interior mode is on, show interior point directly
+    if (forceInterior) {
+      const interior = findInteriorPoint(x, y);
+      if (isValidInteriorPoint(interior)) {
+        setHoverPoint(interior);
+        return;
+      }
+    }
     
     // Check boundary first
     const closest = findClosestPointOnBoundary(x, y);
-    if (closest.distance < 30) {
+    if (closest.distance < SNAP_RADIUS) {
       setHoverPoint(closest);
       return;
     }
@@ -73,8 +94,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     // If in interior mode with start point selected, show interior hover
     if (interiorMode && selectedStartPoint) {
       const interior = findInteriorPoint(x, y);
-      if (interior.southward >= 0 && interior.southward <= 1 && 
-          interior.eastward >= 0 && interior.eastward <= 1) {
+      if (isValidInteriorPoint(interior)) {
         setHoverPoint(interior);
         return;
       }
@@ -90,15 +110,16 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   // Handle click to add edges
   const handleClick = useCallback((e) => {
     const { x, y } = getMouseCoords(e);
+    const forceInterior = e.shiftKey && interiorMode && selectedStartPoint;
     
-    // Check if clicking on a continuation start point
-    if (edges.length > 0 && !selectedStartPoint) {
+    // Check if clicking on a continuation start point (unless forcing interior)
+    if (edges.length > 0 && !selectedStartPoint && !forceInterior) {
       const startPoints = getNextEdgeStartPoints(edges);
       if (startPoints) {
         for (const sp of startPoints) {
           const spCoords = getPointCoordinates(sp);
           const dist = Math.sqrt((spCoords.x - x) ** 2 + (spCoords.y - y) ** 2);
-          if (dist < 20) {
+          if (dist < SNAP_RADIUS) {
             onSelectStartPoint(sp);
             return;
           }
@@ -110,12 +131,17 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     const closestBoundary = findClosestPointOnBoundary(x, y);
     let clickedPoint = null;
     
-    if (closestBoundary.distance < 30) {
+    // If shift is held and interior mode on, force interior point
+    if (forceInterior) {
+      const interior = findInteriorPoint(x, y);
+      if (isValidInteriorPoint(interior)) {
+        clickedPoint = { interior: true, southward: interior.southward, eastward: interior.eastward };
+      }
+    } else if (closestBoundary.distance < SNAP_RADIUS) {
       clickedPoint = { side: closestBoundary.side, t: closestBoundary.t };
     } else if (interiorMode && selectedStartPoint) {
       const interior = findInteriorPoint(x, y);
-      if (interior.southward >= 0 && interior.southward <= 1 && 
-          interior.eastward >= 0 && interior.eastward <= 1) {
+      if (isValidInteriorPoint(interior)) {
         clickedPoint = { interior: true, southward: interior.southward, eastward: interior.eastward };
       }
     }
@@ -338,13 +364,13 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
           <p>Click on the boundary to select a starting point for your first edge.</p>
         )}
         {edges.length === 0 && selectedStartPoint && (
-          <p>Now click on another point to create your first edge.{interiorMode ? ' Interior points enabled.' : ''}</p>
+          <p>Now click on another point to create your first edge.{interiorMode ? ' Hold Shift to place interior point.' : ''}</p>
         )}
         {edges.length > 0 && !selectedStartPoint && (
           <p>Click on the highlighted point to continue the path.</p>
         )}
         {edges.length > 0 && selectedStartPoint && (
-          <p>Click on a point to create the next edge.{interiorMode ? ' Interior points enabled.' : ''}</p>
+          <p>Click on a point to create the next edge.{interiorMode ? ' Hold Shift for interior.' : ''}</p>
         )}
       </div>
     </div>
