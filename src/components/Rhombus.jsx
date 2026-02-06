@@ -118,10 +118,17 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     const x = (e.clientX - rect.left) / rect.width * (size + 2 * padding) - padding;
     const y = (e.clientY - rect.top) / rect.height * (size + 2 * padding) - padding;
     
-    // If in interior mode when a start point is selected, find interior point
+    // Always check boundary first - this provides the visual cue with complementary point
+    const closest = findClosestPointOnBoundary(x, y, false);
+    if (closest.distance < 30) {
+      // Near boundary - show boundary point hover (with complementary indicator)
+      setHoverPoint(closest);
+      return;
+    }
+    
+    // Not near boundary - if in interior mode with start point selected, show interior.
     if (interiorMode && selectedStartPoint) {
       const interior = findInteriorPoint(x, y);
-      // Only show interior point if it's actually inside
       if (interior.southward >= 0 && interior.southward <= 1 && 
           interior.eastward >= 0 && interior.eastward <= 1) {
         setHoverPoint(interior);
@@ -129,22 +136,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       }
     }
     
-    // Otherwise, find closest boundary point
-    const closest = findClosestPointOnBoundary(x, y, false);
-    if (closest.distance < 30) {
-      setHoverPoint(closest);
-    } else if (interiorMode && selectedStartPoint) {
-      // If in interior mode, also check interior
-      const interior = findInteriorPoint(x, y);
-      if (interior.southward >= 0 && interior.southward <= 1 && 
-          interior.eastward >= 0 && interior.eastward <= 1) {
-        setHoverPoint(interior);
-      } else {
-        setHoverPoint(null);
-      }
-    } else {
-      setHoverPoint(null);
-    }
+    setHoverPoint(null);
   }, [size, padding, interiorMode, selectedStartPoint]);
   
   const handleMouseLeave = useCallback(() => {
@@ -157,6 +149,22 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     const rect = svg.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width * (size + 2 * padding) - padding;
     const y = (e.clientY - rect.top) / rect.height * (size + 2 * padding) - padding;
+    
+    // First, check if we're clicking on a valid start point for continuation
+    // This takes priority because start points can be interior points
+    if (edges.length > 0 && !selectedStartPoint) {
+      const startPoints = getNextEdgeStartPoints(edges);
+      if (startPoints) {
+        for (const sp of startPoints) {
+          const spCoords = getPointCoordinates(sp);
+          const dist = Math.sqrt((spCoords.x - x) ** 2 + (spCoords.y - y) ** 2);
+          if (dist < 20) {
+            onSelectStartPoint(sp);
+            return;
+          }
+        }
+      }
+    }
     
     // Find the closest point (boundary or interior based on mode)
     const closestBoundary = findClosestPointOnBoundary(x, y, false);
@@ -210,28 +218,6 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         onSelectStartPoint(null);
       }
       return;
-    }
-    
-    // We have existing edges
-    const startPoints = getNextEdgeStartPoints(edges);
-    
-    // Check if user clicked on one of the valid start points
-    const clickedOnStart = startPoints && startPoints.some(sp => {
-      const spCoords = getPointCoordinates(sp);
-      const dist = Math.sqrt((spCoords.x - x) ** 2 + (spCoords.y - y) ** 2);
-      return dist < 20;
-    });
-    
-    if (clickedOnStart && !selectedStartPoint) {
-      // Find which start point was clicked
-      for (const sp of startPoints) {
-        const spCoords = getPointCoordinates(sp);
-        const dist = Math.sqrt((spCoords.x - x) ** 2 + (spCoords.y - y) ** 2);
-        if (dist < 20) {
-          onSelectStartPoint(sp);
-          return;
-        }
-      }
     }
     
     // If we have a start point selected, create an edge

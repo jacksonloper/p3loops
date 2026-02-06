@@ -72,13 +72,13 @@ const SIZE = 300;
 const SHEAR = SIZE / Math.sqrt(3);
 
 // Corner positions of the rhombus (after shearing)
-// Starting from unit square corners and applying shear transformation
-// The shear moves points rightward based on how far down they are (southward)
-// NW corner: (0, 0) -> sheared to (SHEAR/2, 0) to center the rhombus
-// NE corner: (SIZE, 0) -> sheared to (SIZE + SHEAR/2, 0)
-// SE corner: (SIZE, SIZE) -> sheared to (SIZE - SHEAR/2, SIZE)
-// SW corner: (0, SIZE) -> sheared to (-SHEAR/2, SIZE)
-// We center it by shifting: x' = x + SHEAR/2 - southward * SHEAR
+// Starting from unit square corners and applying shear transformation.
+// The shear moves points leftward at the top, rightward at the bottom.
+// NW corner: (0, 0) -> sheared to (-SHEAR/2, 0)
+// NE corner: (SIZE, 0) -> sheared to (SIZE - SHEAR/2, 0)
+// SE corner: (SIZE, SIZE) -> sheared to (SIZE + SHEAR/2, SIZE)
+// SW corner: (0, SIZE) -> sheared to (SHEAR/2, SIZE)
+// This creates: NE and SW corners at 120°, NW and SE corners at 60°
 const HALF_SHEAR = SHEAR / 2;
 
 // Transform from unit square coordinates to rhombus coordinates
@@ -87,8 +87,10 @@ export function unitSquareToRhombus(southward, eastward) {
   // Y position is straightforward
   const y = southward * SIZE;
   // X position: start at eastward * SIZE, then apply shear based on vertical position
-  // Shear shifts right at top, left at bottom (to create the 60° angles at NW/SE)
-  const shearOffset = HALF_SHEAR - southward * SHEAR;
+  // Shear shifts left at top, right at bottom (to create the 120° angles at NE/SW)
+  // At southward=0 (top), shearOffset = -HALF_SHEAR (shift left)
+  // At southward=1 (bottom), shearOffset = +HALF_SHEAR (shift right)
+  const shearOffset = -HALF_SHEAR + southward * SHEAR;
   const x = eastward * SIZE + shearOffset;
   return { x, y };
 }
@@ -165,7 +167,7 @@ export function getBow() {
 // Transform from rhombus screen coordinates back to unit square
 export function rhombusToUnitSquare(x, y) {
   const southward = y / SIZE;
-  const shearOffset = HALF_SHEAR - southward * SHEAR;
+  const shearOffset = -HALF_SHEAR + southward * SHEAR;
   const eastward = (x - shearOffset) / SIZE;
   return { southward, eastward };
 }
