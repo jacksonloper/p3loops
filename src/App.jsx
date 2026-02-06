@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import './App.css'
 import Rhombus from './components/Rhombus.jsx'
 import { validatePath, autospaceEdges, findValidRandomEdge, getNextEdgeStartPoints } from './utils/pathLogic.js'
@@ -18,6 +18,7 @@ function PathEditorApp() {
   const [beadCount, setBeadCount] = useState(3)
   const [beadSpeed, setBeadSpeed] = useState(0.3)
   const [interiorMode, setInteriorMode] = useState(true)
+  const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null)
 
   const appendEdgeToPath = useCallback((newEdge) => {
     setPathEdges(currentEdges => [...currentEdges, newEdge])
@@ -69,9 +70,22 @@ function PathEditorApp() {
     })
   }, [pathEdges])
 
-  const handleEdgeError = useCallback((errorMessage) => {
+  const handleEdgeError = useCallback((errorMessage, crossingEdgeIndex = null) => {
     setValidationMessage(errorMessage)
+    if (crossingEdgeIndex !== null) {
+      setHighlightedEdgeIndex(crossingEdgeIndex)
+    }
   }, [])
+
+  // Clear highlighted edge after 2 seconds
+  useEffect(() => {
+    if (highlightedEdgeIndex !== null) {
+      const timeout = setTimeout(() => {
+        setHighlightedEdgeIndex(null)
+      }, 2000)
+      return () => clearTimeout(timeout)
+    }
+  }, [highlightedEdgeIndex])
 
   const handleAutospace = useCallback(() => {
     if (pathEdges.length === 0) return
@@ -126,6 +140,7 @@ function PathEditorApp() {
             beadCount={beadCount}
             beadSpeed={beadSpeed}
             interiorMode={interiorMode}
+            highlightedEdgeIndex={highlightedEdgeIndex}
           />
         </section>
 

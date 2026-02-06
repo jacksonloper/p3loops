@@ -15,7 +15,7 @@
  * Same-side edges are forbidden (e.g., north to north).
  */
 
-import { getIdentifiedSide, pointsAreEqual, getPointCoordinates, isInteriorPoint, SIDES } from './geometry.js';
+import { getIdentifiedSide, pointsAreEqual, getPointCoordinates, getPointPaperCoordinates, isInteriorPoint, SIDES } from './geometry.js';
 
 // Normalize a point to its canonical representation
 // For interior points, just return as-is
@@ -64,17 +64,19 @@ export function pointExistsInPath(point, edges) {
   return allPoints.some(p => pointsAreEqual(p, point));
 }
 
-// Line segment intersection detection
+// Line segment intersection detection in paper coordinates
 // Returns true if line segment (p1, p2) intersects (p3, p4)
-function segmentsIntersect(p1, p2, p3, p4) {
+// where p1, p2, p3, p4 are {southward, eastward} coordinates
+function segmentsIntersectPaper(p1, p2, p3, p4) {
   function ccw(A, B, C) {
-    return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+    return (C.eastward - A.eastward) * (B.southward - A.southward) > 
+           (B.eastward - A.eastward) * (C.southward - A.southward);
   }
   
   // Check if segments share an endpoint (they're allowed to touch at endpoints)
   const eps = 0.0001;
   function pointsClose(a, b) {
-    return Math.abs(a.x - b.x) < eps && Math.abs(a.y - b.y) < eps;
+    return Math.abs(a.southward - b.southward) < eps && Math.abs(a.eastward - b.eastward) < eps;
   }
   
   if (pointsClose(p1, p3) || pointsClose(p1, p4) || pointsClose(p2, p3) || pointsClose(p2, p4)) {
@@ -84,6 +86,13 @@ function segmentsIntersect(p1, p2, p3, p4) {
   return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
 }
 
+// Get paper coordinates for an edge (as line segment in unit square)
+export function getEdgePaperCoordinates(edge) {
+  const from = getPointPaperCoordinates(edge.from);
+  const to = getPointPaperCoordinates(edge.to);
+  return { from, to };
+}
+
 // Get screen coordinates for an edge (as line segment)
 export function getEdgeCoordinates(edge) {
   const from = getPointCoordinates(edge.from);
@@ -91,21 +100,22 @@ export function getEdgeCoordinates(edge) {
   return { from, to };
 }
 
-// Check if two edges cross
+// Check if two edges cross (using paper coordinates)
 export function edgesCross(edge1, edge2) {
-  const coords1 = getEdgeCoordinates(edge1);
-  const coords2 = getEdgeCoordinates(edge2);
-  return segmentsIntersect(coords1.from, coords1.to, coords2.from, coords2.to);
+  const coords1 = getEdgePaperCoordinates(edge1);
+  const coords2 = getEdgePaperCoordinates(edge2);
+  return segmentsIntersectPaper(coords1.from, coords1.to, coords2.from, coords2.to);
 }
 
 // Check if an edge crosses any existing edge in the path
+// Returns { crosses: boolean, crossingEdgeIndex: number | null }
 export function edgeCrossesPath(newEdge, existingEdges) {
-  for (const edge of existingEdges) {
-    if (edgesCross(newEdge, edge)) {
-      return true;
+  for (let i = 0; i < existingEdges.length; i++) {
+    if (edgesCross(newEdge, existingEdges[i])) {
+      return { crosses: true, crossingEdgeIndex: i };
     }
   }
-  return false;
+  return { crosses: false, crossingEdgeIndex: null };
 }
 
 // Check if a path is non-crossing
@@ -225,6 +235,7 @@ export function validatePath(edges) {
 }
 
 // Check if adding a new edge would be valid
+// Returns { valid: boolean, error?: string, crossingEdgeIndex?: number }
 export function canAddEdge(newEdge, existingEdges) {
   // Check for same-side edges (forbidden)
   if (isSameSideEdge(newEdge)) {
@@ -247,8 +258,13 @@ export function canAddEdge(newEdge, existingEdges) {
   }
   
   // Check for crossings
-  if (edgeCrossesPath(newEdge, existingEdges)) {
-    return { valid: false, error: 'New edge would cross an existing edge' };
+  const crossingResult = edgeCrossesPath(newEdge, existingEdges);
+  if (crossingResult.crosses) {
+    return { 
+      valid: false, 
+      error: `New edge would cross existing edge #${crossingResult.crossingEdgeIndex + 1}`,
+      crossingEdgeIndex: crossingResult.crossingEdgeIndex
+    };
   }
   
   return { valid: true };

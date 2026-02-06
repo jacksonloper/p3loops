@@ -133,6 +133,39 @@ export function getPointCoordinates(point) {
   return getPointOnSide(point.side, point.t);
 }
 
+// Get "paper coordinates" (unit square before shearing) for a point on a side
+// Paper coordinates are (southward, eastward) in [0,1]^2
+function getPointOnSidePaperCoords(side, t) {
+  switch (side) {
+    case 'north': {
+      // West to east at top (southward = 0)
+      return { southward: 0, eastward: t };
+    }
+    case 'east': {
+      // South to north at right (eastward = 1)
+      return { southward: 1 - t, eastward: 1 };
+    }
+    case 'south': {
+      // East to west at bottom (southward = 1)
+      return { southward: 1, eastward: 1 - t };
+    }
+    case 'west': {
+      // North to south at left (eastward = 0)
+      return { southward: t, eastward: 0 };
+    }
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
+}
+
+// Get paper coordinates (unit square) for any point
+export function getPointPaperCoordinates(point) {
+  if (isInteriorPoint(point)) {
+    return { southward: point.southward, eastward: point.eastward };
+  }
+  return getPointOnSidePaperCoords(point.side, point.t);
+}
+
 // Get SVG path for the entire rhombus
 export function getRhombusPath() {
   // Get the four corners

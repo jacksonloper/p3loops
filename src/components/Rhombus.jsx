@@ -54,12 +54,13 @@ function getPositionOnPath(edges, proportion) {
  * @param {function} onAddEdge - Callback when a new edge is added
  * @param {Object|null} selectedStartPoint - Currently selected start point for next edge
  * @param {function} onSelectStartPoint - Callback to set selected start point
- * @param {function} onError - Callback for error messages
+ * @param {function} onError - Callback for error messages, receives (message, crossingEdgeIndex?)
  * @param {number} beadCount - Number of animated beads to display (0-10)
  * @param {number} beadSpeed - Animation speed in cycles per second (how many times a bead completes the path per second)
  * @param {boolean} interiorMode - Whether to allow selecting interior points
+ * @param {number|null} highlightedEdgeIndex - Index of edge to highlight (for crossing errors)
  */
-function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError, beadCount = 3, beadSpeed = 0.5, interiorMode = false }) {
+function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError, beadCount = 3, beadSpeed = 0.5, interiorMode = false, highlightedEdgeIndex = null }) {
   const [hoverPoint, setHoverPoint] = useState(null);
   const [beadPhase, setBeadPhase] = useState(0);
   const animationRef = useRef(null);
@@ -230,7 +231,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       // Check if valid
       const validation = canAddEdge(newEdge, edges);
       if (!validation.valid) {
-        onError(validation.error);
+        onError(validation.error, validation.crossingEdgeIndex);
         onSelectStartPoint(null);
         return;
       }
@@ -243,6 +244,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   // Render the edges
   const edgeElements = edges.map((edge, index) => {
     const coords = getEdgeCoordinates(edge);
+    const isHighlighted = highlightedEdgeIndex === index;
     return (
       <line
         key={index}
@@ -250,8 +252,8 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         y1={coords.from.y}
         x2={coords.to.x}
         y2={coords.to.y}
-        className="edge-line"
-        strokeWidth="3"
+        className={`edge-line ${isHighlighted ? 'edge-line-problem' : ''}`}
+        strokeWidth={isHighlighted ? "5" : "3"}
       />
     );
   });
