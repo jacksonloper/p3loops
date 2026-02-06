@@ -98,6 +98,14 @@
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
+/* Ghost paths - full set of edges shown in each rhombus in very subtle gray */
+.ghost-path {
+  stroke: rgba(150, 150, 150, 0.25);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Trajectory styling */
 .trajectory-line {
   stroke: #e94560;

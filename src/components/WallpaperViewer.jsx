@@ -13,6 +13,27 @@ import { isInteriorPoint } from '../utils/geometry.js';
 import './WallpaperViewer.css';
 
 /**
+ * Generate SVG path string for all edges rendered in a given reference frame.
+ * This shows the full original path as it would appear in each rhombus copy.
+ * @param {Array} edges - Array of edge objects with from/to points
+ * @param {Object} frame - Reference frame to transform points into
+ * @returns {string} - SVG path string
+ */
+function generateAllEdgesPathString(edges, frame) {
+  if (edges.length === 0) return '';
+  
+  const pathParts = [];
+  
+  for (const edge of edges) {
+    const fromPt = pointToScreenSpace(edge.from, frame);
+    const toPt = pointToScreenSpace(edge.to, frame);
+    pathParts.push(`M ${fromPt.x} ${fromPt.y} L ${toPt.x} ${toPt.y}`);
+  }
+  
+  return pathParts.join(' ');
+}
+
+/**
  * Generate the wallpaper data: path points and rhombus frames visited.
  * @param {Array} edges - Array of edge objects with from/to points
  * @returns {{ pathPoints: Array, rhombusFrames: Array }}
@@ -162,6 +183,7 @@ function WallpaperViewer({ edges, onClose }) {
             {/* Draw rhombi first (subtle background) */}
             {rhombusFrames.map((frame, index) => {
               const markerInfo = getNorthMarkerInfo(frame);
+              const ghostPathString = generateAllEdgesPathString(edges, frame);
               return (
                 <g key={index} className="rhombus-instance">
                   {/* Rhombus outline */}
@@ -169,6 +191,15 @@ function WallpaperViewer({ edges, onClose }) {
                     d={getRhombusPathString(frame)} 
                     className="rhombus-outline"
                   />
+                  
+                  {/* Ghost paths - all edges shown in subtle gray */}
+                  {ghostPathString && (
+                    <path 
+                      d={ghostPathString}
+                      className="ghost-path"
+                      fill="none"
+                    />
+                  )}
                   
                   {/* North marker "N" */}
                   <text
