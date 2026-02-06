@@ -25,7 +25,8 @@ import {
   NE_CORNER,
   SW_CORNER,
   NW_CORNER,
-  SE_CORNER
+  SE_CORNER,
+  SIDE
 } from './wallpaperGeometry.js';
 
 // Tolerance for floating-point comparisons in geometry tests
@@ -370,10 +371,10 @@ describe('pointToScreenSpace', () => {
 });
 
 describe('edge length sanity check', () => {
-  // The rhombus has side length 300 and 60/120 degree angles
-  // The diameter (longest diagonal) is: 2 * 300 * sin(60°) ≈ 519.6
+  // The rhombus has 60/120 degree angles
+  // The diameter (longest diagonal) is: 2 * SIDE * sin(60°) ≈ 519.6 for SIDE=300
   // No edge should ever exceed this length
-  const RHOMBUS_DIAMETER = 2 * 300 * Math.sin(60 * Math.PI / 180);
+  const RHOMBUS_DIAMETER = 2 * SIDE * Math.sin(60 * Math.PI / 180);
   
   function distance(p1, p2) {
     return Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);

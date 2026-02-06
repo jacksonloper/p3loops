@@ -300,5 +300,5 @@ export function pathToWallpaperPath(edges) {
   return points;
 }
 
-// Export corner coordinates for testing (functions already exported with 'export function')
-export { NE_CORNER, SW_CORNER, NW_CORNER, SE_CORNER };
+// Export corner coordinates and rhombus dimensions for testing
+export { NE_CORNER, SW_CORNER, NW_CORNER, SE_CORNER, SIDE };
