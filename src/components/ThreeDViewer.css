@@ -1,0 +1,87 @@
+.three-d-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.three-d-viewer-container {
+  width: 90vw;
+  max-width: 900px;
+  height: 80vh;
+  background: #1a1a2e;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.three-d-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.three-d-viewer-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #e0e0e0;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.three-d-close-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
+  padding-bottom: 2px;
+}
+
+.three-d-close-btn:hover {
+  background: rgba(220, 53, 69, 0.6);
+  color: white;
+}
+
+.three-d-canvas-container {
+  flex: 1;
+  position: relative;
+  background: #1a1a2e;
+}
+
+.three-d-canvas-container canvas {
+  display: block;
+}
+
+.three-d-instructions {
+  padding: 0.75rem 1rem;
+  background: rgba(74, 144, 217, 0.1);
+  text-align: center;
+}
+
+.three-d-instructions p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #888;
+}
