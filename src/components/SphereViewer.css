@@ -97,6 +97,11 @@
   background: #ffc107;
 }
 
+.legend-dot.orange {
+  background: #ffaa00;
+  opacity: 0.8;
+}
+
 .legend-cone {
   display: inline-block;
   width: 0;
@@ -110,4 +115,15 @@
 .hint {
   color: #666 !important;
   font-style: italic;
+}
+
+.latlon-info {
+  background: rgba(255, 170, 0, 0.15);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+  text-align: left;
 }

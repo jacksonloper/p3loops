@@ -20,29 +20,29 @@ import { getPointPaperCoordinates } from './geometry.js';
 /**
  * Convert unit square coordinates (southward, eastward) to latitude/longitude.
  * 
- * Using the diagonal coordinates:
- *   - u = (eastward - southward) / 2 + 0.5  (ranges 0 to 1 along NW-SE diagonal direction)
- *   - v = (eastward + southward) / 2        (ranges 0 to 1 along SW-NE diagonal, 0 at NE, 1 at SW)
+ * The mapping is based on the diagonal coordinates of the unit square:
+ *   - v = (southward + (1 - eastward)) / 2: distance from NE corner along polar axis
+ *     - v = 0 at NE (north pole), v = 1 at SW (south pole)
+ *   - u = (southward + eastward) / 2: position along the equatorial direction
+ *     - u = 0 at NW, u = 1 at SE (both on equator, 180° apart)
  * 
- * Then:
- *   - latitude = 90° - 180° * v  (north pole at v=0, south pole at v=1)
- *   - longitude = 360° * (u - 0.5)  (ranges -180° to +180°)
+ * Latitude: 90° at NE pole, -90° at SW pole
+ * Longitude: -180° at NW, +180° at SE
  */
 export function unitSquareToLatLon(southward, eastward) {
-  // Position along the NW-SE diagonal (perpendicular to polar axis)
-  // At NW (0,0): u = 0.5, at SE (1,1): u = 0.5 (both on equator)
-  // At NE (0,1): u = 1, at SW (1,0): u = 0
-  const u = (eastward - southward + 1) / 2;
-  
   // Position along the NE-SW diagonal (polar axis)
-  // At NE (0,1): v = 0.5, at SW (1,0): v = 0.5
-  // Let's use a different parameterization based on distance to NE corner
-  // Distance from NE corner (0,1) to point (s,e):
-  // For latitude, we need distance along the polar axis
-  const v = (southward + (1 - eastward)) / 2; // 0 at NE, 1 at SW
+  // v = 0 at NE corner (0,1), v = 1 at SW corner (1,0)
+  const v = (southward + (1 - eastward)) / 2;
   
-  const latitude = 90 - 180 * v; // degrees, +90 at NE, -90 at SW
-  const longitude = 360 * (u - 0.5); // degrees, -180 to +180
+  // Position along the NW-SE diagonal (equatorial direction)
+  // u = 0 at NW corner (0,0), u = 1 at SE corner (1,1)
+  const u = (southward + eastward) / 2;
+  
+  // Latitude: +90° at north pole (v=0), -90° at south pole (v=1)
+  const latitude = 90 - 180 * v;
+  
+  // Longitude: -180° at NW (u=0), +180° at SE (u=1), 0° at center (u=0.5)
+  const longitude = 360 * (u - 0.5);
   
   return { latitude, longitude };
 }

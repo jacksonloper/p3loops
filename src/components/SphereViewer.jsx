@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { subdivideEdgeOnSphere, getEdgeMidpointAndDirection } from '../utils/sphereGeometry.js';
+import { subdivideEdgeOnSphere, getEdgeMidpointAndDirection, unitSquareToLatLon } from '../utils/sphereGeometry.js';
+import { getPointPaperCoordinates } from '../utils/geometry.js';
 import './SphereViewer.css';
 
 const SPHERE_RADIUS = 1;
@@ -20,6 +21,8 @@ function SphereViewer({ edges, onClose }) {
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
   const animationIdRef = useRef(null);
+  const clickablePointsRef = useRef([]);
+  const [selectedPoint, setSelectedPoint] = useState(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -90,8 +93,13 @@ function SphereViewer({ edges, onClose }) {
     const pathGroup = new THREE.Group();
     scene.add(pathGroup);
 
+    // Store clickable points for lat/lon lookup
+    const clickablePoints = [];
+
     // Add edges as line segments
-    edges.forEach((edge) => {
+    edges.forEach((edge, edgeIndex) => {
+      const fromPaper = getPointPaperCoordinates(edge.from);
+      const toPaper = getPointPaperCoordinates(edge.to);
       const points = subdivideEdgeOnSphere(edge, SUBDIVISIONS, SPHERE_RADIUS);
       
       // Create line geometry from subdivided points
@@ -106,6 +114,41 @@ function SphereViewer({ edges, onClose }) {
       
       const line = new THREE.Line(lineGeometry, lineMaterial);
       pathGroup.add(line);
+
+      // Add small clickable spheres at each subdivision point
+      for (let i = 0; i <= SUBDIVISIONS; i++) {
+        const t = i / SUBDIVISIONS;
+        
+        // Interpolate paper coordinates
+        const southward = fromPaper.southward + t * (toPaper.southward - fromPaper.southward);
+        const eastward = fromPaper.eastward + t * (toPaper.eastward - fromPaper.eastward);
+        
+        // Get lat/lon for this point
+        const { latitude, longitude } = unitSquareToLatLon(southward, eastward);
+        
+        // Create small sphere marker (slightly larger for easier clicking)
+        const markerGeometry = new THREE.SphereGeometry(0.04, 8, 8);
+        const markerMaterial = new THREE.MeshBasicMaterial({ 
+          color: 0xffaa00,
+          transparent: true,
+          opacity: 0.7
+        });
+        const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+        marker.position.set(points[i].x, points[i].y, points[i].z);
+        
+        // Store lat/lon data on the marker
+        marker.userData = {
+          edgeIndex,
+          pointIndex: i,
+          southward,
+          eastward,
+          latitude,
+          longitude
+        };
+        
+        pathGroup.add(marker);
+        clickablePoints.push(marker);
+      }
 
       // Add direction cone at midpoint of each edge
       const { position, direction } = getEdgeMidpointAndDirection(edge, SPHERE_RADIUS);
@@ -137,6 +180,9 @@ function SphereViewer({ edges, onClose }) {
       
       pathGroup.add(cone);
     });
+
+    // Store clickable points ref for click handling
+    clickablePointsRef.current = clickablePoints;
 
     // Add endpoint markers (spheres at start and end of path)
     if (edges.length > 0) {
@@ -177,9 +223,37 @@ function SphereViewer({ edges, onClose }) {
     }
     window.addEventListener('resize', handleResize);
 
+    // Handle click for lat/lon lookup
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    
+    function handleClick(event) {
+      if (!containerRef.current || !cameraRef.current) return;
+      
+      const rect = containerRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      
+      raycaster.setFromCamera(mouse, cameraRef.current);
+      
+      const intersects = raycaster.intersectObjects(clickablePointsRef.current);
+      
+      if (intersects.length > 0) {
+        const clicked = intersects[0].object;
+        if (clicked.userData && clicked.userData.latitude !== undefined) {
+          setSelectedPoint(clicked.userData);
+        }
+      } else {
+        setSelectedPoint(null);
+      }
+    }
+    
+    renderer.domElement.addEventListener('click', handleClick);
+
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
+      renderer.domElement.removeEventListener('click', handleClick);
       if (animationIdRef.current) {
         cancelAnimationFrame(animationIdRef.current);
       }
@@ -221,8 +295,19 @@ function SphereViewer({ edges, onClose }) {
             <span className="legend-item"><span className="legend-dot green" /> Start</span>
             <span className="legend-item"><span className="legend-dot yellow" /> End</span>
             <span className="legend-item"><span className="legend-cone" /> Flow direction</span>
+            <span className="legend-item"><span className="legend-dot orange" /> Click for lat/lon</span>
           </p>
-          <p className="hint">Click and drag to rotate. Scroll to zoom.</p>
+          {selectedPoint ? (
+            <div className="latlon-info">
+              <strong>Selected Point (Edge {selectedPoint.edgeIndex + 1}, Point {selectedPoint.pointIndex}):</strong>
+              <br />
+              Paper coords: southward={selectedPoint.southward.toFixed(3)}, eastward={selectedPoint.eastward.toFixed(3)}
+              <br />
+              <strong>Latitude: {selectedPoint.latitude.toFixed(2)}°</strong> | <strong>Longitude: {selectedPoint.longitude.toFixed(2)}°</strong>
+            </div>
+          ) : (
+            <p className="hint">Click on orange markers along path to see lat/lon. Drag to rotate, scroll to zoom.</p>
+          )}
         </div>
       </div>
     </div>
