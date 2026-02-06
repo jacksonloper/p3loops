@@ -185,12 +185,7 @@ export function updateReferenceFrameForSide(side, currentFrame) {
  * @returns {{ x: number, y: number }} - Screen coordinates in TRUE rhombus
  */
 export function paperToTrueRhombus(southward, eastward) {
-  // Linear interpolation within the rhombus
-  // P = NW + eastward * (NE - NW) + southward * (SW - NW)
-  // But NW + (NE - NW) + (SW - NW) should give SE
-  // Let's verify: NW + NE - NW + SW - NW = NE + SW - NW = ?
-  // Actually for a parallelogram: NE + SW = NW + SE, so NE + SW - NW = SE ✓
-  
+  // Bilinear interpolation: P = NW + eastward*(NE-NW) + southward*(SW-NW)
   const x = NW_CORNER.x + eastward * (NE_CORNER.x - NW_CORNER.x) + southward * (SW_CORNER.x - NW_CORNER.x);
   const y = NW_CORNER.y + eastward * (NE_CORNER.y - NW_CORNER.y) + southward * (SW_CORNER.y - NW_CORNER.y);
   

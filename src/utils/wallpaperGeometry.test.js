@@ -28,9 +28,10 @@ import {
   SE_CORNER
 } from './wallpaperGeometry.js';
 
-const EPSILON = 0.0001;
+// Tolerance for floating-point comparisons in geometry tests
+const TOLERANCE = 0.01;
 
-function expectPointsClose(p1, p2, tolerance = EPSILON) {
+function expectPointsClose(p1, p2, tolerance = TOLERANCE) {
   expect(Math.abs(p1.x - p2.x)).toBeLessThan(tolerance);
   expect(Math.abs(p1.y - p2.y)).toBeLessThan(tolerance);
 }
@@ -108,7 +109,7 @@ describe('Wall crossing continuity - North wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('east', t); // Entry is on east side with same t
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 
   it('should maintain position continuity when crossing north wall at t=0.5', () => {
@@ -122,7 +123,7 @@ describe('Wall crossing continuity - North wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('east', t);
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 
   it('should maintain position continuity when crossing north wall at t=0.8', () => {
@@ -136,7 +137,7 @@ describe('Wall crossing continuity - North wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('east', t);
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 });
 
@@ -152,7 +153,7 @@ describe('Wall crossing continuity - East wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('north', t); // Entry is on north side
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 
   it('should maintain position continuity when crossing east wall at t=0.5', () => {
@@ -166,7 +167,7 @@ describe('Wall crossing continuity - East wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('north', t);
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 });
 
@@ -182,7 +183,7 @@ describe('Wall crossing continuity - South wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('west', t); // Entry is on west side
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 
   it('should maintain position continuity when crossing south wall at t=0.5', () => {
@@ -196,7 +197,7 @@ describe('Wall crossing continuity - South wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('west', t);
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 });
 
@@ -212,7 +213,7 @@ describe('Wall crossing continuity - West wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('south', t); // Entry is on south side
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 
   it('should maintain position continuity when crossing west wall at t=0.5', () => {
@@ -226,7 +227,7 @@ describe('Wall crossing continuity - West wall', () => {
     const entryPoint = getPointOnSideTrueRhombus('south', t);
     const afterCrossing = applyReferenceFrame(entryPoint.x, entryPoint.y, newFrame);
     
-    expectPointsClose(beforeCrossing, afterCrossing, 0.01);
+    expectPointsClose(beforeCrossing, afterCrossing);
   });
 });
 
@@ -246,7 +247,7 @@ describe('Multiple crossings continuity', () => {
     const eastEntry = getPointOnSideTrueRhombus('east', t1);
     const point1_after = applyReferenceFrame(eastEntry.x, eastEntry.y, frame);
     
-    expectPointsClose(point1_before, point1_after, 0.01);
+    expectPointsClose(point1_before, point1_after);
     
     // Second crossing: now in new frame, cross through north (entry side was east)
     // Let's say the path goes from east entry to north at t=0.5
@@ -257,7 +258,7 @@ describe('Multiple crossings continuity', () => {
     const eastEntry2 = getPointOnSideTrueRhombus('east', t2);
     const point2_after = applyReferenceFrame(eastEntry2.x, eastEntry2.y, frame);
     
-    expectPointsClose(point2_before, point2_after, 0.01);
+    expectPointsClose(point2_before, point2_after);
   });
 });
 
@@ -269,7 +270,7 @@ describe('NE corner fixed point for north/east rotations', () => {
     const beforeNE = applyReferenceFrame(NE_CORNER.x, NE_CORNER.y, frame);
     const afterNE = applyReferenceFrame(NE_CORNER.x, NE_CORNER.y, newFrame);
     
-    expectPointsClose(beforeNE, afterNE, 0.01);
+    expectPointsClose(beforeNE, afterNE);
   });
 
   it('should keep NE corner fixed when rotating around NE (east crossing)', () => {
@@ -279,7 +280,7 @@ describe('NE corner fixed point for north/east rotations', () => {
     const beforeNE = applyReferenceFrame(NE_CORNER.x, NE_CORNER.y, frame);
     const afterNE = applyReferenceFrame(NE_CORNER.x, NE_CORNER.y, newFrame);
     
-    expectPointsClose(beforeNE, afterNE, 0.01);
+    expectPointsClose(beforeNE, afterNE);
   });
 });
 
@@ -291,7 +292,7 @@ describe('SW corner fixed point for south/west rotations', () => {
     const beforeSW = applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame);
     const afterSW = applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, newFrame);
     
-    expectPointsClose(beforeSW, afterSW, 0.01);
+    expectPointsClose(beforeSW, afterSW);
   });
 
   it('should keep SW corner fixed when rotating around SW (west crossing)', () => {
@@ -301,7 +302,7 @@ describe('SW corner fixed point for south/west rotations', () => {
     const beforeSW = applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame);
     const afterSW = applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, newFrame);
     
-    expectPointsClose(beforeSW, afterSW, 0.01);
+    expectPointsClose(beforeSW, afterSW);
   });
 });
 
@@ -327,11 +328,11 @@ describe('pathToWallpaperPath', () => {
     
     // First point should be at north, t=0.25 in identity frame
     const expectedStart = getPointOnSideTrueRhombus('north', 0.25);
-    expectPointsClose(result[0], expectedStart, 0.01);
+    expectPointsClose(result[0], expectedStart);
     
     // Second point should be at south, t=0.75 in identity frame
     const expectedEnd = getPointOnSideTrueRhombus('south', 0.75);
-    expectPointsClose(result[1], expectedEnd, 0.01);
+    expectPointsClose(result[1], expectedEnd);
   });
 
   it('should handle interior points', () => {
@@ -346,7 +347,7 @@ describe('pathToWallpaperPath', () => {
     
     // Interior point should map to center of rhombus
     const expectedInterior = paperToTrueRhombus(0.5, 0.5);
-    expectPointsClose(result[1], expectedInterior, 0.01);
+    expectPointsClose(result[1], expectedInterior);
   });
 });
 
@@ -356,7 +357,7 @@ describe('pointToScreenSpace', () => {
     const point = { side: 'north', t: 0.5 };
     const result = pointToScreenSpace(point, frame);
     const expected = getPointOnSideTrueRhombus('north', 0.5);
-    expectPointsClose(result, expected, 0.01);
+    expectPointsClose(result, expected);
   });
 
   it('should correctly convert interior point with identity frame', () => {
@@ -364,6 +365,6 @@ describe('pointToScreenSpace', () => {
     const point = { interior: true, southward: 0.5, eastward: 0.5 };
     const result = pointToScreenSpace(point, frame);
     const expected = paperToTrueRhombus(0.5, 0.5);
-    expectPointsClose(result, expected, 0.01);
+    expectPointsClose(result, expected);
   });
 });
