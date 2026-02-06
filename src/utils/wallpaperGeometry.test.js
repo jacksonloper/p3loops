@@ -368,3 +368,57 @@ describe('pointToScreenSpace', () => {
     expectPointsClose(result, expected);
   });
 });
+
+describe('edge length sanity check', () => {
+  // The rhombus has side length 300 and 60/120 degree angles
+  // The diameter (longest diagonal) is: 2 * 300 * sin(60°) ≈ 519.6
+  // No edge should ever exceed this length
+  const RHOMBUS_DIAMETER = 2 * 300 * Math.sin(60 * Math.PI / 180);
+  
+  function distance(p1, p2) {
+    return Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+  }
+  
+  it('should not produce edges longer than rhombus diameter with multi-crossing path', () => {
+    // A path that crosses multiple boundaries
+    const edges = [
+      { from: { side: 'north', t: 0.3 }, to: { side: 'south', t: 0.7 } },
+      { from: { side: 'west', t: 0.7 }, to: { side: 'north', t: 0.5 } },
+      { from: { side: 'east', t: 0.5 }, to: { side: 'south', t: 0.4 } },
+      { from: { side: 'west', t: 0.4 }, to: { side: 'east', t: 0.6 } }
+    ];
+    
+    const points = pathToWallpaperPath(edges);
+    
+    for (let i = 0; i < points.length - 1; i++) {
+      const edgeLength = distance(points[i], points[i + 1]);
+      expect(edgeLength).toBeLessThanOrEqual(RHOMBUS_DIAMETER + TOLERANCE);
+    }
+  });
+  
+  it('should produce edges within rhombus bounds for example path', () => {
+    // The example from public/exampleedge.json
+    const exampleEdges = [
+      { from: { side: 'north', t: 0.368 }, to: { side: 'west', t: 0.473 } },
+      { from: { side: 'south', t: 0.473 }, to: { side: 'north', t: 0.67 } },
+      { from: { side: 'east', t: 0.67 }, to: { side: 'south', t: 0.313 } },
+      { from: { side: 'west', t: 0.313 }, to: { side: 'north', t: 0.185 } },
+      { from: { side: 'east', t: 0.185 }, to: { side: 'east', t: 0.603 } },
+      { from: { side: 'north', t: 0.603 }, to: { side: 'south', t: 0.861 } },
+      { from: { side: 'west', t: 0.861 }, to: { side: 'north', t: 0.487 } },
+      { from: { side: 'east', t: 0.487 }, to: { side: 'east', t: 0.273 } },
+      { from: { side: 'north', t: 0.273 }, to: { side: 'west', t: 0.397 } },
+      { from: { side: 'south', t: 0.397 }, to: { side: 'north', t: 0.804 } },
+      { from: { side: 'east', t: 0.804 }, to: { side: 'south', t: 0.36 } },
+      { from: { side: 'west', t: 0.36 }, to: { side: 'north', t: 0.216 } },
+      { from: { side: 'east', t: 0.216 }, to: { side: 'east', t: 0.548 } }
+    ];
+    
+    const points = pathToWallpaperPath(exampleEdges);
+    
+    for (let i = 0; i < points.length - 1; i++) {
+      const edgeLength = distance(points[i], points[i + 1]);
+      expect(edgeLength).toBeLessThanOrEqual(RHOMBUS_DIAMETER + TOLERANCE);
+    }
+  });
+});

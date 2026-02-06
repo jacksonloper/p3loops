@@ -131,43 +131,49 @@ function composeTransformations(first, second) {
 }
 
 /**
- * Get the rotation transform when passing through a wall.
- * @param {'north' | 'east' | 'south' | 'west'} side - The wall being crossed
- * @returns {{ a: number, b: number, c: number, d: number, tx: number, ty: number }}
- */
-function getWallCrossingRotation(side) {
-  const angle120CW = -2 * Math.PI / 3;   // 120° clockwise = -120° = -2π/3 radians
-  const angle120CCW = 2 * Math.PI / 3;   // 120° counter-clockwise = +120° = 2π/3 radians
-  
-  switch (side) {
-    case 'north':
-      // 120° clockwise around NE corner
-      return createRotationAroundPoint(angle120CW, NE_CORNER.x, NE_CORNER.y);
-    case 'east':
-      // 120° counter-clockwise around NE corner
-      return createRotationAroundPoint(angle120CCW, NE_CORNER.x, NE_CORNER.y);
-    case 'south':
-      // 120° clockwise around SW corner
-      return createRotationAroundPoint(angle120CW, SW_CORNER.x, SW_CORNER.y);
-    case 'west':
-      // 120° counter-clockwise around SW corner
-      return createRotationAroundPoint(angle120CCW, SW_CORNER.x, SW_CORNER.y);
-    default:
-      throw new Error(`Unknown side: ${side}`);
-  }
-}
-
-/**
  * Update the reference frame when the path crosses a wall.
- * The rotation is composed with the current reference frame.
+ * The rotation must be around the TRANSFORMED corner position (where the corner is in world space).
  * 
  * @param {'north' | 'east' | 'south' | 'west'} side - The wall being crossed
  * @param {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} currentFrame - Current reference frame
  * @returns {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} - New reference frame
  */
 export function updateReferenceFrameForSide(side, currentFrame) {
-  const rotation = getWallCrossingRotation(side);
-  // The rotation needs to be applied in "world" space, so we compose it after the current frame
+  const angle120CW = -2 * Math.PI / 3;   // 120° clockwise = -120° = -2π/3 radians
+  const angle120CCW = 2 * Math.PI / 3;   // 120° counter-clockwise = +120° = 2π/3 radians
+  
+  // Determine which corner to rotate around and the rotation angle
+  let localCorner;
+  let angle;
+  
+  switch (side) {
+    case 'north':
+      localCorner = NE_CORNER;
+      angle = angle120CW;
+      break;
+    case 'east':
+      localCorner = NE_CORNER;
+      angle = angle120CCW;
+      break;
+    case 'south':
+      localCorner = SW_CORNER;
+      angle = angle120CW;
+      break;
+    case 'west':
+      localCorner = SW_CORNER;
+      angle = angle120CCW;
+      break;
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
+  
+  // Transform the corner to world space using the current frame
+  const worldCorner = applyReferenceFrame(localCorner.x, localCorner.y, currentFrame);
+  
+  // Create the rotation around the world-space corner position
+  const rotation = createRotationAroundPoint(angle, worldCorner.x, worldCorner.y);
+  
+  // Compose: first apply currentFrame, then the rotation
   return composeTransformations(currentFrame, rotation);
 }
 
