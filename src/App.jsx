@@ -275,7 +275,7 @@ function PathEditorApp() {
           <ul>
             <li>Edges must chain together (endpoint of one = startpoint of next)</li>
             <li>Edges cannot cross each other</li>
-            <li><strong>Same-side edges are forbidden</strong> (e.g., north to north or north to east)</li>
+            <li><strong>Same-side edges are forbidden</strong> (e.g., north to north, but north to east is allowed)</li>
             <li>Interior points are allowed when enabled</li>
             <li>No loops allowed (cannot return to a point already in the path)</li>
           </ul>
