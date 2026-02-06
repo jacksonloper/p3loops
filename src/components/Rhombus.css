@@ -43,6 +43,11 @@
   }
 }
 
+.edge-arrow {
+  fill: #fff;
+  pointer-events: none;
+}
+
 .edge-point {
   fill: #e94560;
 }
@@ -123,13 +128,6 @@
 
 .rhombus-instructions p {
   margin: 0;
-}
-
-.path-bead {
-  stroke: rgba(255, 255, 255, 0.6);
-  stroke-width: 1.5;
-  pointer-events: none;
-  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.4));
 }
 
 @keyframes pulse {

@@ -131,14 +131,14 @@
   opacity: 0.8;
 }
 
-.bead-settings {
+.settings-panel {
   margin-top: 1rem;
   padding: 1rem;
   background: rgba(255,255,255,0.03);
   border-radius: 8px;
 }
 
-.bead-settings h4 {
+.settings-panel h4 {
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
   color: #a0a0a0;

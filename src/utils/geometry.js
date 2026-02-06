@@ -22,7 +22,20 @@
 
 export const SIDES = ['north', 'east', 'south', 'west'];
 
-// Get the identified side (north↔east, south↔west)
+// Configuration constants
+const SIZE = 300;
+// Shear amount for 60/120 degree angles.
+// For a 30° shear angle: tan(30°) = 1/√3 ≈ 0.577
+// SHEAR = SIZE * tan(30°) = SIZE / √3
+const SHEAR = SIZE / Math.sqrt(3);
+const HALF_SHEAR = SHEAR / 2;
+
+// Epsilon for floating-point comparisons
+export const EPSILON = 0.0001;
+
+/**
+ * Get the identified side (north↔east, south↔west).
+ */
 export function getIdentifiedSide(side) {
   switch (side) {
     case 'north': return 'east';
@@ -33,17 +46,21 @@ export function getIdentifiedSide(side) {
   }
 }
 
-// Check if a point is an interior point
+/**
+ * Check if a point is an interior point.
+ */
 export function isInteriorPoint(point) {
   return point.interior === true;
 }
 
-// Check if two points are the same (considering identifications)
+/**
+ * Check if two points are the same (considering identifications).
+ */
 export function pointsAreEqual(p1, p2) {
   // Interior points - direct equality check
   if (isInteriorPoint(p1) && isInteriorPoint(p2)) {
-    return Math.abs(p1.southward - p2.southward) < 0.0001 &&
-           Math.abs(p1.eastward - p2.eastward) < 0.0001;
+    return Math.abs(p1.southward - p2.southward) < EPSILON &&
+           Math.abs(p1.eastward - p2.eastward) < EPSILON;
   }
   
   // One interior, one boundary - never equal
@@ -51,153 +68,28 @@ export function pointsAreEqual(p1, p2) {
     return false;
   }
   
-  // Both boundary points
-  // Direct equality
-  if (p1.side === p2.side && Math.abs(p1.t - p2.t) < 0.0001) {
-    return true;
+  // Both boundary points - check direct or identified equality
+  if (Math.abs(p1.t - p2.t) >= EPSILON) {
+    return false;
   }
-  // Check identified side
-  if (p1.side === getIdentifiedSide(p2.side) && Math.abs(p1.t - p2.t) < 0.0001) {
-    return true;
-  }
-  return false;
+  return p1.side === p2.side || p1.side === getIdentifiedSide(p2.side);
 }
 
-// Configuration for the rhombus
-const SIZE = 300;
-// Shear amount for 60/120 degree angles.
-// For a 30° shear angle: tan(30°) = 1/√3 ≈ 0.577
-// SHEAR = SIZE * tan(30°) = SIZE / √3, which gives the horizontal offset
-// This creates a rhombus where NW/SE corners are 60° and NE/SW corners are 120°
-const SHEAR = SIZE / Math.sqrt(3);
-
-// Corner positions of the rhombus (after shearing)
-// Starting from unit square corners and applying shear transformation.
-// The shear moves points leftward at the top, rightward at the bottom.
-// NW corner: (0, 0) -> sheared to (-SHEAR/2, 0)
-// NE corner: (SIZE, 0) -> sheared to (SIZE - SHEAR/2, 0)
-// SE corner: (SIZE, SIZE) -> sheared to (SIZE + SHEAR/2, SIZE)
-// SW corner: (0, SIZE) -> sheared to (SHEAR/2, SIZE)
-// This creates: NE and SW corners at 120°, NW and SE corners at 60°
-const HALF_SHEAR = SHEAR / 2;
-
-// Transform from unit square coordinates to rhombus coordinates
-// (southward, eastward) in [0,1]^2 -> (x, y) in screen coordinates
+/**
+ * Transform from unit square coordinates to rhombus screen coordinates.
+ * (southward, eastward) in [0,1]^2 -> (x, y) in screen coordinates
+ */
 export function unitSquareToRhombus(southward, eastward) {
-  // Y position is straightforward
   const y = southward * SIZE;
-  // X position: start at eastward * SIZE, then apply shear based on vertical position
-  // Shear shifts left at top, right at bottom (to create the 120° angles at NE/SW)
-  // At southward=0 (top), shearOffset = -HALF_SHEAR (shift left)
-  // At southward=1 (bottom), shearOffset = +HALF_SHEAR (shift right)
+  // Shear: left at top, right at bottom (creates 120° at NE/SW)
   const shearOffset = -HALF_SHEAR + southward * SHEAR;
   const x = eastward * SIZE + shearOffset;
   return { x, y };
 }
 
-// Get the (x, y) coordinates for a point on a side at percentage t
-export function getPointOnSide(side, t) {
-  // t is from 0 to 1 (percentage/100)
-  switch (side) {
-    case 'north': {
-      // West to east at top (southward = 0)
-      return unitSquareToRhombus(0, t);
-    }
-    case 'east': {
-      // South to north at right (eastward = 1)
-      return unitSquareToRhombus(1 - t, 1);
-    }
-    case 'south': {
-      // East to west at bottom (southward = 1)
-      return unitSquareToRhombus(1, 1 - t);
-    }
-    case 'west': {
-      // North to south at left (eastward = 0)
-      return unitSquareToRhombus(t, 0);
-    }
-    default:
-      throw new Error(`Unknown side: ${side}`);
-  }
-}
-
-// Get the (x, y) coordinates for an interior point
-export function getInteriorPoint(southward, eastward) {
-  return unitSquareToRhombus(southward, eastward);
-}
-
-// Get coordinates for any point (boundary or interior)
-export function getPointCoordinates(point) {
-  if (isInteriorPoint(point)) {
-    return getInteriorPoint(point.southward, point.eastward);
-  }
-  return getPointOnSide(point.side, point.t);
-}
-
-// Get "paper coordinates" (unit square before shearing) for a point on a side
-// Paper coordinates are (southward, eastward) in [0,1]^2
-function getPointOnSidePaperCoords(side, t) {
-  switch (side) {
-    case 'north': {
-      // West to east at top (southward = 0)
-      return { southward: 0, eastward: t };
-    }
-    case 'east': {
-      // South to north at right (eastward = 1)
-      return { southward: 1 - t, eastward: 1 };
-    }
-    case 'south': {
-      // East to west at bottom (southward = 1)
-      return { southward: 1, eastward: 1 - t };
-    }
-    case 'west': {
-      // North to south at left (eastward = 0)
-      return { southward: t, eastward: 0 };
-    }
-    default:
-      throw new Error(`Unknown side: ${side}`);
-  }
-}
-
-// Get paper coordinates (unit square) for any point
-export function getPointPaperCoordinates(point) {
-  if (isInteriorPoint(point)) {
-    return { southward: point.southward, eastward: point.eastward };
-  }
-  return getPointOnSidePaperCoords(point.side, point.t);
-}
-
-// Get SVG path for the entire rhombus
-export function getRhombusPath() {
-  // Get the four corners
-  const nw = unitSquareToRhombus(0, 0); // NW corner (60°)
-  const ne = unitSquareToRhombus(0, 1); // NE corner (120°)
-  const se = unitSquareToRhombus(1, 1); // SE corner (60°)
-  const sw = unitSquareToRhombus(1, 0); // SW corner (120°)
-  
-  return `M ${nw.x} ${nw.y} L ${ne.x} ${ne.y} L ${se.x} ${se.y} L ${sw.x} ${sw.y} Z`;
-}
-
-// Alias for backward compatibility
-export function getSquarePath() {
-  return getRhombusPath();
-}
-
-// Get the SIZE constant for external use
-export function getSize() {
-  return SIZE;
-}
-
-// Get the SHEAR constant for external use (replacing BOW)
-export function getShear() {
-  return SHEAR;
-}
-
-// Backward compatibility alias
-export function getBow() {
-  return SHEAR;
-}
-
-// Transform from rhombus screen coordinates back to unit square
+/**
+ * Transform from rhombus screen coordinates back to unit square.
+ */
 export function rhombusToUnitSquare(x, y) {
   const southward = y / SIZE;
   const shearOffset = -HALF_SHEAR + southward * SHEAR;
@@ -205,22 +97,95 @@ export function rhombusToUnitSquare(x, y) {
   return { southward, eastward };
 }
 
-// Check if a unit square point is inside the unit square [0,1]^2
-function isInsideUnitSquare(southward, eastward) {
-  return southward >= 0 && southward <= 1 && eastward >= 0 && eastward <= 1;
+/**
+ * Get screen coordinates for a point on a side at percentage t.
+ */
+export function getPointOnSide(side, t) {
+  switch (side) {
+    case 'north': return unitSquareToRhombus(0, t);
+    case 'east': return unitSquareToRhombus(1 - t, 1);
+    case 'south': return unitSquareToRhombus(1, 1 - t);
+    case 'west': return unitSquareToRhombus(t, 0);
+    default: throw new Error(`Unknown side: ${side}`);
+  }
 }
 
-// Find the closest point on the boundary or interior to a given (x, y)
-// If interiorMode is true, it will also consider interior points
-export function findClosestPointOnBoundary(x, y, interiorMode = false) {
+/**
+ * Get screen coordinates for an interior point.
+ */
+export function getInteriorPoint(southward, eastward) {
+  return unitSquareToRhombus(southward, eastward);
+}
+
+/**
+ * Get screen coordinates for any point (boundary or interior).
+ */
+export function getPointCoordinates(point) {
+  if (isInteriorPoint(point)) {
+    return getInteriorPoint(point.southward, point.eastward);
+  }
+  return getPointOnSide(point.side, point.t);
+}
+
+/**
+ * Get paper coordinates (unit square before shearing) for a point on a side.
+ */
+function getPointOnSidePaperCoords(side, t) {
+  switch (side) {
+    case 'north': return { southward: 0, eastward: t };
+    case 'east': return { southward: 1 - t, eastward: 1 };
+    case 'south': return { southward: 1, eastward: 1 - t };
+    case 'west': return { southward: t, eastward: 0 };
+    default: throw new Error(`Unknown side: ${side}`);
+  }
+}
+
+/**
+ * Get paper coordinates (unit square) for any point.
+ */
+export function getPointPaperCoordinates(point) {
+  if (isInteriorPoint(point)) {
+    return { southward: point.southward, eastward: point.eastward };
+  }
+  return getPointOnSidePaperCoords(point.side, point.t);
+}
+
+/**
+ * Get SVG path for the rhombus outline.
+ */
+export function getRhombusPath() {
+  const nw = unitSquareToRhombus(0, 0);
+  const ne = unitSquareToRhombus(0, 1);
+  const se = unitSquareToRhombus(1, 1);
+  const sw = unitSquareToRhombus(1, 0);
+  return `M ${nw.x} ${nw.y} L ${ne.x} ${ne.y} L ${se.x} ${se.y} L ${sw.x} ${sw.y} Z`;
+}
+
+/**
+ * Get the SIZE constant for external use.
+ */
+export function getSize() {
+  return SIZE;
+}
+
+/**
+ * Get the SHEAR constant for external use.
+ */
+export function getShear() {
+  return SHEAR;
+}
+
+/**
+ * Find the closest point on the boundary to a given screen position.
+ * Returns { side, t, distance }
+ */
+export function findClosestPointOnBoundary(x, y) {
   let bestSide = null;
   let bestT = null;
   let bestDist = Infinity;
-  let bestInterior = null;
   
-  // Check boundary points
+  // Coarse search
   for (const side of SIDES) {
-    // Search along this side
     for (let i = 0; i <= 100; i++) {
       const t = i / 100;
       const pt = getPointOnSide(side, t);
@@ -229,12 +194,11 @@ export function findClosestPointOnBoundary(x, y, interiorMode = false) {
         bestDist = dist;
         bestSide = side;
         bestT = t;
-        bestInterior = null;
       }
     }
   }
   
-  // Refine the boundary search
+  // Fine refinement
   if (bestSide !== null) {
     for (let i = -10; i <= 10; i++) {
       const t = Math.max(0, Math.min(1, bestT + i / 1000));
@@ -243,53 +207,24 @@ export function findClosestPointOnBoundary(x, y, interiorMode = false) {
       if (dist < bestDist) {
         bestDist = dist;
         bestT = t;
-        bestInterior = null;
       }
     }
-  }
-  
-  // If interior mode, also check if the point is inside the rhombus
-  if (interiorMode) {
-    const unitCoords = rhombusToUnitSquare(x, y);
-    if (isInsideUnitSquare(unitCoords.southward, unitCoords.eastward)) {
-      // The cursor is inside the rhombus, check if interior is closer
-      const interiorPt = getInteriorPoint(unitCoords.southward, unitCoords.eastward);
-      const interiorDist = Math.sqrt((interiorPt.x - x) ** 2 + (interiorPt.y - y) ** 2);
-      if (interiorDist < bestDist) {
-        bestDist = interiorDist;
-        bestInterior = { southward: unitCoords.southward, eastward: unitCoords.eastward };
-        bestSide = null;
-        bestT = null;
-      }
-    }
-  }
-  
-  if (bestInterior) {
-    return {
-      interior: true,
-      southward: bestInterior.southward,
-      eastward: bestInterior.eastward,
-      distance: bestDist
-    };
   }
   
   return { side: bestSide, t: bestT, distance: bestDist };
 }
 
-// Get the closest interior point for a given screen coordinate
+/**
+ * Get the interior point for a given screen coordinate.
+ * Returns { interior: true, southward, eastward, distance }
+ */
 export function findInteriorPoint(x, y) {
   const unitCoords = rhombusToUnitSquare(x, y);
-  // Clamp to valid range
   const southward = Math.max(0, Math.min(1, unitCoords.southward));
   const eastward = Math.max(0, Math.min(1, unitCoords.eastward));
   
   const pt = getInteriorPoint(southward, eastward);
   const dist = Math.sqrt((pt.x - x) ** 2 + (pt.y - y) ** 2);
   
-  return {
-    interior: true,
-    southward,
-    eastward,
-    distance: dist
-  };
+  return { interior: true, southward, eastward, distance: dist };
 }
