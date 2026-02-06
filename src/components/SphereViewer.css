@@ -1,0 +1,113 @@
+.sphere-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.sphere-viewer-modal {
+  background: #1a1a2e;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  height: 80%;
+  max-height: 700px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sphere-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sphere-viewer-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #e0e0e0;
+}
+
+.sphere-viewer-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.75rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.sphere-viewer-close:hover {
+  color: #fff;
+}
+
+.sphere-viewer-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.sphere-viewer-info {
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.sphere-viewer-info p {
+  margin: 0 0 0.5rem;
+  color: #a0a0a0;
+  font-size: 0.85rem;
+}
+
+.sphere-viewer-info p:last-child {
+  margin-bottom: 0;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 1rem;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.legend-dot.green {
+  background: #00ff88;
+}
+
+.legend-dot.yellow {
+  background: #ffc107;
+}
+
+.legend-cone {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 10px solid #fff;
+  margin-right: 6px;
+}
+
+.hint {
+  color: #666 !important;
+  font-style: italic;
+}

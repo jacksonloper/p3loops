@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import './App.css'
 import Rhombus from './components/Rhombus.jsx'
+import SphereViewer from './components/SphereViewer.jsx'
 import { validatePath } from './utils/pathLogic.js'
 
 /**
@@ -20,6 +21,7 @@ function PathEditorApp() {
   const [jsonInputText, setJsonInputText] = useState('')
   const [validationMessage, setValidationMessage] = useState('')
   const [showJsonPanel, setShowJsonPanel] = useState(false)
+  const [showSphereViewer, setShowSphereViewer] = useState(false)
   const [interiorMode, setInteriorMode] = useState(true)
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null)
 
@@ -137,6 +139,13 @@ function PathEditorApp() {
             >
               {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
             </button>
+            <button 
+              onClick={() => setShowSphereViewer(true)}
+              disabled={pathEdges.length === 0}
+              className="control-btn primary-btn"
+            >
+              View on Sphere
+            </button>
           </div>
 
           {validationMessage && (
@@ -202,6 +211,13 @@ function PathEditorApp() {
           </ul>
         </section>
       </main>
+
+      {showSphereViewer && (
+        <SphereViewer
+          edges={pathEdges}
+          onClose={() => setShowSphereViewer(false)}
+        />
+      )}
     </div>
   )
 }
