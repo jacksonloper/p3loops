@@ -1,19 +1,29 @@
 /**
- * Path logic for edges on the bowed square.
+ * Path logic for edges on the rhombus.
  * 
  * An edge is defined by:
  *   { from: { side, t }, to: { side, t } }
- * where t is the percentage (0-1) along the side.
+ * for boundary points where t is the percentage (0-1) along the side.
+ * 
+ * Or for interior points:
+ *   { from/to: { interior: true, southward, eastward } }
+ * where southward and eastward are in [0,1].
  * 
  * A path is a list of edges that chain together (endpoint of one = startpoint of next).
  * Paths must be non-crossing and cannot form loops.
+ * 
+ * Same-side edges are forbidden (e.g., north to north).
  */
 
-import { getIdentifiedSide, pointsAreEqual, getPointOnSide, SIDES } from './geometry.js';
+import { getIdentifiedSide, pointsAreEqual, getPointCoordinates, isInteriorPoint, SIDES } from './geometry.js';
 
 // Normalize a point to its canonical representation
-// We'll use the first alphabetically between the side and its identified side
+// For interior points, just return as-is
+// For boundary points, use the first alphabetically between the side and its identified side
 export function normalizePoint(point) {
+  if (isInteriorPoint(point)) {
+    return { interior: true, southward: point.southward, eastward: point.eastward };
+  }
   const identified = getIdentifiedSide(point.side);
   if (point.side < identified) {
     return { side: point.side, t: point.t };
@@ -76,8 +86,8 @@ function segmentsIntersect(p1, p2, p3, p4) {
 
 // Get screen coordinates for an edge (as line segment)
 export function getEdgeCoordinates(edge) {
-  const from = getPointOnSide(edge.from.side, edge.from.t);
-  const to = getPointOnSide(edge.to.side, edge.to.t);
+  const from = getPointCoordinates(edge.from);
+  const to = getPointCoordinates(edge.to);
   return { from, to };
 }
 
@@ -110,6 +120,49 @@ export function isNonCrossing(edges) {
   return true;
 }
 
+// Check if an edge is a same-side edge (both endpoints on the same side, which is forbidden)
+export function isSameSideEdge(edge) {
+  // If either endpoint is interior, it's not a same-side edge
+  if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
+    return false;
+  }
+  // Check if both endpoints are on the same side (or identified sides)
+  return edge.from.side === edge.to.side || 
+         edge.from.side === getIdentifiedSide(edge.to.side);
+}
+
+// Helper to format point for error messages
+function formatPoint(point) {
+  if (isInteriorPoint(point)) {
+    return `interior (${(point.southward * 100).toFixed(1)}%, ${(point.eastward * 100).toFixed(1)}%)`;
+  }
+  return `${point.side} ${(point.t * 100).toFixed(1)}%`;
+}
+
+// Validate a single point (boundary or interior)
+function isValidPoint(point) {
+  if (isInteriorPoint(point)) {
+    if (typeof point.southward !== 'number' || typeof point.eastward !== 'number') {
+      return false;
+    }
+    if (point.southward < 0 || point.southward > 1 || point.eastward < 0 || point.eastward > 1) {
+      return false;
+    }
+    return true;
+  }
+  // Boundary point
+  if (!SIDES.includes(point.side)) {
+    return false;
+  }
+  if (typeof point.t !== 'number') {
+    return false;
+  }
+  if (point.t < 0 || point.t > 1) {
+    return false;
+  }
+  return true;
+}
+
 // Validate a complete path
 export function validatePath(edges) {
   if (edges.length === 0) return { valid: true };
@@ -120,14 +173,15 @@ export function validatePath(edges) {
     if (!edge.from || !edge.to) {
       return { valid: false, error: `Edge ${i} missing from or to` };
     }
-    if (!SIDES.includes(edge.from.side) || !SIDES.includes(edge.to.side)) {
-      return { valid: false, error: `Edge ${i} has invalid side` };
+    if (!isValidPoint(edge.from)) {
+      return { valid: false, error: `Edge ${i} has invalid 'from' point` };
     }
-    if (typeof edge.from.t !== 'number' || typeof edge.to.t !== 'number') {
-      return { valid: false, error: `Edge ${i} has invalid t value` };
+    if (!isValidPoint(edge.to)) {
+      return { valid: false, error: `Edge ${i} has invalid 'to' point` };
     }
-    if (edge.from.t < 0 || edge.from.t > 1 || edge.to.t < 0 || edge.to.t > 1) {
-      return { valid: false, error: `Edge ${i} t values must be between 0 and 1` };
+    // Check for same-side edges (forbidden)
+    if (isSameSideEdge(edge)) {
+      return { valid: false, error: `Edge ${i} is a same-side edge (from ${edge.from.side} to ${edge.to.side}), which is forbidden` };
     }
   }
   
@@ -149,14 +203,14 @@ export function validatePath(edges) {
     // Check if 'from' point was already seen (except for the immediate previous 'to')
     for (let j = 0; j < seenPoints.length - 1; j++) {
       if (pointsAreEqual(edge.from, seenPoints[j])) {
-        return { valid: false, error: `Loop detected: point at ${edge.from.side} ${(edge.from.t * 100).toFixed(1)}% already exists in path` };
+        return { valid: false, error: `Loop detected: point at ${formatPoint(edge.from)} already exists in path` };
       }
     }
     
     // Check if 'to' point already exists anywhere
     for (const p of seenPoints) {
       if (pointsAreEqual(edge.to, p)) {
-        return { valid: false, error: `Loop detected: point at ${edge.to.side} ${(edge.to.t * 100).toFixed(1)}% already exists in path` };
+        return { valid: false, error: `Loop detected: point at ${formatPoint(edge.to)} already exists in path` };
       }
     }
     
@@ -169,6 +223,13 @@ export function validatePath(edges) {
 
 // Check if adding a new edge would be valid
 export function canAddEdge(newEdge, existingEdges) {
+  // Check for same-side edges (forbidden)
+  if (isSameSideEdge(newEdge)) {
+    const fromSide = isInteriorPoint(newEdge.from) ? 'interior' : newEdge.from.side;
+    const toSide = isInteriorPoint(newEdge.to) ? 'interior' : newEdge.to.side;
+    return { valid: false, error: `Same-side edges are forbidden (from ${fromSide} to ${toSide})` };
+  }
+  
   // Check that it chains with the last edge
   if (existingEdges.length > 0) {
     const lastEdge = existingEdges[existingEdges.length - 1];
@@ -193,11 +254,20 @@ export function canAddEdge(newEdge, existingEdges) {
 // Get the starting point for a new edge (the complementary/identified version of the last endpoint)
 // If the last edge ended on north, the next edge must start from east (and vice versa)
 // If the last edge ended on south, the next edge must start from west (and vice versa)
+// If the last edge ended on an interior point, the next edge starts from the same interior point
 export function getNextEdgeStartPoints(edges) {
   if (edges.length === 0) return null;
   
   const lastEdge = edges[edges.length - 1];
   const endPoint = lastEdge.to;
+  
+  // Interior points don't have identified versions - just return the same point
+  if (isInteriorPoint(endPoint)) {
+    return [
+      { interior: true, southward: endPoint.southward, eastward: endPoint.eastward }
+    ];
+  }
+  
   const identifiedSide = getIdentifiedSide(endPoint.side);
   
   // Only return the complementary point (not the same side)
@@ -210,6 +280,7 @@ export function getNextEdgeStartPoints(edges) {
  * Autospace: Redistribute all points evenly within each side.
  * For each side, collect all unique t values used by edges, sort them, 
  * and redistribute them evenly from 0 to 1 (with padding from edges).
+ * Interior points are left unchanged.
  */
 export function autospaceEdges(edges) {
   if (edges.length === 0) return [];
@@ -221,12 +292,16 @@ export function autospaceEdges(edges) {
   const T_PRECISION_DIGITS = 6;
   
   for (const edge of edges) {
-    // Normalize points to their canonical sides
+    // Normalize points to their canonical sides (skip interior points)
     const fromNorm = normalizePoint(edge.from);
     const toNorm = normalizePoint(edge.to);
     
-    pointsBySide[fromNorm.side].add(fromNorm.t);
-    pointsBySide[toNorm.side].add(toNorm.t);
+    if (!isInteriorPoint(fromNorm)) {
+      pointsBySide[fromNorm.side].add(fromNorm.t);
+    }
+    if (!isInteriorPoint(toNorm)) {
+      pointsBySide[toNorm.side].add(toNorm.t);
+    }
   }
   
   // Create mapping from old t to new t for each side
@@ -250,18 +325,29 @@ export function autospaceEdges(edges) {
     tMapping[side] = mapping;
   }
   
-  // Apply mapping to all edges
+  // Apply mapping to all edges (interior points remain unchanged)
   const newEdges = edges.map(edge => {
-    const fromNorm = normalizePoint(edge.from);
-    const toNorm = normalizePoint(edge.to);
+    // Handle from point
+    let newFrom;
+    if (isInteriorPoint(edge.from)) {
+      newFrom = { interior: true, southward: edge.from.southward, eastward: edge.from.eastward };
+    } else {
+      const fromNorm = normalizePoint(edge.from);
+      const newFromT = tMapping[fromNorm.side][fromNorm.t.toFixed(T_PRECISION_DIGITS)] ?? edge.from.t;
+      newFrom = { side: edge.from.side, t: newFromT };
+    }
     
-    const newFromT = tMapping[fromNorm.side][fromNorm.t.toFixed(T_PRECISION_DIGITS)] ?? edge.from.t;
-    const newToT = tMapping[toNorm.side][toNorm.t.toFixed(T_PRECISION_DIGITS)] ?? edge.to.t;
+    // Handle to point
+    let newTo;
+    if (isInteriorPoint(edge.to)) {
+      newTo = { interior: true, southward: edge.to.southward, eastward: edge.to.eastward };
+    } else {
+      const toNorm = normalizePoint(edge.to);
+      const newToT = tMapping[toNorm.side][toNorm.t.toFixed(T_PRECISION_DIGITS)] ?? edge.to.t;
+      newTo = { side: edge.to.side, t: newToT };
+    }
     
-    return {
-      from: { side: edge.from.side, t: newFromT },
-      to: { side: edge.to.side, t: newToT }
-    };
+    return { from: newFrom, to: newTo };
   });
   
   return newEdges;
@@ -272,20 +358,34 @@ const MAX_RANDOM_PLACEMENT_ATTEMPTS = 1000;
 
 /**
  * Find a random valid position for the next edge.
- * Samples random points on all sides and tests if an edge to that point would be valid.
+ * Samples random points on all sides and interior, and tests if an edge to that point would be valid.
  * Returns null if no valid position found after many attempts.
  */
 export function findValidRandomEdge(edges, startPoint) {
   if (!startPoint) return null;
   
   for (let attempt = 0; attempt < MAX_RANDOM_PLACEMENT_ATTEMPTS; attempt++) {
-    // Pick a random side and random t value
-    const randomSide = SIDES[Math.floor(Math.random() * SIDES.length)];
-    const randomT = Math.random();
+    // 70% chance to pick a boundary point, 30% chance to pick an interior point
+    const pickInterior = Math.random() < 0.3;
+    
+    let candidateTo;
+    if (pickInterior) {
+      // Pick a random interior point
+      candidateTo = {
+        interior: true,
+        southward: Math.random(),
+        eastward: Math.random()
+      };
+    } else {
+      // Pick a random side and random t value
+      const randomSide = SIDES[Math.floor(Math.random() * SIDES.length)];
+      const randomT = Math.random();
+      candidateTo = { side: randomSide, t: randomT };
+    }
     
     const candidateEdge = {
       from: startPoint,
-      to: { side: randomSide, t: randomT }
+      to: candidateTo
     };
     
     // Check if this would be a valid edge

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import './App.css'
-import BowedSquare from './components/BowedSquare.jsx'
+import Rhombus from './components/Rhombus.jsx'
 import { validatePath, autospaceEdges, findValidRandomEdge, getNextEdgeStartPoints } from './utils/pathLogic.js'
 
 function getMessageStyleClass(message) {
@@ -17,6 +17,7 @@ function PathEditorApp() {
   const [showJsonPanel, setShowJsonPanel] = useState(false)
   const [beadCount, setBeadCount] = useState(3)
   const [beadSpeed, setBeadSpeed] = useState(0.3)
+  const [interiorMode, setInteriorMode] = useState(true)
 
   const appendEdgeToPath = useCallback((newEdge) => {
     setPathEdges(currentEdges => [...currentEdges, newEdge])
@@ -111,12 +112,12 @@ function PathEditorApp() {
     <div className="path-editor-container">
       <header className="app-header">
         <h1>P3 Loops Path Editor</h1>
-        <p className="subtitle">Create non-crossing paths on a bowed square with edge identifications</p>
+        <p className="subtitle">Create non-crossing paths on a 120/60/120/60 rhombus with edge identifications</p>
       </header>
 
       <main className="editor-main">
         <section className="visualization-section">
-          <BowedSquare
+          <Rhombus
             edges={pathEdges}
             onAddEdge={appendEdgeToPath}
             selectedStartPoint={activeStartPoint}
@@ -124,6 +125,7 @@ function PathEditorApp() {
             onError={handleEdgeError}
             beadCount={beadCount}
             beadSpeed={beadSpeed}
+            interiorMode={interiorMode}
           />
         </section>
 
@@ -212,6 +214,16 @@ function PathEditorApp() {
               />
               <span className="setting-value">{beadSpeed.toFixed(2)}</span>
             </div>
+            <div className="setting-row">
+              <label htmlFor="interior-mode">Interior points:</label>
+              <input
+                id="interior-mode"
+                type="checkbox"
+                checked={interiorMode}
+                onChange={(e) => setInteriorMode(e.target.checked)}
+              />
+              <span className="setting-value">{interiorMode ? 'Enabled' : 'Disabled'}</span>
+            </div>
           </div>
         </section>
 
@@ -238,8 +250,9 @@ function PathEditorApp() {
         )}
 
         <section className="info-section">
-          <h3>About Edge Identifications</h3>
+          <h3>About the Rhombus</h3>
           <ul>
+            <li><strong>Shape:</strong> 120/60/120/60 degree rhombus (NE/SW corners are 120°, NW/SE corners are 60°)</li>
             <li><strong>North ≡ East:</strong> A point at t% along North is the same as t% along East</li>
             <li><strong>South ≡ West:</strong> A point at t% along South is the same as t% along West</li>
           </ul>
@@ -247,6 +260,8 @@ function PathEditorApp() {
           <ul>
             <li>Edges must chain together (endpoint of one = startpoint of next)</li>
             <li>Edges cannot cross each other</li>
+            <li><strong>Same-side edges are forbidden</strong> (e.g., north to north or north to east)</li>
+            <li>Interior points are allowed when enabled</li>
             <li>No loops allowed (cannot return to a point already in the path)</li>
           </ul>
         </section>
