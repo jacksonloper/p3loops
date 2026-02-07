@@ -5,23 +5,6 @@ import ThreeDViewer from './components/ThreeDViewer.jsx'
 import WallpaperViewer from './components/WallpaperViewer.jsx'
 import { validatePath } from './utils/pathLogic.js'
 
-// Example path from public/exampleedge.json - pre-loaded so users see something interesting
-const EXAMPLE_PATH = [
-  { from: { side: 'north', t: 0.368 }, to: { side: 'west', t: 0.473 } },
-  { from: { side: 'south', t: 0.473 }, to: { side: 'north', t: 0.67 } },
-  { from: { side: 'east', t: 0.67 }, to: { side: 'south', t: 0.313 } },
-  { from: { side: 'west', t: 0.313 }, to: { side: 'north', t: 0.185 } },
-  { from: { side: 'east', t: 0.185 }, to: { side: 'east', t: 0.603 } },
-  { from: { side: 'north', t: 0.603 }, to: { side: 'south', t: 0.861 } },
-  { from: { side: 'west', t: 0.861 }, to: { side: 'north', t: 0.487 } },
-  { from: { side: 'east', t: 0.487 }, to: { side: 'east', t: 0.273 } },
-  { from: { side: 'north', t: 0.273 }, to: { side: 'west', t: 0.397 } },
-  { from: { side: 'south', t: 0.397 }, to: { side: 'north', t: 0.804 } },
-  { from: { side: 'east', t: 0.804 }, to: { side: 'south', t: 0.36 } },
-  { from: { side: 'west', t: 0.36 }, to: { side: 'north', t: 0.216 } },
-  { from: { side: 'east', t: 0.216 }, to: { side: 'east', t: 0.548 } }
-];
-
 /**
  * Determine message style class based on content.
  */
@@ -34,7 +17,7 @@ function getMessageStyleClass(message) {
 }
 
 function PathEditorApp() {
-  const [pathEdges, setPathEdges] = useState(EXAMPLE_PATH)
+  const [pathEdges, setPathEdges] = useState([])
   const [activeStartPoint, setActiveStartPoint] = useState(null)
   const [jsonInputText, setJsonInputText] = useState('')
   const [validationMessage, setValidationMessage] = useState('')
@@ -47,10 +30,29 @@ function PathEditorApp() {
   const [loadingExample, setLoadingExample] = useState(false)
   const [selectedExample, setSelectedExample] = useState('')
 
-  // Fetch examples manifest on mount
+  // Load simple loop example and manifest on mount
   useEffect(() => {
+    // Load the simple loop example as initial path
+    fetch('/examples/exampleedge.json')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch example')
+        return res.json()
+      })
+      .then(data => {
+        setPathEdges(data)
+        setSelectedExample('simple')
+      })
+      .catch(err => {
+        console.warn('Failed to load initial example:', err)
+        setValidationMessage('Failed to load initial example')
+      })
+
+    // Load examples manifest
     fetch('/examples/manifest.json')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch manifest')
+        return res.json()
+      })
       .then(setExamplesList)
       .catch(err => {
         console.warn('Failed to load examples manifest:', err)
