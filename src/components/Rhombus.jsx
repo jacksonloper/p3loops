@@ -10,7 +10,8 @@ import {
   findInteriorPoint,
   pointsAreEqual,
   getIdentifiedSide,
-  isInteriorPoint
+  isInteriorPoint,
+  EPSILON
 } from '../utils/geometry.js';
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints, isSameSideEdge } from '../utils/pathLogic.js';
 import './Rhombus.css';
@@ -19,11 +20,13 @@ import './Rhombus.css';
 const SNAP_RADIUS = 20;
 
 /**
- * Check if an interior point is within valid bounds [0,1]^2.
+ * Check if an interior point is truly inside the rhombus (not on boundary).
+ * Points with coordinates at 0 or 1 are ON the boundary, not interior.
  */
 function isValidInteriorPoint(interior) {
-  return interior.southward >= 0 && interior.southward <= 1 && 
-         interior.eastward >= 0 && interior.eastward <= 1;
+  // Must be strictly inside the unit square, not on any edge
+  return interior.southward > EPSILON && interior.southward < 1 - EPSILON && 
+         interior.eastward > EPSILON && interior.eastward < 1 - EPSILON;
 }
 
 /**
@@ -292,25 +295,6 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
             className="selected-start-point"
           />
         )}
-        
-        {/* Preview line */}
-        {selectedStartPoint && hoverPoint && (() => {
-          const startCoords = getPointCoordinates(selectedStartPoint);
-          const endCoords = isInteriorPoint(hoverPoint)
-            ? getInteriorPoint(hoverPoint.southward, hoverPoint.eastward)
-            : getPointOnSide(hoverPoint.side, hoverPoint.t);
-          return (
-            <line
-              x1={startCoords.x}
-              y1={startCoords.y}
-              x2={endCoords.x}
-              y2={endCoords.y}
-              className="preview-line"
-              strokeWidth="2"
-              strokeDasharray="5,5"
-            />
-          );
-        })()}
         
         {/* Hover points */}
         {hoverPoint && (isInteriorPoint(hoverPoint) ? (

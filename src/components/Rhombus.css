@@ -92,11 +92,6 @@
   pointer-events: none;
 }
 
-.preview-line {
-  stroke: rgba(255, 255, 255, 0.5);
-  pointer-events: none;
-}
-
 .side-label {
   fill: #888;
   font-family: sans-serif;
