@@ -9,7 +9,6 @@ import {
   findClosestPointOnBoundary,
   findInteriorPoint,
   pointsAreEqual,
-  getIdentifiedSide,
   isInteriorPoint
 } from '../utils/geometry.js';
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints, isSameSideEdge } from '../utils/pathLogic.js';
@@ -345,20 +344,12 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
             className="hover-point-interior"
           />
         ) : (
-          <>
-            <circle
-              cx={getPointOnSide(hoverPoint.side, hoverPoint.t).x}
-              cy={getPointOnSide(hoverPoint.side, hoverPoint.t).y}
-              r="6"
-              className="hover-point"
-            />
-            <circle
-              cx={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).x}
-              cy={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).y}
-              r="6"
-              className="hover-point-complementary"
-            />
-          </>
+          <circle
+            cx={getPointOnSide(hoverPoint.side, hoverPoint.t).x}
+            cy={getPointOnSide(hoverPoint.side, hoverPoint.t).y}
+            r="6"
+            className="hover-point"
+          />
         ))}
       </svg>
       
