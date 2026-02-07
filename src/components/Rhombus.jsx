@@ -73,20 +73,19 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   // Handle mouse move for hover feedback
   const handleMouseMove = useCallback((e) => {
     const { x, y } = getMouseCoords(e);
-    const forceInterior = e.shiftKey && interiorMode && selectedStartPoint;
     
-    // If shift is held and interior mode is on, show interior point directly
-    if (forceInterior) {
-      const interior = findInteriorPoint(x, y);
-      if (isValidInteriorPoint(interior)) {
-        setHoverPoint(interior);
-        return;
-      }
-    }
-    
-    // Always show nearest boundary point (interior only with Shift)
     const closest = findClosestPointOnBoundary(x, y);
-    setHoverPoint(closest);
+    const interior = findInteriorPoint(x, y);
+    const isInsideRhombus = isValidInteriorPoint(interior);
+    
+    // If interior mode is enabled and we have a start point selected,
+    // and cursor is inside the rhombus but not near boundary, show interior point
+    if (interiorMode && selectedStartPoint && isInsideRhombus && closest.distance >= SNAP_RADIUS) {
+      setHoverPoint(interior);
+    } else {
+      // Near boundary or outside rhombus - show boundary point
+      setHoverPoint(closest);
+    }
   }, [getMouseCoords, interiorMode, selectedStartPoint]);
   
   const handleMouseLeave = useCallback(() => {
@@ -106,21 +105,21 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   // Handle click to add edges
   const handleClick = useCallback((e) => {
     const { x, y } = getMouseCoords(e);
-    const forceInterior = e.shiftKey && interiorMode && selectedStartPoint;
     
     // Determine clicked point
     const closestBoundary = findClosestPointOnBoundary(x, y);
+    const interior = findInteriorPoint(x, y);
     let clickedPoint = null;
     
-    // If shift is held and interior mode on, force interior point
-    if (forceInterior) {
-      const interior = findInteriorPoint(x, y);
-      if (isValidInteriorPoint(interior)) {
-        clickedPoint = { interior: true, southward: interior.southward, eastward: interior.eastward };
-      }
+    // Check if click is inside the rhombus (valid interior point)
+    const isInsideRhombus = isValidInteriorPoint(interior);
+    
+    // If interior mode is enabled and we have a start point selected,
+    // and click is inside the rhombus but not near boundary, use interior point
+    if (interiorMode && selectedStartPoint && isInsideRhombus && closestBoundary.distance >= SNAP_RADIUS) {
+      clickedPoint = { interior: true, southward: interior.southward, eastward: interior.eastward };
     } else {
-      // Always snap to nearest boundary point (makes mobile/touch interaction easier)
-      // Interior points only happen with explicit Shift+click
+      // Near boundary or outside rhombus - snap to boundary
       clickedPoint = { side: closestBoundary.side, t: closestBoundary.t };
     }
     
@@ -344,7 +343,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
           <p>Click anywhere to select a starting point on the boundary.</p>
         )}
         {selectedStartPoint && (
-          <p>Click to add the next point.{interiorMode ? ' Hold Shift for interior.' : ''}</p>
+          <p>Click to add the next point.{interiorMode ? ' (Click inside for interior point)' : ''}</p>
         )}
       </div>
     </div>

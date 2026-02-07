@@ -3,7 +3,7 @@ import './App.css'
 import Rhombus from './components/Rhombus.jsx'
 import ThreeDViewer from './components/ThreeDViewer.jsx'
 import WallpaperViewer from './components/WallpaperViewer.jsx'
-import { validatePath } from './utils/pathLogic.js'
+import { validatePath, getNextEdgeStartPoints } from './utils/pathLogic.js'
 
 /**
  * Determine message style class based on content.
@@ -30,6 +30,20 @@ function PathEditorApp() {
   const [loadingExample, setLoadingExample] = useState(false)
   const [selectedExample, setSelectedExample] = useState('')
 
+  // Helper to auto-select the next start point based on edges
+  const autoSelectStartPoint = useCallback((edges) => {
+    if (edges.length === 0) {
+      setActiveStartPoint(null)
+      return
+    }
+    const startPoints = getNextEdgeStartPoints(edges)
+    if (startPoints && startPoints.length > 0) {
+      setActiveStartPoint(startPoints[0])
+    } else {
+      setActiveStartPoint(null)
+    }
+  }, [])
+
   // Load simple loop example and manifest on mount
   useEffect(() => {
     // Load the simple loop example as initial path
@@ -41,6 +55,8 @@ function PathEditorApp() {
       .then(data => {
         setPathEdges(data)
         setSelectedExample('simple')
+        // Auto-select start point for the loaded example
+        autoSelectStartPoint(data)
       })
       .catch(err => {
         console.warn('Failed to load initial example:', err)
@@ -58,7 +74,7 @@ function PathEditorApp() {
         console.warn('Failed to load examples manifest:', err)
         setExamplesList([])
       })
-  }, [])
+  }, [autoSelectStartPoint])
 
   const loadExample = useCallback(async (exampleId) => {
     if (!exampleId) return
@@ -78,7 +94,8 @@ function PathEditorApp() {
       }
       
       setPathEdges(data)
-      setActiveStartPoint(null)
+      // Auto-select start point for the loaded example
+      autoSelectStartPoint(data)
       setValidationMessage(`Loaded example: ${example.name}`)
     } catch (err) {
       const errorMsg = err instanceof SyntaxError 
@@ -88,7 +105,7 @@ function PathEditorApp() {
     } finally {
       setLoadingExample(false)
     }
-  }, [examplesList])
+  }, [examplesList, autoSelectStartPoint])
 
   // Clear highlighted edge after timeout
   useEffect(() => {
@@ -104,10 +121,14 @@ function PathEditorApp() {
   }, [])
 
   const removeLastEdge = useCallback(() => {
-    setPathEdges(current => current.slice(0, -1))
-    setActiveStartPoint(null)
+    setPathEdges(current => {
+      const newEdges = current.slice(0, -1)
+      // Auto-select start point for the remaining edges
+      autoSelectStartPoint(newEdges)
+      return newEdges
+    })
     setValidationMessage('')
-  }, [])
+  }, [autoSelectStartPoint])
 
   const clearEntirePath = useCallback(() => {
     setPathEdges([])
@@ -131,13 +152,14 @@ function PathEditorApp() {
       }
 
       setPathEdges(parsedData)
-      setActiveStartPoint(null)
+      // Auto-select start point for the imported data
+      autoSelectStartPoint(parsedData)
       setValidationMessage('Path imported successfully!')
       setJsonInputText('')
     } catch (parseError) {
       setValidationMessage(`JSON parse error: ${parseError.message}`)
     }
-  }, [jsonInputText])
+  }, [jsonInputText, autoSelectStartPoint])
 
   const copyPathToClipboard = useCallback(() => {
     const jsonOutput = JSON.stringify(pathEdges, null, 2)
