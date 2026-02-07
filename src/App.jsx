@@ -43,6 +43,50 @@ function PathEditorApp() {
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false)
   const [interiorMode, setInteriorMode] = useState(true)
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null)
+  const [examplesList, setExamplesList] = useState([])
+  const [loadingExample, setLoadingExample] = useState(false)
+  const [selectedExample, setSelectedExample] = useState('')
+
+  // Fetch examples manifest on mount
+  useEffect(() => {
+    fetch('/examples/manifest.json')
+      .then(res => res.json())
+      .then(setExamplesList)
+      .catch(err => {
+        console.warn('Failed to load examples manifest:', err)
+        setExamplesList([])
+      })
+  }, [])
+
+  const loadExample = useCallback(async (exampleId) => {
+    if (!exampleId) return
+    
+    const example = examplesList.find(e => e.id === exampleId)
+    if (!example) return
+    
+    setLoadingExample(true)
+    try {
+      const res = await fetch(`/examples/${example.filename}`)
+      const data = await res.json()
+      
+      const validationResult = validatePath(data)
+      if (!validationResult.valid) {
+        setValidationMessage(`Invalid example: ${validationResult.error}`)
+        return
+      }
+      
+      setPathEdges(data)
+      setActiveStartPoint(null)
+      setValidationMessage(`Loaded example: ${example.name}`)
+    } catch (err) {
+      const errorMsg = err instanceof SyntaxError 
+        ? 'Invalid example format' 
+        : 'Network error loading example'
+      setValidationMessage(errorMsg)
+    } finally {
+      setLoadingExample(false)
+    }
+  }, [examplesList])
 
   // Clear highlighted edge after timeout
   useEffect(() => {
@@ -173,6 +217,28 @@ function PathEditorApp() {
               View as P3 Wallpaper
             </button>
           </div>
+
+          {examplesList.length > 0 && (
+            <div className="example-selector">
+              <label htmlFor="example-select">Load Example:</label>
+              <select
+                id="example-select"
+                value={selectedExample}
+                onChange={(e) => {
+                  setSelectedExample(e.target.value)
+                  loadExample(e.target.value)
+                }}
+                disabled={loadingExample}
+              >
+                <option value="">Select an example...</option>
+                {examplesList.map(example => (
+                  <option key={example.id} value={example.id}>
+                    {example.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {validationMessage && (
             <div className={`message-box ${getMessageStyleClass(validationMessage)}`}>

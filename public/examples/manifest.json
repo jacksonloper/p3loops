@@ -1,0 +1,14 @@
+[
+  {
+    "id": "simple",
+    "name": "Simple Loop",
+    "filename": "exampleedge.json",
+    "description": "A basic example with 8 edges including interior points"
+  },
+  {
+    "id": "complex",
+    "name": "Complex Loop",
+    "filename": "exampleedge2.json",
+    "description": "A more complex example with 24 edges and multiple interior points"
+  }
+]
