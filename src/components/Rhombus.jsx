@@ -366,10 +366,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         {edges.length === 0 && !selectedStartPoint && (
           <p>Click anywhere to select a starting point on the boundary.</p>
         )}
-        {edges.length === 0 && selectedStartPoint && (
-          <p>Click to add the next point.{interiorMode ? ' Hold Shift for interior.' : ''}</p>
-        )}
-        {edges.length > 0 && selectedStartPoint && (
+        {selectedStartPoint && (
           <p>Click to add the next point.{interiorMode ? ' Hold Shift for interior.' : ''}</p>
         )}
       </div>
