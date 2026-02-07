@@ -77,6 +77,14 @@
   pointer-events: none;
 }
 
+.hover-point-complementary {
+  fill: rgba(255, 255, 255, 0.35);
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1;
+  stroke-dasharray: 2,2;
+  pointer-events: none;
+}
+
 .hover-point-interior {
   fill: rgba(255, 159, 67, 0.6);
   stroke: rgba(255, 255, 255, 0.5);

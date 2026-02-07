@@ -9,6 +9,7 @@ import {
   findClosestPointOnBoundary,
   findInteriorPoint,
   pointsAreEqual,
+  getIdentifiedSide,
   isInteriorPoint
 } from '../utils/geometry.js';
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints, isSameSideEdge } from '../utils/pathLogic.js';
@@ -83,23 +84,9 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       }
     }
     
-    // Check boundary first
+    // Always show nearest boundary point (interior only with Shift)
     const closest = findClosestPointOnBoundary(x, y);
-    if (closest.distance < SNAP_RADIUS) {
-      setHoverPoint(closest);
-      return;
-    }
-    
-    // If in interior mode with start point selected, show interior hover
-    if (interiorMode && selectedStartPoint) {
-      const interior = findInteriorPoint(x, y);
-      if (isValidInteriorPoint(interior)) {
-        setHoverPoint(interior);
-        return;
-      }
-    }
-    
-    setHoverPoint(null);
+    setHoverPoint(closest);
   }, [getMouseCoords, interiorMode, selectedStartPoint]);
   
   const handleMouseLeave = useCallback(() => {
@@ -131,18 +118,9 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       if (isValidInteriorPoint(interior)) {
         clickedPoint = { interior: true, southward: interior.southward, eastward: interior.eastward };
       }
-    } else if (closestBoundary.distance < SNAP_RADIUS) {
-      // Near boundary - snap to it
-      clickedPoint = { side: closestBoundary.side, t: closestBoundary.t };
-    } else if (interiorMode && selectedStartPoint) {
-      // Interior mode with start point selected - allow interior points
-      const interior = findInteriorPoint(x, y);
-      if (isValidInteriorPoint(interior)) {
-        clickedPoint = { interior: true, southward: interior.southward, eastward: interior.eastward };
-      }
     } else {
-      // Clicked outside rhombus without interior mode - use nearest boundary point
-      // This makes mobile/touch interaction easier
+      // Always snap to nearest boundary point (makes mobile/touch interaction easier)
+      // Interior points only happen with explicit Shift+click
       clickedPoint = { side: closestBoundary.side, t: closestBoundary.t };
     }
     
@@ -344,12 +322,20 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
             className="hover-point-interior"
           />
         ) : (
-          <circle
-            cx={getPointOnSide(hoverPoint.side, hoverPoint.t).x}
-            cy={getPointOnSide(hoverPoint.side, hoverPoint.t).y}
-            r="6"
-            className="hover-point"
-          />
+          <>
+            <circle
+              cx={getPointOnSide(hoverPoint.side, hoverPoint.t).x}
+              cy={getPointOnSide(hoverPoint.side, hoverPoint.t).y}
+              r="6"
+              className="hover-point"
+            />
+            <circle
+              cx={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).x}
+              cy={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).y}
+              r="6"
+              className="hover-point-complementary"
+            />
+          </>
         ))}
       </svg>
       
