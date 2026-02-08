@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   getRhombusPath,
   getPointOnSide,
@@ -16,8 +16,17 @@ import {
 import { getEdgeCoordinates, canAddEdge, getNextEdgeStartPoints, isSameSideEdge } from '../utils/pathLogic.js';
 import './Rhombus.css';
 
-// Snap radius for boundary detection (in SVG units)
-const SNAP_RADIUS = 20;
+// Snap radius for boundary detection (in SVG units, at zoom level 1)
+const BASE_SNAP_RADIUS = 20;
+
+// Zoom configuration
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 20;
+const WHEEL_ZOOM_FACTOR = 1.1;
+
+// Touch configuration
+const TAP_MAX_DURATION_MS = 300;  // Maximum duration for a tap (vs pan)
+const TAP_MAX_DISTANCE = 10;      // Maximum movement for a tap (in screen pixels)
 
 /**
  * Check if an interior point is truly inside the rhombus (not on boundary).
@@ -59,20 +68,82 @@ function getEdgeArrow(edge) {
 function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError, interiorMode = false, highlightedEdgeIndex = null, disabled = false }) {
   const [hoverPoint, setHoverPoint] = useState(null);
   
+  // Zoom and pan state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  
+  // Track touch/drag state for distinguishing taps from pans
+  const svgRef = useRef(null);
+  const touchState = useRef({
+    startTime: 0,
+    startPos: null,
+    startPan: null,
+    isPanning: false,
+    pinchStartDistance: null,
+    pinchStartZoom: null,
+    pinchCenter: null,        // Screen coordinates of pinch center
+    pinchCenterSvg: null      // SVG coordinates of pinch center (for zoom anchoring)
+  });
+  
   const size = getSize();
   const shear = getShear();
   const padding = shear / 2 + 50;
-  const viewBox = `${-padding} ${-padding} ${size + 2 * padding} ${size + 2 * padding}`;
+  
+  // Calculate dynamic viewBox based on zoom and pan
+  const fullWidth = size + 2 * padding;
+  const fullHeight = size + 2 * padding;
+  const viewWidth = fullWidth / zoom;
+  const viewHeight = fullHeight / zoom;
+  const centerX = size / 2;
+  const centerY = size / 2;
+  // Pan is in screen pixels, convert to SVG units
+  const viewX = centerX - viewWidth / 2 - pan.x / zoom;
+  const viewY = centerY - viewHeight / 2 - pan.y / zoom;
+  const viewBox = `${viewX} ${viewY} ${viewWidth} ${viewHeight}`;
+  
+  // Snap radius scales inversely with zoom (smaller in original space as we zoom in)
+  const snapRadius = BASE_SNAP_RADIUS / zoom;
   const rhombusPath = getRhombusPath();
   
-  // Convert screen coordinates from mouse event
-  const getMouseCoords = useCallback((e) => {
-    const svg = e.currentTarget;
+  // Scale factors for visual elements to maintain screen size when zooming
+  // All sizes divided by zoom to appear constant on screen
+  const strokeScale = 1 / zoom;
+  const baseEdgeStrokeWidth = 3;
+  const baseHighlightedStrokeWidth = 5;
+  const basePointRadius = 5;
+  const baseStartPointRadius = 8;
+  const baseHoverRadius = 6;
+  const baseFontSize = 12;
+  const baseSmallFontSize = 10;
+  const baseRhombusStrokeWidth = 2;
+  
+  // Position offsets for labels (in SVG units at zoom 1)
+  const angleLabelOffset = { x: 10, y: 10 };
+  const angleLabelOffsetLarge = { x: 25, y: 15 };
+  const identTextOffset = { x: 35, y: 25, xLarge: 45, yLarge: 30 };
+  
+  // Convert screen coordinates (clientX, clientY) to SVG coordinates
+  // Uses given zoom and pan values (useful for calculating transforms during pinch)
+  const screenToSvg = useCallback((clientX, clientY, currentZoom, currentPan) => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
     const rect = svg.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width * (size + 2 * padding) - padding;
-    const y = (e.clientY - rect.top) / rect.height * (size + 2 * padding) - padding;
+    
+    // Calculate viewBox parameters for the given zoom/pan
+    const vWidth = fullWidth / currentZoom;
+    const vHeight = fullHeight / currentZoom;
+    const vX = centerX - vWidth / 2 - currentPan.x / currentZoom;
+    const vY = centerY - vHeight / 2 - currentPan.y / currentZoom;
+    
+    const x = (clientX - rect.left) / rect.width * vWidth + vX;
+    const y = (clientY - rect.top) / rect.height * vHeight + vY;
     return { x, y };
-  }, [size, padding]);
+  }, [fullWidth, fullHeight, centerX, centerY]);
+  
+  // Convert screen coordinates from mouse/touch event to SVG coordinates (using current zoom/pan)
+  const getMouseCoords = useCallback((e) => {
+    return screenToSvg(e.clientX, e.clientY, zoom, pan);
+  }, [screenToSvg, zoom, pan]);
   
   // Handle mouse move for hover feedback
   const handleMouseMove = useCallback((e) => {
@@ -90,13 +161,13 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     
     // If interior mode is enabled and we have a start point selected,
     // and cursor is inside the rhombus but not near boundary, show interior point
-    if (interiorMode && selectedStartPoint && isInsideRhombus && closest.distance >= SNAP_RADIUS) {
+    if (interiorMode && selectedStartPoint && isInsideRhombus && closest.distance >= snapRadius) {
       setHoverPoint(interior);
     } else {
       // Near boundary or outside rhombus - show boundary point
       setHoverPoint(closest);
     }
-  }, [getMouseCoords, interiorMode, selectedStartPoint, disabled]);
+  }, [getMouseCoords, interiorMode, selectedStartPoint, disabled, snapRadius]);
   
   const handleMouseLeave = useCallback(() => {
     setHoverPoint(null);
@@ -129,7 +200,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     
     // If interior mode is enabled and we have a start point selected,
     // and click is inside the rhombus but not near boundary, use interior point
-    if (interiorMode && selectedStartPoint && isInsideRhombus && closestBoundary.distance >= SNAP_RADIUS) {
+    if (interiorMode && selectedStartPoint && isInsideRhombus && closestBoundary.distance >= snapRadius) {
       clickedPoint = { interior: true, southward: interior.southward, eastward: interior.eastward };
     } else {
       // Near boundary or outside rhombus - snap to boundary
@@ -182,7 +253,229 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       // Auto-chain: automatically select the next start point
       autoSelectNextStartPoint([...edges, newEdge]);
     }
-  }, [edges, selectedStartPoint, onAddEdge, onSelectStartPoint, onError, getMouseCoords, interiorMode, autoSelectNextStartPoint, disabled]);
+  }, [edges, selectedStartPoint, onAddEdge, onSelectStartPoint, onError, getMouseCoords, interiorMode, autoSelectNextStartPoint, disabled, snapRadius]);
+  
+  // Handle mouse wheel for zooming
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? (1 / WHEEL_ZOOM_FACTOR) : WHEEL_ZOOM_FACTOR;
+    setZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * delta)));
+  }, []);
+  
+  // Add wheel listener with passive: false to allow preventDefault
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
+  
+  // Mouse drag handlers for panning
+  const handleMouseDown = useCallback((e) => {
+    // Only pan with left mouse button
+    if (e.button !== 0) return;
+    touchState.current = {
+      ...touchState.current,
+      startTime: Date.now(),
+      startPos: { x: e.clientX, y: e.clientY },
+      startPan: { ...pan },
+      isPanning: false
+    };
+  }, [pan]);
+  
+  const handleMouseMoveForPan = useCallback((e) => {
+    if (!touchState.current.startPos) return;
+    
+    const dx = e.clientX - touchState.current.startPos.x;
+    const dy = e.clientY - touchState.current.startPos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If moved beyond tap threshold, it's a pan operation
+    if (distance > TAP_MAX_DISTANCE) {
+      touchState.current.isPanning = true;
+      setPan({
+        x: touchState.current.startPan.x + dx,
+        y: touchState.current.startPan.y + dy
+      });
+    }
+  }, []);
+  
+  const handleMouseUp = useCallback((e) => {
+    const state = touchState.current;
+    const duration = Date.now() - state.startTime;
+    const dx = e.clientX - (state.startPos?.x || 0);
+    const dy = e.clientY - (state.startPos?.y || 0);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If it was a short tap without much movement, trigger click
+    const wasTap = duration < TAP_MAX_DURATION_MS && distance < TAP_MAX_DISTANCE;
+    
+    if (!state.isPanning && wasTap) {
+      // The onClick handler will be called naturally
+    }
+    
+    touchState.current = {
+      ...touchState.current,
+      startPos: null,
+      startPan: null,
+      isPanning: false
+    };
+  }, []);
+  
+  // Touch handlers for mobile (pinch-to-zoom and pan)
+  const getTouchDistance = useCallback((touches) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }, []);
+  
+  const getTouchCenter = useCallback((touches) => {
+    if (touches.length < 2) return { x: touches[0].clientX, y: touches[0].clientY };
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2
+    };
+  }, []);
+  
+  const handleTouchStart = useCallback((e) => {
+    if (e.touches.length === 2) {
+      // Pinch gesture starting
+      const pinchCenterScreen = getTouchCenter(e.touches);
+      // Convert pinch center to SVG coordinates for zoom anchoring
+      const pinchCenterSvgCoords = screenToSvg(pinchCenterScreen.x, pinchCenterScreen.y, zoom, pan);
+      touchState.current = {
+        ...touchState.current,
+        pinchStartDistance: getTouchDistance(e.touches),
+        pinchStartZoom: zoom,
+        pinchCenter: pinchCenterScreen,
+        pinchCenterSvg: pinchCenterSvgCoords,
+        startPan: { ...pan },
+        isPanning: true
+      };
+    } else if (e.touches.length === 1) {
+      // Single finger - could be tap or pan
+      touchState.current = {
+        ...touchState.current,
+        startTime: Date.now(),
+        startPos: { x: e.touches[0].clientX, y: e.touches[0].clientY },
+        startPan: { ...pan },
+        isPanning: false,
+        pinchStartDistance: null
+      };
+    }
+  }, [getTouchDistance, getTouchCenter, zoom, pan, screenToSvg]);
+  
+  const handleTouchMove = useCallback((e) => {
+    if (e.touches.length === 2 && touchState.current.pinchStartDistance) {
+      // Pinch gesture
+      e.preventDefault();
+      const currentDistance = getTouchDistance(e.touches);
+      const scale = currentDistance / touchState.current.pinchStartDistance;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, touchState.current.pinchStartZoom * scale));
+      
+      // Get current pinch center in screen coordinates
+      const currentCenter = getTouchCenter(e.touches);
+      const svg = svgRef.current;
+      
+      if (svg && touchState.current.pinchCenterSvg) {
+        const rect = svg.getBoundingClientRect();
+        const svgPoint = touchState.current.pinchCenterSvg;
+        
+        // Calculate what pan is needed to keep svgPoint at currentCenter screen position
+        // The SVG point should appear at currentCenter on screen
+        // Screen position formula: screenX = (svgX - viewX) / viewWidth * screenWidth
+        // viewX = centerX - viewWidth/2 - pan.x/zoom
+        // We need to solve for pan.x such that svgX appears at currentCenter.x
+        
+        // Normalized position of currentCenter in SVG element (0-1)
+        const normX = (currentCenter.x - rect.left) / rect.width;
+        const normY = (currentCenter.y - rect.top) / rect.height;
+        
+        // viewWidth and viewHeight at new zoom
+        const newViewWidth = fullWidth / newZoom;
+        const newViewHeight = fullHeight / newZoom;
+        
+        // We want: svgPoint.x = viewX + normX * viewWidth
+        // svgPoint.x = centerX - viewWidth/2 - pan.x/zoom + normX * viewWidth
+        // pan.x/zoom = centerX - viewWidth/2 + normX * viewWidth - svgPoint.x
+        // pan.x = zoom * (centerX - viewWidth/2 + normX * viewWidth - svgPoint.x)
+        
+        const newPanX = newZoom * (centerX - newViewWidth / 2 + normX * newViewWidth - svgPoint.x);
+        const newPanY = newZoom * (centerY - newViewHeight / 2 + normY * newViewHeight - svgPoint.y);
+        
+        setZoom(newZoom);
+        setPan({ x: newPanX, y: newPanY });
+      } else {
+        setZoom(newZoom);
+      }
+    } else if (e.touches.length === 1 && touchState.current.startPos) {
+      // Single finger move - check if it's a pan
+      const dx = e.touches[0].clientX - touchState.current.startPos.x;
+      const dy = e.touches[0].clientY - touchState.current.startPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance > TAP_MAX_DISTANCE) {
+        e.preventDefault();
+        touchState.current.isPanning = true;
+        setPan({
+          x: touchState.current.startPan.x + dx,
+          y: touchState.current.startPan.y + dy
+        });
+      }
+    }
+  }, [getTouchDistance, getTouchCenter, fullWidth, fullHeight, centerX, centerY]);
+  
+  const handleTouchEnd = useCallback((e) => {
+    const state = touchState.current;
+    
+    if (e.touches.length === 0) {
+      // All fingers lifted
+      // If it was a quick tap without pinching or panning, the onClick will be triggered naturally
+      // since we haven't prevented the default behavior for taps
+      
+      touchState.current = {
+        startTime: 0,
+        startPos: null,
+        startPan: null,
+        isPanning: false,
+        pinchStartDistance: null,
+        pinchStartZoom: null,
+        pinchCenter: null,
+        pinchCenterSvg: null
+      };
+    } else if (e.touches.length === 1 && state.pinchStartDistance) {
+      // Went from 2 fingers to 1 - reset to single finger pan
+      touchState.current = {
+        ...touchState.current,
+        startPos: { x: e.touches[0].clientX, y: e.touches[0].clientY },
+        startPan: { ...pan },
+        pinchStartDistance: null,
+        pinchStartZoom: null,
+        pinchCenter: null,
+        pinchCenterSvg: null
+      };
+    }
+  }, [pan]);
+  
+  // Reset zoom and pan
+  const handleResetView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+  
+  // Combined mouse move handler for both hover feedback and panning
+  const handleCombinedMouseMove = useCallback((e) => {
+    handleMouseMove(e);
+    handleMouseMoveForPan(e);
+  }, [handleMouseMove, handleMouseMoveForPan]);
+  
+  // Click handler that only triggers if not panning
+  const handleClickIfNotPanning = useCallback((e) => {
+    if (!touchState.current.isPanning) {
+      handleClick(e);
+    }
+  }, [handleClick]);
   
   // Corner positions for labels
   const nw = getPointOnSide('north', 0);
@@ -200,29 +493,41 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   
   return (
     <div className="rhombus-container">
+      <div className="zoom-controls">
+        <span className="zoom-level">Zoom: {zoom.toFixed(1)}x</span>
+        <button onClick={handleResetView} className="reset-view-btn" title="Reset View">
+          Reset View
+        </button>
+      </div>
       <svg
+        ref={svgRef}
         viewBox={viewBox}
         className="rhombus-svg"
-        onMouseMove={handleMouseMove}
+        onMouseMove={handleCombinedMouseMove}
         onMouseLeave={handleMouseLeave}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onClick={handleClickIfNotPanning}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         {/* Rhombus outline */}
-        <path d={rhombusPath} className="rhombus-path" />
+        <path d={rhombusPath} className="rhombus-path" strokeWidth={baseRhombusStrokeWidth * strokeScale} />
         
         {/* Corner angle indicators */}
-        <text x={ne.x + 10} y={ne.y - 10} className="angle-text" fontSize="10">120°</text>
-        <text x={sw.x - 25} y={sw.y + 15} className="angle-text" fontSize="10">120°</text>
-        <text x={nw.x - 25} y={nw.y - 5} className="angle-text" fontSize="10">60°</text>
-        <text x={se.x + 10} y={se.y + 15} className="angle-text" fontSize="10">60°</text>
+        <text x={ne.x + angleLabelOffset.x * strokeScale} y={ne.y - angleLabelOffset.y * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={sw.x - angleLabelOffsetLarge.x * strokeScale} y={sw.y + angleLabelOffsetLarge.y * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={nw.x - angleLabelOffsetLarge.x * strokeScale} y={nw.y - 5 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
+        <text x={se.x + angleLabelOffset.x * strokeScale} y={se.y + angleLabelOffsetLarge.y * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
         
         {/* Identification indicators */}
-        <text x={ne.x + 35} y={ne.y - 25} className="identification-text" fontSize="10">N≡E</text>
-        <text x={sw.x - 45} y={sw.y + 30} className="identification-text" fontSize="10">S≡W</text>
+        <text x={ne.x + identTextOffset.x * strokeScale} y={ne.y - identTextOffset.y * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>N≡E</text>
+        <text x={sw.x - identTextOffset.xLarge * strokeScale} y={sw.y + identTextOffset.yLarge * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>S≡W</text>
         
         {/* Side labels */}
         {sideLabels.map(({ key, x, y, label }) => (
-          <text key={key} x={x} y={y} className="side-label" textAnchor="middle" dominantBaseline="middle" fontSize="12">
+          <text key={key} x={x} y={y} className="side-label" textAnchor="middle" dominantBaseline="middle" fontSize={baseFontSize * strokeScale}>
             {label}
           </text>
         ))}
@@ -243,13 +548,13 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
                 x2={coords.to.x}
                 y2={coords.to.y}
                 className={`edge-line ${isHighlighted ? 'edge-line-problem' : ''}`}
-                strokeWidth={isHighlighted ? 5 : 3}
+                strokeWidth={(isHighlighted ? baseHighlightedStrokeWidth : baseEdgeStrokeWidth) * strokeScale}
               />
               <text
                 x={midX}
                 y={midY}
                 className="edge-arrow"
-                fontSize="12"
+                fontSize={baseFontSize * strokeScale}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 transform={`rotate(${arrow.rotation}, ${midX}, ${midY})`}
@@ -269,14 +574,16 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
               <circle
                 cx={fromCoords.x}
                 cy={fromCoords.y}
-                r="5"
+                r={basePointRadius * strokeScale}
                 className={isInteriorPoint(edge.from) ? 'interior-point' : 'edge-point'}
+                strokeWidth={strokeScale}
               />
               <circle
                 cx={toCoords.x}
                 cy={toCoords.y}
-                r="5"
+                r={basePointRadius * strokeScale}
                 className={isInteriorPoint(edge.to) ? 'interior-point' : 'edge-point'}
+                strokeWidth={strokeScale}
               />
             </g>
           );
@@ -290,8 +597,9 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
               key={`start-${index}`}
               cx={coords.x}
               cy={coords.y}
-              r="8"
+              r={baseStartPointRadius * strokeScale}
               className="next-start-point"
+              strokeWidth={2 * strokeScale}
             />
           );
         })}
@@ -301,8 +609,9 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
           <circle
             cx={getPointCoordinates(selectedStartPoint).x}
             cy={getPointCoordinates(selectedStartPoint).y}
-            r="8"
+            r={baseStartPointRadius * strokeScale}
             className="selected-start-point"
+            strokeWidth={2 * strokeScale}
           />
         )}
         
@@ -311,22 +620,25 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
           <circle
             cx={getInteriorPoint(hoverPoint.southward, hoverPoint.eastward).x}
             cy={getInteriorPoint(hoverPoint.southward, hoverPoint.eastward).y}
-            r="6"
+            r={baseHoverRadius * strokeScale}
             className="hover-point-interior"
+            strokeWidth={strokeScale}
           />
         ) : (
           <>
             <circle
               cx={getPointOnSide(hoverPoint.side, hoverPoint.t).x}
               cy={getPointOnSide(hoverPoint.side, hoverPoint.t).y}
-              r="6"
+              r={baseHoverRadius * strokeScale}
               className="hover-point"
             />
             <circle
               cx={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).x}
               cy={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).y}
-              r="6"
+              r={baseHoverRadius * strokeScale}
               className="hover-point-complementary"
+              strokeWidth={strokeScale}
+              strokeDasharray={`${2 * strokeScale},${2 * strokeScale}`}
             />
           </>
         ))}
