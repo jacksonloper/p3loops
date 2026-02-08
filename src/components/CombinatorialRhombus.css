@@ -1,0 +1,235 @@
+.combinatorial-rhombus-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.combinatorial-rhombus-main {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  width: 100%;
+  max-width: 900px;
+}
+
+@media (max-width: 700px) {
+  .combinatorial-rhombus-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.combinatorial-svg-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.combinatorial-rhombus-svg {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  aspect-ratio: 1;
+  background: #1a1a2e;
+  border-radius: 8px;
+}
+
+.combinatorial-rhombus-path {
+  fill: #16213e;
+  stroke: #4a90d9;
+  stroke-width: 2;
+}
+
+.combinatorial-side-label {
+  fill: #888;
+  font-family: sans-serif;
+  font-size: 12px;
+}
+
+.combinatorial-first-segment-selected {
+  stroke: #ffc107;
+  stroke-width: 10;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+.combinatorial-segment-highlight {
+  stroke: #00ff88;
+  stroke-width: 8;
+  stroke-linecap: round;
+  opacity: 0.7;
+  animation: segment-pulse 1s ease-in-out infinite;
+}
+
+@keyframes segment-pulse {
+  0%, 100% {
+    opacity: 0.5;
+    stroke-width: 8;
+  }
+  50% {
+    opacity: 0.9;
+    stroke-width: 12;
+  }
+}
+
+.combinatorial-edge-line {
+  stroke: #e94560;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.combinatorial-edge-problem {
+  stroke: #ff0000;
+  stroke-width: 5;
+  animation: problem-flash 0.5s ease-in-out 3;
+}
+
+@keyframes problem-flash {
+  0%, 100% {
+    stroke: #ff0000;
+    opacity: 1;
+  }
+  50% {
+    stroke: #ffff00;
+    opacity: 0.7;
+  }
+}
+
+.combinatorial-edge-arrow {
+  fill: #fff;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.combinatorial-point {
+  fill: #e94560;
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.combinatorial-point-label {
+  fill: #fff;
+  font-family: sans-serif;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.combinatorial-start-point {
+  fill: none;
+  stroke: #00ff88;
+  stroke-width: 3;
+  animation: start-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes start-pulse {
+  0%, 100% {
+    stroke-width: 3;
+    opacity: 1;
+  }
+  50% {
+    stroke-width: 5;
+    opacity: 0.7;
+  }
+}
+
+/* Segment Selection Panel */
+.combinatorial-segment-panel {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 15px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.combinatorial-segment-panel h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: #a0a0a0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.combinatorial-instruction {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 15px;
+  line-height: 1.5;
+}
+
+.combinatorial-instruction.disabled {
+  color: #dc3545;
+  font-style: italic;
+}
+
+.combinatorial-segment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.combinatorial-side-group {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.combinatorial-side-group h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: #667eea;
+  text-transform: capitalize;
+}
+
+.combinatorial-segment-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.combinatorial-segment-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.combinatorial-segment-option input[type="radio"] {
+  accent-color: #00ff88;
+  width: 16px;
+  height: 16px;
+}
+
+.combinatorial-segment-option input[type="radio"]:disabled {
+  opacity: 0.4;
+}
+
+.combinatorial-segment-label {
+  font-size: 0.85rem;
+  color: #ccc;
+}
+
+.combinatorial-accept-btn {
+  width: 100%;
+  margin-top: 15px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #00c853;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.combinatorial-accept-btn:hover:not(:disabled) {
+  background: #00a844;
+  transform: translateY(-1px);
+}
+
+.combinatorial-accept-btn:disabled {
+  background: #555;
+  color: #888;
+  cursor: not-allowed;
+}

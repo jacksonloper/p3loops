@@ -3,6 +3,7 @@ import './App.css'
 import Rhombus from './components/Rhombus.jsx'
 import ThreeDViewer from './components/ThreeDViewer.jsx'
 import WallpaperViewer from './components/WallpaperViewer.jsx'
+import CombinatorialEditor from './components/CombinatorialEditor.jsx'
 import { validatePath, getNextEdgeStartPoints, canCloseLoop } from './utils/pathLogic.js'
 
 /**
@@ -16,7 +17,7 @@ function getMessageStyleClass(message) {
   return isError ? 'error-message' : 'success-message'
 }
 
-function PathEditorApp() {
+function PathEditorApp({ onSwitchToCombinatorial }) {
   const [pathEdges, setPathEdges] = useState([])
   const [activeStartPoint, setActiveStartPoint] = useState(null)
   const [jsonInputText, setJsonInputText] = useState('')
@@ -216,6 +217,9 @@ function PathEditorApp() {
       <header className="app-header">
         <h1>P3 Loops Path Editor</h1>
         <p className="subtitle">Create non-crossing paths on a 120/60/120/60 rhombus with edge identifications</p>
+        <button onClick={onSwitchToCombinatorial} className="mode-switch-btn">
+          Switch to Combinatorial Mode →
+        </button>
       </header>
 
       <main className="editor-main">
@@ -392,4 +396,25 @@ function PathEditorApp() {
   )
 }
 
-export default PathEditorApp
+/**
+ * Main App component that manages switching between Original and Combinatorial editors.
+ */
+function App() {
+  const [mode, setMode] = useState('original')
+
+  if (mode === 'combinatorial') {
+    return (
+      <CombinatorialEditor
+        onSwitchToOriginal={() => setMode('original')}
+      />
+    )
+  }
+
+  return (
+    <PathEditorApp
+      onSwitchToCombinatorial={() => setMode('combinatorial')}
+    />
+  )
+}
+
+export default App
