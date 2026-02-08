@@ -3,6 +3,7 @@ import './App.css'
 import Rhombus from './components/Rhombus.jsx'
 import ThreeDViewer from './components/ThreeDViewer.jsx'
 import WallpaperViewer from './components/WallpaperViewer.jsx'
+import TopologicalPathSelector from './components/TopologicalPathSelector.jsx'
 import { validatePath, getNextEdgeStartPoints, canCloseLoop } from './utils/pathLogic.js'
 
 /**
@@ -14,6 +15,12 @@ function getMessageStyleClass(message) {
     message.toLowerCase().includes(indicator.toLowerCase())
   )
   return isError ? 'error-message' : 'success-message'
+}
+
+// Path entry mode constants
+const PATH_ENTRY_MODES = {
+  CLICK: 'click',
+  TOPOLOGICAL: 'topological'
 }
 
 function PathEditorApp() {
@@ -30,6 +37,7 @@ function PathEditorApp() {
   const [loadingExample, setLoadingExample] = useState(false)
   const [selectedExample, setSelectedExample] = useState('')
   const [isLoopClosed, setIsLoopClosed] = useState(false)
+  const [pathEntryMode, setPathEntryMode] = useState(PATH_ENTRY_MODES.CLICK)
 
   // Helper to auto-select the next start point based on edges
   const autoSelectStartPoint = useCallback((edges) => {
@@ -211,6 +219,25 @@ function PathEditorApp() {
     }
   }, [])
 
+  // Handler for topological mode adding edges
+  const handleTopologicalAddEdges = useCallback((newEdges, startPoint = null) => {
+    if (startPoint && newEdges.length === 0) {
+      // Just setting the starting point
+      setActiveStartPoint(startPoint)
+      setValidationMessage('Starting point selected')
+      return
+    }
+    
+    if (newEdges.length > 0) {
+      setPathEdges(current => {
+        const updated = [...current, ...newEdges]
+        autoSelectStartPoint(updated)
+        return updated
+      })
+      setValidationMessage(`Added ${newEdges.length} edge${newEdges.length > 1 ? 's' : ''}`)
+    }
+  }, [autoSelectStartPoint])
+
   return (
     <div className="path-editor-container">
       <header className="app-header">
@@ -322,16 +349,40 @@ function PathEditorApp() {
 
           <div className="settings-panel">
             <div className="setting-row">
-              <label htmlFor="interior-mode">Interior points:</label>
-              <input
-                id="interior-mode"
-                type="checkbox"
-                checked={interiorMode}
-                onChange={(e) => setInteriorMode(e.target.checked)}
-              />
-              <span className="setting-value">{interiorMode ? 'Enabled' : 'Disabled'}</span>
+              <label htmlFor="path-entry-mode">Entry mode:</label>
+              <select
+                id="path-entry-mode"
+                value={pathEntryMode}
+                onChange={(e) => setPathEntryMode(e.target.value)}
+                className="mode-selector"
+              >
+                <option value={PATH_ENTRY_MODES.CLICK}>Click to place</option>
+                <option value={PATH_ENTRY_MODES.TOPOLOGICAL}>Topological (discrete)</option>
+              </select>
             </div>
+            {pathEntryMode === PATH_ENTRY_MODES.CLICK && (
+              <div className="setting-row">
+                <label htmlFor="interior-mode">Interior points:</label>
+                <input
+                  id="interior-mode"
+                  type="checkbox"
+                  checked={interiorMode}
+                  onChange={(e) => setInteriorMode(e.target.checked)}
+                />
+                <span className="setting-value">{interiorMode ? 'Enabled' : 'Disabled'}</span>
+              </div>
+            )}
           </div>
+
+          {pathEntryMode === PATH_ENTRY_MODES.TOPOLOGICAL && (
+            <TopologicalPathSelector
+              edges={pathEdges}
+              activeStartPoint={activeStartPoint}
+              onAddEdges={handleTopologicalAddEdges}
+              onError={handleEdgeError}
+              disabled={isLoopClosed}
+            />
+          )}
         </section>
 
         {showJsonPanel && (

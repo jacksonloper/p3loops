@@ -1,0 +1,241 @@
+.topological-selector {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.topological-selector.disabled {
+  opacity: 0.6;
+}
+
+.disabled-message {
+  text-align: center;
+  color: #888;
+  font-style: italic;
+  margin: 1rem 0;
+}
+
+.selector-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  color: #e0e0e0;
+  text-align: center;
+}
+
+.selector-subtitle {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: #888;
+  text-align: center;
+}
+
+.selector-subtitle strong {
+  color: #667eea;
+}
+
+.side-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.side-group {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.side-group.no-options {
+  opacity: 0.5;
+}
+
+.side-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: background 0.2s;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.side-header:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.side-header.expanded {
+  background: rgba(102, 126, 234, 0.2);
+  border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.side-header.disabled {
+  cursor: not-allowed;
+  color: #666;
+}
+
+.side-name {
+  font-weight: 600;
+  min-width: 60px;
+}
+
+.side-id {
+  color: #667eea;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+.segment-count {
+  flex: 1;
+  text-align: right;
+  color: #888;
+  font-size: 0.85rem;
+  margin-right: 0.5rem;
+}
+
+.expand-icon {
+  color: #667eea;
+  font-size: 0.8rem;
+}
+
+.segment-options {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.segment-option {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  border: 2px solid transparent;
+}
+
+.segment-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.segment-option.selected {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: #667eea;
+}
+
+.segment-option input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  margin-right: 0.75rem;
+  accent-color: #667eea;
+}
+
+.segment-description {
+  font-size: 0.9rem;
+  color: #e0e0e0;
+}
+
+.preview-section {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.preview-section h4 {
+  margin: 0 0 0.5rem;
+  color: #667eea;
+  font-size: 0.9rem;
+}
+
+.preview-info {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: #a0a0a0;
+}
+
+.accept-button {
+  display: block;
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  margin-top: 1rem;
+}
+
+.accept-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.accept-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.accept-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.helper-text {
+  text-align: center;
+  color: #666;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  font-style: italic;
+}
+
+/* Mobile-friendly adjustments */
+@media (max-width: 600px) {
+  .topological-selector {
+    padding: 0.75rem;
+  }
+  
+  .side-header {
+    padding: 1rem;
+    font-size: 1rem;
+  }
+  
+  .segment-option {
+    padding: 1rem;
+  }
+  
+  .segment-option input[type="radio"] {
+    width: 24px;
+    height: 24px;
+    margin-right: 1rem;
+  }
+  
+  .segment-description {
+    font-size: 1rem;
+  }
+  
+  .accept-button {
+    padding: 1rem 1.5rem;
+    font-size: 1.1rem;
+  }
+}
+
+/* Touch-friendly tap targets */
+@media (pointer: coarse) {
+  .segment-option {
+    min-height: 48px;
+  }
+  
+  .side-header {
+    min-height: 48px;
+  }
+}
