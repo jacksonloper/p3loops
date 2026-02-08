@@ -104,6 +104,18 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   const snapRadius = BASE_SNAP_RADIUS / zoom;
   const rhombusPath = getRhombusPath();
   
+  // Scale factors for visual elements to maintain screen size when zooming
+  // All sizes divided by zoom to appear constant on screen
+  const strokeScale = 1 / zoom;
+  const baseEdgeStrokeWidth = 3;
+  const baseHighlightedStrokeWidth = 5;
+  const basePointRadius = 5;
+  const baseStartPointRadius = 8;
+  const baseHoverRadius = 6;
+  const baseFontSize = 12;
+  const baseSmallFontSize = 10;
+  const baseRhombusStrokeWidth = 2;
+  
   // Convert screen coordinates from mouse/touch event to SVG coordinates
   const getMouseCoords = useCallback((e) => {
     const svg = svgRef.current;
@@ -451,21 +463,21 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         onTouchEnd={handleTouchEnd}
       >
         {/* Rhombus outline */}
-        <path d={rhombusPath} className="rhombus-path" />
+        <path d={rhombusPath} className="rhombus-path" strokeWidth={baseRhombusStrokeWidth * strokeScale} />
         
         {/* Corner angle indicators */}
-        <text x={ne.x + 10} y={ne.y - 10} className="angle-text" fontSize="10">120°</text>
-        <text x={sw.x - 25} y={sw.y + 15} className="angle-text" fontSize="10">120°</text>
-        <text x={nw.x - 25} y={nw.y - 5} className="angle-text" fontSize="10">60°</text>
-        <text x={se.x + 10} y={se.y + 15} className="angle-text" fontSize="10">60°</text>
+        <text x={ne.x + 10 * strokeScale} y={ne.y - 10 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={sw.x - 25 * strokeScale} y={sw.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={nw.x - 25 * strokeScale} y={nw.y - 5 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
+        <text x={se.x + 10 * strokeScale} y={se.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
         
         {/* Identification indicators */}
-        <text x={ne.x + 35} y={ne.y - 25} className="identification-text" fontSize="10">N≡E</text>
-        <text x={sw.x - 45} y={sw.y + 30} className="identification-text" fontSize="10">S≡W</text>
+        <text x={ne.x + 35 * strokeScale} y={ne.y - 25 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>N≡E</text>
+        <text x={sw.x - 45 * strokeScale} y={sw.y + 30 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>S≡W</text>
         
         {/* Side labels */}
         {sideLabels.map(({ key, x, y, label }) => (
-          <text key={key} x={x} y={y} className="side-label" textAnchor="middle" dominantBaseline="middle" fontSize="12">
+          <text key={key} x={x} y={y} className="side-label" textAnchor="middle" dominantBaseline="middle" fontSize={baseFontSize * strokeScale}>
             {label}
           </text>
         ))}
@@ -486,13 +498,13 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
                 x2={coords.to.x}
                 y2={coords.to.y}
                 className={`edge-line ${isHighlighted ? 'edge-line-problem' : ''}`}
-                strokeWidth={isHighlighted ? 5 : 3}
+                strokeWidth={(isHighlighted ? baseHighlightedStrokeWidth : baseEdgeStrokeWidth) * strokeScale}
               />
               <text
                 x={midX}
                 y={midY}
                 className="edge-arrow"
-                fontSize="12"
+                fontSize={baseFontSize * strokeScale}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 transform={`rotate(${arrow.rotation}, ${midX}, ${midY})`}
@@ -512,14 +524,16 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
               <circle
                 cx={fromCoords.x}
                 cy={fromCoords.y}
-                r="5"
+                r={basePointRadius * strokeScale}
                 className={isInteriorPoint(edge.from) ? 'interior-point' : 'edge-point'}
+                strokeWidth={strokeScale}
               />
               <circle
                 cx={toCoords.x}
                 cy={toCoords.y}
-                r="5"
+                r={basePointRadius * strokeScale}
                 className={isInteriorPoint(edge.to) ? 'interior-point' : 'edge-point'}
+                strokeWidth={strokeScale}
               />
             </g>
           );
@@ -533,8 +547,9 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
               key={`start-${index}`}
               cx={coords.x}
               cy={coords.y}
-              r="8"
+              r={baseStartPointRadius * strokeScale}
               className="next-start-point"
+              strokeWidth={2 * strokeScale}
             />
           );
         })}
@@ -544,8 +559,9 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
           <circle
             cx={getPointCoordinates(selectedStartPoint).x}
             cy={getPointCoordinates(selectedStartPoint).y}
-            r="8"
+            r={baseStartPointRadius * strokeScale}
             className="selected-start-point"
+            strokeWidth={2 * strokeScale}
           />
         )}
         
@@ -554,22 +570,25 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
           <circle
             cx={getInteriorPoint(hoverPoint.southward, hoverPoint.eastward).x}
             cy={getInteriorPoint(hoverPoint.southward, hoverPoint.eastward).y}
-            r="6"
+            r={baseHoverRadius * strokeScale}
             className="hover-point-interior"
+            strokeWidth={strokeScale}
           />
         ) : (
           <>
             <circle
               cx={getPointOnSide(hoverPoint.side, hoverPoint.t).x}
               cy={getPointOnSide(hoverPoint.side, hoverPoint.t).y}
-              r="6"
+              r={baseHoverRadius * strokeScale}
               className="hover-point"
             />
             <circle
               cx={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).x}
               cy={getPointOnSide(getIdentifiedSide(hoverPoint.side), hoverPoint.t).y}
-              r="6"
+              r={baseHoverRadius * strokeScale}
               className="hover-point-complementary"
+              strokeWidth={strokeScale}
+              strokeDasharray={`${2 * strokeScale},${2 * strokeScale}`}
             />
           </>
         ))}
