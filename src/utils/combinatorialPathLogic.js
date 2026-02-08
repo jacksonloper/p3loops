@@ -1,0 +1,814 @@
+/**
+ * Combinatorial path logic for edges on the rhombus.
+ * 
+ * In this approach:
+ * - Edges are always side-to-side (including same-side)
+ * - Points are identified by a side and an integer position in an ordering
+ * - When a new edge is added to a segment, a new point is created in the middle
+ * - The ordering is updated by relabeling all points
+ * - Crossing detection is purely combinatorial (chord intersection)
+ * 
+ * The rhombus sides are: north, east, south, west
+ * Identifications: north ≡ east, south ≡ west
+ * This means a point at position k on north is the same as position k on east.
+ * 
+ * Points are stored as { side: string, pos: number }
+ * Edges are stored as { from: point, to: point }
+ * 
+ * For visualization, we convert integer positions to floating-point t values
+ * by distributing points evenly: t = (pos + 0.5) / numPoints on that side group.
+ */
+
+import { getIdentifiedSide } from './geometry.js';
+
+/**
+ * Side groups for identification.
+ * north ≡ east (group "NE")
+ * south ≡ west (group "SW")
+ */
+const SIDE_GROUPS = {
+  north: 'NE',
+  east: 'NE',
+  south: 'SW',
+  west: 'SW'
+};
+
+/**
+ * Get the group for a side (NE or SW).
+ */
+export function getSideGroup(side) {
+  return SIDE_GROUPS[side];
+}
+
+/**
+ * Get the canonical side for a group.
+ * We use 'north' for NE group, 'south' for SW group.
+ */
+export function getCanonicalSide(side) {
+  const group = getSideGroup(side);
+  return group === 'NE' ? 'north' : 'south';
+}
+
+/**
+ * Check if two sides are in the same group (identified).
+ */
+export function sidesAreIdentified(side1, side2) {
+  return getSideGroup(side1) === getSideGroup(side2);
+}
+
+/**
+ * Create an initial combinatorial state with one point on each side group.
+ * Returns { points: { NE: [...], SW: [...] }, edges: [] }
+ * 
+ * Each point has { pos: number, originalSide?: string }
+ * The pos is used to determine ordering within the group.
+ */
+export function createInitialState() {
+  return {
+    points: {
+      NE: [], // Points on north/east
+      SW: []  // Points on south/west
+    },
+    edges: []
+  };
+}
+
+/**
+ * Get all points on a side group.
+ */
+export function getPointsInGroup(state, group) {
+  return state.points[group] || [];
+}
+
+/**
+ * Count the number of points on a side group.
+ */
+export function countPointsInGroup(state, group) {
+  return getPointsInGroup(state, group).length;
+}
+
+/**
+ * Add a point to a side group at a specific position.
+ * Position is an index where the point will be inserted.
+ * All subsequent points get their pos values incremented.
+ * 
+ * @param {Object} state - Current state
+ * @param {string} group - 'NE' or 'SW'
+ * @param {number} insertIndex - Where to insert (between existing points)
+ * @param {string} originalSide - The side from which this point was created
+ * @returns {Object} New state with the point added
+ */
+export function insertPoint(state, group, insertIndex, originalSide) {
+  const points = [...state.points[group]];
+  
+  // Insert a new point at the given index
+  const newPoint = { pos: insertIndex, originalSide };
+  points.splice(insertIndex, 0, newPoint);
+  
+  // Reindex all points
+  for (let i = 0; i < points.length; i++) {
+    points[i] = { ...points[i], pos: i };
+  }
+  
+  return {
+    ...state,
+    points: {
+      ...state.points,
+      [group]: points
+    }
+  };
+}
+
+/**
+ * A combinatorial point is represented as { side: string, pos: number }.
+ * The 'pos' is the integer index in the ordering of that side group.
+ */
+
+/**
+ * Normalize a point to use the canonical side.
+ * This allows comparing points across identified sides.
+ */
+export function normalizePoint(point) {
+  const group = getSideGroup(point.side);
+  const canonicalSide = group === 'NE' ? 'north' : 'south';
+  return { side: canonicalSide, pos: point.pos };
+}
+
+/**
+ * Check if two combinatorial points are equal.
+ */
+export function pointsEqual(p1, p2) {
+  const n1 = normalizePoint(p1);
+  const n2 = normalizePoint(p2);
+  return n1.side === n2.side && n1.pos === n2.pos;
+}
+
+/**
+ * Get all segments on a side group.
+ * A segment is between two adjacent points, or from "start" to first point,
+ * or from last point to "end".
+ * 
+ * Returns array of { startPos: number | null, endPos: number | null, group: string }
+ * where null represents the boundary (before first / after last).
+ */
+export function getSegmentsInGroup(state, group) {
+  const points = getPointsInGroup(state, group);
+  const segments = [];
+  
+  // If no points, there's one segment spanning the whole side
+  if (points.length === 0) {
+    segments.push({ startPos: null, endPos: null, group });
+  } else {
+    // Segment from start to first point
+    segments.push({ startPos: null, endPos: 0, group });
+    
+    // Segments between adjacent points
+    for (let i = 0; i < points.length - 1; i++) {
+      segments.push({ startPos: i, endPos: i + 1, group });
+    }
+    
+    // Segment from last point to end
+    segments.push({ startPos: points.length - 1, endPos: null, group });
+  }
+  
+  return segments;
+}
+
+/**
+ * Get all available segments (on all side groups) that can be targeted.
+ */
+export function getAllSegments(state) {
+  return [
+    ...getSegmentsInGroup(state, 'NE'),
+    ...getSegmentsInGroup(state, 'SW')
+  ];
+}
+
+/**
+ * Convert a segment to a descriptive string for UI.
+ */
+export function segmentToString(segment) {
+  const groupName = segment.group === 'NE' ? 'North/East' : 'South/West';
+  
+  if (segment.startPos === null && segment.endPos === null) {
+    return `${groupName}: entire side`;
+  } else if (segment.startPos === null) {
+    return `${groupName}: before point ${segment.endPos + 1}`;
+  } else if (segment.endPos === null) {
+    return `${groupName}: after point ${segment.startPos + 1}`;
+  } else {
+    return `${groupName}: between points ${segment.startPos + 1} and ${segment.endPos + 1}`;
+  }
+}
+
+/**
+ * Check if two chords (edges) cross combinatorially.
+ * 
+ * The key insight is that edges can cross in several scenarios based on
+ * which side groups they connect:
+ * 
+ * 1. Both edges go from NE to SW (or SW to NE):
+ *    They cross if the positions interleave.
+ *    Edge1: NE[a] -> SW[b], Edge2: NE[c] -> SW[d]
+ *    Cross if (a < c AND d < b) OR (c < a AND b < d)
+ * 
+ * 2. One edge goes NE to SW, the other goes within the same group:
+ *    A same-side edge (NE to NE or SW to SW) can be crossed by a 
+ *    cross-group edge if the cross-group edge's endpoint on that side
+ *    is between the same-side edge's endpoints.
+ * 
+ * 3. Both edges are same-side (NE to NE or SW to SW):
+ *    On the same side, they cross if their position intervals overlap
+ *    in the middle (but not if one contains the other).
+ *    Edge1: [a, b], Edge2: [c, d] (sorted)
+ *    Cross if (a < c < b < d) OR (c < a < d < b)
+ * 
+ * @param {Object} edge1 - First edge { from: point, to: point }
+ * @param {Object} edge2 - Second edge { from: point, to: point }
+ * @param {Object} state - Current state (for point counts)
+ * @returns {boolean} True if edges cross
+ */
+export function edgesCross(edge1, edge2, state) {
+  const group1from = getSideGroup(edge1.from.side);
+  const group1to = getSideGroup(edge1.to.side);
+  const group2from = getSideGroup(edge2.from.side);
+  const group2to = getSideGroup(edge2.to.side);
+  
+  const edge1CrossGroup = group1from !== group1to;
+  const edge2CrossGroup = group2from !== group2to;
+  
+  if (edge1CrossGroup && edge2CrossGroup) {
+    // Both edges cross between groups (NE to SW or SW to NE)
+    // Normalize so both go from NE to SW
+    let a, b, c, d;
+    
+    if (group1from === 'NE') {
+      a = edge1.from.pos;
+      b = edge1.to.pos;
+    } else {
+      a = edge1.to.pos;
+      b = edge1.from.pos;
+    }
+    
+    if (group2from === 'NE') {
+      c = edge2.from.pos;
+      d = edge2.to.pos;
+    } else {
+      c = edge2.to.pos;
+      d = edge2.from.pos;
+    }
+    
+    // Get max positions for normalization
+    const maxNE = countPointsInGroup(state, 'NE');
+    const maxSW = countPointsInGroup(state, 'SW');
+    
+    // Normalize to [0, 1] range for comparison
+    const na = a / maxNE;
+    const nc = c / maxNE;
+    const nb = b / maxSW;
+    const nd = d / maxSW;
+    
+    // They cross if positions interleave: (a < c AND d < b) OR (c < a AND b < d)
+    return (na < nc && nd < nb) || (nc < na && nb < nd);
+  }
+  
+  if (!edge1CrossGroup && !edge2CrossGroup) {
+    // Both edges are same-side (within one group)
+    if (group1from !== group2from) {
+      // Different groups, can't cross
+      return false;
+    }
+    
+    // Same group, check if position intervals interleave
+    // Sort endpoints
+    let a1 = edge1.from.pos, b1 = edge1.to.pos;
+    let a2 = edge2.from.pos, b2 = edge2.to.pos;
+    if (a1 > b1) [a1, b1] = [b1, a1];
+    if (a2 > b2) [a2, b2] = [b2, a2];
+    
+    // Intervals [a1, b1] and [a2, b2] cross if they properly interleave:
+    // (a1 < a2 < b1 < b2) OR (a2 < a1 < b2 < b1)
+    return (a1 < a2 && a2 < b1 && b1 < b2) || (a2 < a1 && a1 < b2 && b2 < b1);
+  }
+  
+  // One edge crosses groups, the other stays within one group
+  // The cross-group edge could cross the same-group edge
+  // This happens when the cross-group edge's endpoint on the same-group side
+  // is between the same-group edge's endpoints
+  
+  const crossEdge = edge1CrossGroup ? edge1 : edge2;
+  const sameEdge = edge1CrossGroup ? edge2 : edge1;
+  
+  const sameGroup = getSideGroup(sameEdge.from.side); // Both endpoints in same group
+  
+  // Get the cross-edge's position on the same-group side
+  let crossPos;
+  if (getSideGroup(crossEdge.from.side) === sameGroup) {
+    crossPos = crossEdge.from.pos;
+  } else {
+    crossPos = crossEdge.to.pos;
+  }
+  
+  // Get the same-edge's position range
+  let sameMin = Math.min(sameEdge.from.pos, sameEdge.to.pos);
+  let sameMax = Math.max(sameEdge.from.pos, sameEdge.to.pos);
+  
+  // They cross if crossPos is strictly between sameMin and sameMax
+  return crossPos > sameMin && crossPos < sameMax;
+}
+
+/**
+ * Check if a new edge would cross any existing edge.
+ * @returns { crosses: boolean, crossingEdgeIndex: number | null }
+ */
+export function edgeCrossesPath(newEdge, state) {
+  for (let i = 0; i < state.edges.length; i++) {
+    if (edgesCross(newEdge, state.edges[i], state)) {
+      return { crosses: true, crossingEdgeIndex: i };
+    }
+  }
+  return { crosses: false, crossingEdgeIndex: null };
+}
+
+/**
+ * Get the starting point for the next edge (the endpoint of the last edge,
+ * translated to the identified side).
+ */
+export function getNextStartPoint(state) {
+  if (state.edges.length === 0) return null;
+  
+  const lastEdge = state.edges[state.edges.length - 1];
+  const lastTo = lastEdge.to;
+  
+  // Return the identified side version
+  return {
+    side: getIdentifiedSide(lastTo.side),
+    pos: lastTo.pos
+  };
+}
+
+/**
+ * Add a new edge to a segment.
+ * This creates a new point in the segment and adds the edge.
+ * 
+ * @param {Object} state - Current state
+ * @param {Object} fromPoint - Starting point { side, pos }
+ * @param {Object} segment - Target segment { startPos, endPos, group }
+ * @param {string} targetSide - The side to place the new point on (north, east, south, west)
+ * @returns {{ newState: Object, error?: string }}
+ */
+export function addEdgeToSegment(state, fromPoint, segment, targetSide) {
+  // Validate that targetSide matches the segment's group
+  if (getSideGroup(targetSide) !== segment.group) {
+    return { newState: null, error: 'Target side does not match segment group' };
+  }
+  
+  // Calculate where to insert the new point
+  // If segment is { startPos: null, endPos: 0 }, insert at position 0
+  // If segment is { startPos: 0, endPos: 1 }, insert at position 1
+  // If segment is { startPos: n, endPos: null }, insert at position n + 1
+  let insertIndex;
+  if (segment.startPos === null) {
+    insertIndex = 0;
+  } else {
+    insertIndex = segment.startPos + 1;
+  }
+  
+  // Insert the new point
+  let newState = insertPoint(state, segment.group, insertIndex, targetSide);
+  
+  // The fromPoint's position might need adjustment if it's in the same group
+  // and at or after the insert position
+  let adjustedFromPoint = { ...fromPoint };
+  if (getSideGroup(fromPoint.side) === segment.group && fromPoint.pos >= insertIndex) {
+    adjustedFromPoint = { ...fromPoint, pos: fromPoint.pos + 1 };
+  }
+  
+  // Also adjust all existing edges that reference points in this group
+  const adjustedEdges = newState.edges.map(edge => {
+    let newFrom = { ...edge.from };
+    let newTo = { ...edge.to };
+    
+    if (getSideGroup(edge.from.side) === segment.group && edge.from.pos >= insertIndex) {
+      newFrom = { ...edge.from, pos: edge.from.pos + 1 };
+    }
+    if (getSideGroup(edge.to.side) === segment.group && edge.to.pos >= insertIndex) {
+      newTo = { ...edge.to, pos: edge.to.pos + 1 };
+    }
+    
+    return { from: newFrom, to: newTo };
+  });
+  
+  newState = { ...newState, edges: adjustedEdges };
+  
+  // Create the new edge
+  const newToPoint = { side: targetSide, pos: insertIndex };
+  const newEdge = { from: adjustedFromPoint, to: newToPoint };
+  
+  // Check for crossing (need to temporarily add the new point to state for crossing check)
+  // Actually, we already added the point, so we can check now
+  const crossingResult = edgeCrossesPath(newEdge, newState);
+  if (crossingResult.crosses) {
+    return { 
+      newState: null, 
+      error: `Edge would cross existing edge #${crossingResult.crossingEdgeIndex + 1}`,
+      crossingEdgeIndex: crossingResult.crossingEdgeIndex
+    };
+  }
+  
+  // Check for loop (destination already exists in path, excluding the new point we just added)
+  // Actually, since we're adding to a segment (not an existing point), this shouldn't happen
+  // unless the fromPoint is the same as toPoint
+  if (pointsEqual(adjustedFromPoint, newToPoint)) {
+    return { newState: null, error: 'Cannot create edge to the same point' };
+  }
+  
+  // Add the edge
+  newState = {
+    ...newState,
+    edges: [...newState.edges, newEdge]
+  };
+  
+  return { newState };
+}
+
+/**
+ * Add the first edge (no previous edge to chain from).
+ * 
+ * @param {Object} state - Current state
+ * @param {Object} fromSegment - Starting segment 
+ * @param {string} fromSide - Side for the starting point
+ * @param {Object} toSegment - Target segment
+ * @param {string} toSide - Side for the ending point
+ */
+export function addFirstEdge(state, fromSegment, fromSide, toSegment, toSide) {
+  // Insert both points
+  let newState = state;
+  
+  // Calculate insert indices
+  let fromInsertIndex = fromSegment.startPos === null ? 0 : fromSegment.startPos + 1;
+  let toInsertIndex = toSegment.startPos === null ? 0 : toSegment.startPos + 1;
+  
+  // If both are in the same group, we need to be careful about ordering
+  if (fromSegment.group === toSegment.group) {
+    // Insert the first point
+    newState = insertPoint(newState, fromSegment.group, fromInsertIndex, fromSide);
+    
+    // Adjust toInsertIndex if it's at or after fromInsertIndex
+    if (toInsertIndex >= fromInsertIndex) {
+      toInsertIndex += 1;
+    }
+    
+    // Insert the second point
+    newState = insertPoint(newState, toSegment.group, toInsertIndex, toSide);
+    
+    // Create the edge
+    let fromPos = fromInsertIndex;
+    let toPos = toInsertIndex > fromInsertIndex ? toInsertIndex : toInsertIndex;
+    
+    // Since we inserted fromInsertIndex first, and toInsertIndex might have shifted
+    if (toInsertIndex <= fromInsertIndex) {
+      // toInsert was before fromInsert, so fromPos shifted
+      fromPos = fromInsertIndex + 1;
+      toPos = toInsertIndex;
+    }
+    
+    const newEdge = {
+      from: { side: fromSide, pos: fromPos },
+      to: { side: toSide, pos: toPos }
+    };
+    
+    newState = { ...newState, edges: [newEdge] };
+  } else {
+    // Different groups, simpler
+    newState = insertPoint(newState, fromSegment.group, fromInsertIndex, fromSide);
+    newState = insertPoint(newState, toSegment.group, toInsertIndex, toSide);
+    
+    const newEdge = {
+      from: { side: fromSide, pos: fromInsertIndex },
+      to: { side: toSide, pos: toInsertIndex }
+    };
+    
+    newState = { ...newState, edges: [newEdge] };
+  }
+  
+  return { newState };
+}
+
+/**
+ * Convert a combinatorial edge to a floating-point edge for visualization.
+ * 
+ * @param {Object} edge - Combinatorial edge { from: { side, pos }, to: { side, pos } }
+ * @param {Object} state - Current state (for point counts)
+ * @returns {Object} Float edge { from: { side, t }, to: { side, t } }
+ */
+export function edgeToFloat(edge, state) {
+  return {
+    from: pointToFloat(edge.from, state),
+    to: pointToFloat(edge.to, state)
+  };
+}
+
+/**
+ * Convert a combinatorial point to a floating-point point.
+ */
+export function pointToFloat(point, state) {
+  const group = getSideGroup(point.side);
+  const numPoints = countPointsInGroup(state, group);
+  
+  // Distribute points evenly: t = (pos + 0.5) / numPoints
+  const t = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
+  
+  return { side: point.side, t };
+}
+
+/**
+ * Convert all edges to floating-point format for visualization.
+ */
+export function allEdgesToFloat(state) {
+  return state.edges.map(edge => edgeToFloat(edge, state));
+}
+
+/**
+ * Remove the last edge from the state.
+ * This also removes the point that was created by that edge.
+ */
+export function removeLastEdge(state) {
+  if (state.edges.length === 0) {
+    return state;
+  }
+  
+  // Get the last edge
+  const lastEdge = state.edges[state.edges.length - 1];
+  const toPoint = lastEdge.to;
+  const group = getSideGroup(toPoint.side);
+  
+  // Remove the point at toPoint.pos
+  const points = [...state.points[group]];
+  points.splice(toPoint.pos, 1);
+  
+  // Reindex remaining points
+  for (let i = 0; i < points.length; i++) {
+    points[i] = { ...points[i], pos: i };
+  }
+  
+  // Adjust all edges' positions that reference this group
+  const adjustedEdges = state.edges.slice(0, -1).map(edge => {
+    let newFrom = { ...edge.from };
+    let newTo = { ...edge.to };
+    
+    if (getSideGroup(edge.from.side) === group && edge.from.pos > toPoint.pos) {
+      newFrom = { ...edge.from, pos: edge.from.pos - 1 };
+    }
+    if (getSideGroup(edge.to.side) === group && edge.to.pos > toPoint.pos) {
+      newTo = { ...edge.to, pos: edge.to.pos - 1 };
+    }
+    
+    return { from: newFrom, to: newTo };
+  });
+  
+  return {
+    ...state,
+    points: {
+      ...state.points,
+      [group]: points
+    },
+    edges: adjustedEdges
+  };
+}
+
+/**
+ * Get all points with their positions for display.
+ * Returns array of { side, pos, group, t } for each point.
+ */
+export function getAllPointsForDisplay(state) {
+  const result = [];
+  
+  for (const group of ['NE', 'SW']) {
+    const points = getPointsInGroup(state, group);
+    const numPoints = points.length;
+    
+    for (const point of points) {
+      const t = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
+      const canonicalSide = group === 'NE' ? 'north' : 'south';
+      result.push({
+        side: point.originalSide || canonicalSide,
+        pos: point.pos,
+        group,
+        t
+      });
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Import a floating-point path into the combinatorial system.
+ * This analyzes the ordering of points along each side group and
+ * creates integer positions that preserve the ordering.
+ * 
+ * Interior points are ignored (collapsed into direct side-to-side edges).
+ * 
+ * In a chained path, edge[i].to and edge[i+1].from refer to the same point
+ * (on identified sides). We need to deduplicate these.
+ * 
+ * @param {Array} floatEdges - Array of float edges with interior points
+ * @returns {Object} Combinatorial state
+ */
+export function importFromFloatEdges(floatEdges) {
+  if (floatEdges.length === 0) {
+    return createInitialState();
+  }
+  
+  // First, simplify edges to remove interior points
+  const simplifiedEdges = simplifyEdges(floatEdges);
+  
+  if (simplifiedEdges.length === 0) {
+    return createInitialState();
+  }
+  
+  // Collect unique boundary points with their t values
+  // Points are identified by their t value and side group
+  // We use t as the key for deduplication within a group
+  const nePointsMap = new Map(); // t -> { t, sides: Set<side> }
+  const swPointsMap = new Map();
+  
+  const EPSILON = 0.001;
+  
+  // Helper to find or add a point
+  function addPoint(side, t) {
+    const group = getSideGroup(side);
+    const map = group === 'NE' ? nePointsMap : swPointsMap;
+    
+    // Find existing point with close t value
+    for (const [existingT, point] of map) {
+      if (Math.abs(existingT - t) < EPSILON) {
+        point.sides.add(side);
+        return existingT;
+      }
+    }
+    
+    // Add new point
+    map.set(t, { t, sides: new Set([side]) });
+    return t;
+  }
+  
+  // Collect all points
+  for (const edge of simplifiedEdges) {
+    addPoint(edge.from.side, edge.from.t);
+    addPoint(edge.to.side, edge.to.t);
+  }
+  
+  // Sort by t value to get the ordering
+  const nePoints = Array.from(nePointsMap.values()).sort((a, b) => a.t - b.t);
+  const swPoints = Array.from(swPointsMap.values()).sort((a, b) => a.t - b.t);
+  
+  // Create t -> pos mapping
+  const nePositions = new Map();
+  for (let i = 0; i < nePoints.length; i++) {
+    nePositions.set(nePoints[i].t, i);
+  }
+  
+  const swPositions = new Map();
+  for (let i = 0; i < swPoints.length; i++) {
+    swPositions.set(swPoints[i].t, i);
+  }
+  
+  // Helper to get position for a point
+  function getPos(side, t) {
+    const group = getSideGroup(side);
+    const map = group === 'NE' ? nePositions : swPositions;
+    
+    // Find position for this t value
+    for (const [existingT, pos] of map) {
+      if (Math.abs(existingT - t) < EPSILON) {
+        return pos;
+      }
+    }
+    
+    throw new Error(`Point not found: ${side} ${t}`);
+  }
+  
+  // Build the state
+  const state = {
+    points: {
+      NE: nePoints.map((p, i) => ({ 
+        pos: i, 
+        originalSide: Array.from(p.sides)[0] // Pick first side
+      })),
+      SW: swPoints.map((p, i) => ({ 
+        pos: i, 
+        originalSide: Array.from(p.sides)[0] 
+      }))
+    },
+    edges: []
+  };
+  
+  // Convert edges
+  for (const edge of simplifiedEdges) {
+    const fromPos = getPos(edge.from.side, edge.from.t);
+    const toPos = getPos(edge.to.side, edge.to.t);
+    
+    state.edges.push({
+      from: { side: edge.from.side, pos: fromPos },
+      to: { side: edge.to.side, pos: toPos }
+    });
+  }
+  
+  return state;
+}
+
+/**
+ * Simplify edges by removing interior waypoints.
+ * E.g., if we have edge1: A -> interior, edge2: interior -> B,
+ * we simplify to just A -> B.
+ */
+function simplifyEdges(floatEdges) {
+  const simplified = [];
+  let pendingFrom = null;
+  
+  for (const edge of floatEdges) {
+    const fromIsInterior = edge.from.interior === true;
+    const toIsInterior = edge.to.interior === true;
+    
+    if (!fromIsInterior && !toIsInterior) {
+      // Direct side-to-side edge
+      simplified.push(edge);
+    } else if (!fromIsInterior && toIsInterior) {
+      // Starting at boundary, going to interior
+      pendingFrom = edge.from;
+    } else if (fromIsInterior && !toIsInterior) {
+      // Coming from interior to boundary
+      if (pendingFrom) {
+        // Complete the simplified edge
+        simplified.push({ from: pendingFrom, to: edge.to });
+        pendingFrom = null;
+      }
+    }
+    // If both are interior, we just skip (continue accumulating)
+  }
+  
+  return simplified;
+}
+
+/**
+ * Check if a loop can be closed.
+ * The loop can be closed if the last point and first point are on the same side group,
+ * and the closing edge would not cross any existing edge.
+ */
+export function canCloseLoop(state) {
+  if (state.edges.length < 2) {
+    return { canClose: false, error: 'Need at least 2 edges to close a loop' };
+  }
+  
+  const firstEdge = state.edges[0];
+  const lastEdge = state.edges[state.edges.length - 1];
+  
+  const firstPoint = firstEdge.from;
+  const lastPoint = lastEdge.to;
+  
+  // Get the continuation point (identified side of last point)
+  const continuationSide = getIdentifiedSide(lastPoint.side);
+  const continuationPoint = { side: continuationSide, pos: lastPoint.pos };
+  
+  // Check if they're on the same side group
+  if (getSideGroup(continuationSide) !== getSideGroup(firstPoint.side)) {
+    return { 
+      canClose: false, 
+      error: `Cannot close: current position is on ${continuationSide}, but start is on ${firstPoint.side}` 
+    };
+  }
+  
+  // Create the closing edge
+  const closingEdge = { from: continuationPoint, to: firstPoint };
+  
+  // Check for crossing
+  const crossingResult = edgeCrossesPath(closingEdge, state);
+  if (crossingResult.crosses) {
+    return {
+      canClose: false,
+      error: `Closing edge would cross existing edge #${crossingResult.crossingEdgeIndex + 1}`,
+      crossingEdgeIndex: crossingResult.crossingEdgeIndex
+    };
+  }
+  
+  return { canClose: true, closingEdge };
+}
+
+/**
+ * Close the loop by adding the closing edge.
+ */
+export function closeLoop(state) {
+  const result = canCloseLoop(state);
+  if (!result.canClose) {
+    return { newState: null, error: result.error };
+  }
+  
+  return {
+    newState: {
+      ...state,
+      edges: [...state.edges, result.closingEdge]
+    }
+  };
+}
