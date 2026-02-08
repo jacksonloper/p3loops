@@ -10,12 +10,10 @@
  * existing edges.
  */
 
-import { NavMesh } from 'nav2d';
 import { 
-  getPointCoordinates, 
+  getPointPaperCoordinates,
   isInteriorPoint,
   getIdentifiedSide,
-  rhombusToUnitSquare,
   SIDES,
   EPSILON
 } from './geometry.js';
@@ -107,14 +105,14 @@ export function getAllSegments(edges) {
 }
 
 /**
- * Check if a segment on a side is reachable from a starting point
- * without crossing any existing edges.
+ * Check if a segment on a side is reachable from a starting point.
+ * Now uses pathfinding to determine reachability, not just direct line.
  * 
  * @param {Object} fromPoint - The starting point (boundary or interior)
  * @param {string} targetSide - The side to reach
  * @param {Object} segment - The segment { start, end, midpoint }
  * @param {Object[]} edges - Existing edges in the path
- * @returns {Object} { reachable: boolean, reason?: string }
+ * @returns {Object} { reachable: boolean, direct: boolean, reason?: string }
  */
 export function isSegmentReachable(fromPoint, targetSide, segment, edges) {
   // Create a test edge from the starting point to the segment midpoint
@@ -123,21 +121,27 @@ export function isSegmentReachable(fromPoint, targetSide, segment, edges) {
   // Check same-side constraint
   const testEdge = { from: fromPoint, to: toPoint };
   if (isSameSideEdge(testEdge)) {
-    return { reachable: false, reason: 'same-side edge forbidden' };
+    return { reachable: false, direct: false, reason: 'same-side edge forbidden' };
   }
   
   // Check if destination already exists in path (would create loop)
   if (pointExistsInPath(toPoint, edges)) {
-    return { reachable: false, reason: 'destination already in path' };
+    return { reachable: false, direct: false, reason: 'destination already in path' };
   }
   
-  // Check if the direct edge would cross any existing edge
+  // First check if the direct edge would work
   const crossResult = edgeCrossesPath(testEdge, edges);
-  if (crossResult.crosses) {
-    return { reachable: false, reason: 'crosses existing edge', crossingIndex: crossResult.crossingEdgeIndex };
+  if (!crossResult.crosses) {
+    return { reachable: true, direct: true };
   }
   
-  return { reachable: true };
+  // Direct path blocked - try to find a routed path
+  const routeResult = findRoutedPath(fromPoint, toPoint, edges);
+  if (routeResult.success) {
+    return { reachable: true, direct: false, routeLength: routeResult.edges.length };
+  }
+  
+  return { reachable: false, direct: false, reason: 'no path available' };
 }
 
 /**
@@ -192,7 +196,9 @@ export function getReachableSegments(edges) {
           segment,
           description: formatSegmentDescription(side, segment),
           fromPoint,
-          type: 'continuation'
+          type: 'continuation',
+          direct: reachability.direct,
+          routeLength: reachability.routeLength || 1
         });
       }
     }
@@ -240,35 +246,359 @@ function getCornerName(side, position) {
 }
 
 /**
- * Create a navigation mesh from the current path.
- * The mesh represents the walkable area (interior of the rhombus)
- * with obstacles created by the existing edges.
- * 
- * @returns {NavMesh} The navigation mesh
+ * Grid resolution for pathfinding.
+ * Higher values = more precise paths but slower computation.
  */
-export function createNavMesh() {
-  // For now, we create a simple triangulated mesh of the rhombus
-  // TODO: Add support for obstacles based on existing edges
+const GRID_RESOLUTION = 10;
+
+/**
+ * Generate waypoints for pathfinding.
+ * Includes interior grid points AND boundary points to enable routing around edges.
+ * 
+ * @param {Object[]} existingEdges - Existing edges to consider for boundary waypoints
+ * @returns {Object[]} Array of waypoints with paper coordinates and type info
+ */
+function generateWaypoints(existingEdges) {
+  const waypoints = [];
+  const step = 1 / (GRID_RESOLUTION + 1);
   
-  // The rhombus in paper coordinates is the unit square
-  // We'll use screen coordinates for the nav mesh
-  const nw = getPointCoordinates({ side: 'north', t: 0 });
-  const ne = getPointCoordinates({ side: 'north', t: 1 });
-  const se = getPointCoordinates({ side: 'south', t: 0 });
-  const sw = getPointCoordinates({ side: 'south', t: 1 });
+  // Interior grid waypoints
+  for (let i = 1; i <= GRID_RESOLUTION; i++) {
+    for (let j = 1; j <= GRID_RESOLUTION; j++) {
+      waypoints.push({
+        southward: i * step,
+        eastward: j * step,
+        type: 'interior'
+      });
+    }
+  }
   
-  // Simple triangle mesh of the rhombus (two triangles)
-  const polygons = [
-    [[nw.x, nw.y], [ne.x, ne.y], [se.x, se.y]],
-    [[nw.x, nw.y], [se.x, se.y], [sw.x, sw.y]]
+  // Boundary waypoints along each side
+  const boundaryStep = 1 / 20;  // Finer resolution on boundary
+  for (let t = boundaryStep; t < 1; t += boundaryStep) {
+    // North boundary: southward=0
+    waypoints.push({ southward: 0, eastward: t, type: 'boundary', side: 'north', t });
+    // South boundary: southward=1
+    waypoints.push({ southward: 1, eastward: 1 - t, type: 'boundary', side: 'south', t });
+    // East boundary: eastward=1
+    waypoints.push({ southward: 1 - t, eastward: 1, type: 'boundary', side: 'east', t });
+    // West boundary: eastward=0
+    waypoints.push({ southward: t, eastward: 0, type: 'boundary', side: 'west', t });
+  }
+  
+  // Add waypoints at edge endpoints (and slightly offset from them)
+  // This is crucial for routing around edge ends
+  for (const edge of existingEdges) {
+    const fromPaper = getPointPaperCoordinates(edge.from);
+    const toPaper = getPointPaperCoordinates(edge.to);
+    
+    // Add offset points near edge endpoints (on both sides of the edge)
+    // These help the pathfinder navigate around edge endpoints
+    const offset = 0.02;
+    const boundaryMargin = 0.01; // Stay away from boundary to remain interior
+    
+    // Perpendicular direction to the edge
+    const dx = toPaper.eastward - fromPaper.eastward;
+    const dy = toPaper.southward - fromPaper.southward;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > EPSILON) {
+      const perpX = -dy / len * offset;
+      const perpY = dx / len * offset;
+      
+      // Helper to clamp to interior (not on boundary)
+      const clampToInterior = (val) => Math.max(boundaryMargin, Math.min(1 - boundaryMargin, val));
+      
+      // Offset points near the 'from' endpoint
+      const from1 = {
+        southward: clampToInterior(fromPaper.southward + perpY),
+        eastward: clampToInterior(fromPaper.eastward + perpX),
+        type: 'interior'
+      };
+      const from2 = {
+        southward: clampToInterior(fromPaper.southward - perpY),
+        eastward: clampToInterior(fromPaper.eastward - perpX),
+        type: 'interior'
+      };
+      
+      // Offset points near the 'to' endpoint
+      const to1 = {
+        southward: clampToInterior(toPaper.southward + perpY),
+        eastward: clampToInterior(toPaper.eastward + perpX),
+        type: 'interior'
+      };
+      const to2 = {
+        southward: clampToInterior(toPaper.southward - perpY),
+        eastward: clampToInterior(toPaper.eastward - perpX),
+        type: 'interior'
+      };
+      
+      waypoints.push(from1, from2, to1, to2);
+    }
+  }
+  
+  return waypoints;
+}
+
+/**
+ * Check if a line segment between two paper-coordinate points
+ * crosses any of the existing edges.
+ */
+function lineSegmentCrossesEdges(p1, p2, existingEdges) {
+  // Create a temporary edge to check
+  const tempEdge = {
+    from: { interior: true, southward: p1.southward, eastward: p1.eastward },
+    to: { interior: true, southward: p2.southward, eastward: p2.eastward }
+  };
+  
+  return edgeCrossesPath(tempEdge, existingEdges).crosses;
+}
+
+/**
+ * Convert a point (boundary or interior) to paper coordinates.
+ */
+function pointToPaperCoords(point) {
+  if (isInteriorPoint(point)) {
+    return { southward: point.southward, eastward: point.eastward };
+  }
+  // For boundary points, use the geometry function
+  return getPointPaperCoordinates(point);
+}
+
+/**
+ * Calculate Euclidean distance between two paper-coordinate points.
+ */
+function distance(p1, p2) {
+  const ds = p1.southward - p2.southward;
+  const de = p1.eastward - p2.eastward;
+  return Math.sqrt(ds * ds + de * de);
+}
+
+/**
+ * A* pathfinding implementation for finding routes around obstacles.
+ * Uses a grid of waypoints (interior and boundary) to navigate around existing edges.
+ * 
+ * @param {Object} fromPoint - Starting point (boundary or interior)
+ * @param {Object} toPoint - Destination point (boundary or interior)  
+ * @param {Object[]} existingEdges - Existing edges to avoid crossing
+ * @returns {Object} { success: boolean, edges?: Edge[], error?: string }
+ */
+export function findRoutedPath(fromPoint, toPoint, existingEdges) {
+  const fromCoords = pointToPaperCoords(fromPoint);
+  const toCoords = pointToPaperCoords(toPoint);
+  
+  // First, check if direct path is possible
+  if (!lineSegmentCrossesEdges(fromCoords, toCoords, existingEdges)) {
+    return {
+      success: true,
+      edges: [{ from: fromPoint, to: toPoint }]
+    };
+  }
+  
+  // Generate waypoints (including boundary points for routing around edges)
+  const waypoints = generateWaypoints(existingEdges);
+  
+  // Add start and end to the graph
+  const startNode = { ...fromCoords, type: 'start', original: fromPoint };
+  const endNode = { ...toCoords, type: 'end', original: toPoint };
+  
+  // Build list of all nodes
+  const allNodes = [
+    startNode,
+    ...waypoints.map((wp, i) => ({ ...wp, index: i })),
+    endNode
   ];
   
-  return new NavMesh(polygons);
+  // Build adjacency: which nodes can see each other without crossing edges
+  // Also exclude same-side edges (forbidden by path rules)
+  // And exclude edges that would create loops (go to an existing path point)
+  const adjacency = new Map();
+  
+  // Helper to check if an edge between two nodes would be a same-side edge
+  const wouldBeSameSideEdge = (nodeA, nodeB) => {
+    // Both must be boundary points on the same side (not identified sides)
+    if (nodeA.type === 'boundary' && nodeB.type === 'boundary') {
+      return nodeA.side === nodeB.side;
+    }
+    if (nodeA.type === 'start' && nodeA.original && !nodeA.original.interior && 
+        nodeB.type === 'boundary') {
+      return nodeA.original.side === nodeB.side;
+    }
+    if (nodeB.type === 'end' && nodeB.original && !nodeB.original.interior && 
+        nodeA.type === 'boundary') {
+      return nodeA.side === nodeB.original.side;
+    }
+    if (nodeA.type === 'start' && nodeA.original && !nodeA.original.interior && 
+        nodeB.type === 'end' && nodeB.original && !nodeB.original.interior) {
+      return nodeA.original.side === nodeB.original.side;
+    }
+    return false;
+  };
+  
+  // Helper to check if going to a waypoint would create a loop
+  // (i.e., if the waypoint already exists in the path, except for the start node)
+  const wouldCreateLoop = (nodeIdx, nodeB) => {
+    // Start node (idx 0) is allowed since it's our current position
+    if (nodeIdx === 0) return false;
+    
+    // End node is checked separately (toPoint shouldn't exist in path)
+    if (nodeB.type === 'end') return false;
+    
+    // For boundary waypoints, check if this point exists in the path
+    if (nodeB.type === 'boundary') {
+      const waypointPoint = { side: nodeB.side, t: nodeB.t };
+      if (pointExistsInPath(waypointPoint, existingEdges)) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+  
+  for (let i = 0; i < allNodes.length; i++) {
+    adjacency.set(i, []);
+    for (let j = 0; j < allNodes.length; j++) {
+      if (i === j) continue;
+      
+      const nodeI = allNodes[i];
+      const nodeJ = allNodes[j];
+      
+      // Skip same-side edges (forbidden)
+      if (wouldBeSameSideEdge(nodeI, nodeJ)) {
+        continue;
+      }
+      
+      // Skip edges that would create a loop (go to existing path point)
+      if (wouldCreateLoop(j, nodeJ)) {
+        continue;
+      }
+      
+      // Check if these two nodes can see each other (line doesn't cross any edge)
+      if (!lineSegmentCrossesEdges(nodeI, nodeJ, existingEdges)) {
+        adjacency.get(i).push(j);
+      }
+    }
+  }
+  
+  // A* search
+  const startIdx = 0;
+  const endIdx = allNodes.length - 1;
+  
+  // Priority queue (using array sorted by f-score)
+  const openSet = [{ idx: startIdx, g: 0, f: distance(startNode, endNode) }];
+  const cameFrom = new Map();
+  const gScore = new Map();
+  gScore.set(startIdx, 0);
+  
+  while (openSet.length > 0) {
+    // Get node with lowest f-score
+    openSet.sort((a, b) => a.f - b.f);
+    const current = openSet.shift();
+    
+    if (current.idx === endIdx) {
+      // Reconstruct path
+      const path = [endIdx];
+      let curr = endIdx;
+      while (cameFrom.has(curr)) {
+        curr = cameFrom.get(curr);
+        path.unshift(curr);
+      }
+      
+      // Convert path to edges
+      const edges = [];
+      for (let i = 0; i < path.length - 1; i++) {
+        const fromNode = allNodes[path[i]];
+        const toNode = allNodes[path[i + 1]];
+        
+        let edgeFrom, edgeTo;
+        
+        // Determine 'from' point - handle boundary waypoints
+        if (fromNode.type === 'start') {
+          edgeFrom = fromNode.original;
+        } else if (fromNode.type === 'boundary') {
+          edgeFrom = { side: fromNode.side, t: fromNode.t };
+        } else {
+          // Interior point or edge-offset (both are interior)
+          edgeFrom = { interior: true, southward: fromNode.southward, eastward: fromNode.eastward };
+        }
+        
+        // Determine 'to' point - handle boundary waypoints
+        if (toNode.type === 'end') {
+          edgeTo = toNode.original;
+        } else if (toNode.type === 'boundary') {
+          edgeTo = { side: toNode.side, t: toNode.t };
+        } else {
+          // Interior point or edge-offset (both are interior)
+          edgeTo = { interior: true, southward: toNode.southward, eastward: toNode.eastward };
+        }
+        
+        edges.push({ from: edgeFrom, to: edgeTo });
+      }
+      
+      return { success: true, edges };
+    }
+    
+    // Explore neighbors
+    const neighbors = adjacency.get(current.idx) || [];
+    for (const neighborIdx of neighbors) {
+      const neighborNode = allNodes[neighborIdx];
+      const currentNode = allNodes[current.idx];
+      
+      const tentativeG = gScore.get(current.idx) + distance(currentNode, neighborNode);
+      
+      if (!gScore.has(neighborIdx) || tentativeG < gScore.get(neighborIdx)) {
+        cameFrom.set(neighborIdx, current.idx);
+        gScore.set(neighborIdx, tentativeG);
+        
+        const f = tentativeG + distance(neighborNode, endNode);
+        
+        // Add to open set if not already there
+        if (!openSet.find(n => n.idx === neighborIdx)) {
+          openSet.push({ idx: neighborIdx, g: tentativeG, f });
+        }
+      }
+    }
+  }
+  
+  // No path found
+  return { success: false, error: 'No path found through waypoint grid' };
+}
+
+/**
+ * Simplify a routed path by removing unnecessary waypoints.
+ * If we can go directly from A to C without crossing edges, remove B.
+ */
+function simplifyPath(edges, existingEdges) {
+  if (edges.length <= 1) return edges;
+  
+  const simplified = [edges[0]];
+  
+  for (let i = 1; i < edges.length; i++) {
+    const lastSimplified = simplified[simplified.length - 1];
+    const current = edges[i];
+    
+    // Try to merge: can we go directly from lastSimplified.from to current.to?
+    const fromCoords = pointToPaperCoords(lastSimplified.from);
+    const toCoords = pointToPaperCoords(current.to);
+    
+    if (!lineSegmentCrossesEdges(fromCoords, toCoords, existingEdges)) {
+      // We can merge - update the last simplified edge
+      simplified[simplified.length - 1] = {
+        from: lastSimplified.from,
+        to: current.to
+      };
+    } else {
+      // Can't merge - add current edge
+      simplified.push(current);
+    }
+  }
+  
+  return simplified;
 }
 
 /**
  * Plan a path from the current position to a target segment.
  * Returns either a direct edge or a sequence of edges with internal nodes.
+ * Uses grid-based A* pathfinding to route around obstacles.
  * 
  * @param {Object} fromPoint - Starting point
  * @param {string} targetSide - Target side
@@ -279,76 +609,25 @@ export function createNavMesh() {
 export function planPathToSegment(fromPoint, targetSide, segment, existingEdges) {
   const toPoint = { side: targetSide, t: segment.midpoint };
   
-  // First, try a direct edge
-  const directEdge = { from: fromPoint, to: toPoint };
-  const crossResult = edgeCrossesPath(directEdge, existingEdges);
+  // Use the grid-based routing
+  const result = findRoutedPath(fromPoint, toPoint, existingEdges);
   
-  if (!crossResult.crosses) {
-    // Direct path is possible
-    return { edges: [directEdge], success: true };
+  if (!result.success) {
+    return result;
   }
   
-  // Need to route around obstacles using nav2d
-  const fromCoords = getPointCoordinates(fromPoint);
-  const toCoords = getPointCoordinates(toPoint);
+  // Simplify the path to remove unnecessary waypoints
+  const simplifiedEdges = simplifyPath(result.edges, existingEdges);
   
-  try {
-    const navmesh = createNavMesh();
-    const path = navmesh.findPath([fromCoords.x, fromCoords.y], [toCoords.x, toCoords.y]);
-    
-    if (!path || path.length < 2) {
-      return { edges: [], success: false, error: 'No path found' };
+  // Verify the final path doesn't cross any existing edges
+  for (const edge of simplifiedEdges) {
+    const cross = edgeCrossesPath(edge, existingEdges);
+    if (cross.crosses) {
+      return { edges: [], success: false, error: 'Routed path crosses existing edge' };
     }
-    
-    // Convert path points to edges
-    // Note: nav2d returns path as array of [x, y] points
-    // We need to convert intermediate points to interior points
-    const resultEdges = [];
-    let currentFrom = fromPoint;
-    
-    for (let i = 1; i < path.length; i++) {
-      const point = path[i];
-      const isLast = i === path.length - 1;
-      
-      let to;
-      if (isLast) {
-        to = toPoint;
-      } else {
-        // This is an intermediate point, make it an interior point
-        // Convert screen coordinates back to paper coordinates
-        const { southward, eastward } = screenToPaper(point[0], point[1]);
-        to = { interior: true, southward, eastward };
-      }
-      
-      resultEdges.push({ from: currentFrom, to });
-      currentFrom = to;
-    }
-    
-    // Verify the routed path doesn't cross any existing edges
-    for (const edge of resultEdges) {
-      const cross = edgeCrossesPath(edge, existingEdges);
-      if (cross.crosses) {
-        return { edges: [], success: false, error: 'Routed path crosses existing edge' };
-      }
-    }
-    
-    return { edges: resultEdges, success: true };
-    
-  } catch (error) {
-    return { edges: [], success: false, error: error.message };
   }
-}
-
-/**
- * Convert screen coordinates back to paper coordinates (southward, eastward).
- * This is a simplified version that works for points inside the rhombus.
- */
-function screenToPaper(x, y) {
-  const result = rhombusToUnitSquare(x, y);
-  return {
-    southward: Math.max(0, Math.min(1, result.southward)),
-    eastward: Math.max(0, Math.min(1, result.eastward))
-  };
+  
+  return { edges: simplifiedEdges, success: true };
 }
 
 /**
