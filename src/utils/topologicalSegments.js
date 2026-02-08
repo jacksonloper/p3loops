@@ -435,17 +435,20 @@ export function findRoutedPath(fromPoint, toPoint, existingEdges) {
   };
   
   // Helper to check if going to a waypoint would create a loop
-  // (i.e., if the waypoint already exists in the path, except for the start node)
-  const wouldCreateLoop = (nodeIdx, nodeB) => {
-    // Start node (idx 0) is allowed since it's our current position
-    if (nodeIdx === 0) return false;
+  // (i.e., if the waypoint already exists in the path)
+  // We allow going TO the start node (idx 0) since it's just our current position
+  // and not a "new" node we're adding to the path
+  const wouldCreateLoop = (targetIdx, targetNode) => {
+    // The start node is our current position - going "to" it is fine during A* traversal
+    // (though the simplified path won't include it as an intermediate step)
+    if (targetIdx === 0) return false;
     
     // End node is checked separately (toPoint shouldn't exist in path)
-    if (nodeB.type === 'end') return false;
+    if (targetNode.type === 'end') return false;
     
     // For boundary waypoints, check if this point exists in the path
-    if (nodeB.type === 'boundary') {
-      const waypointPoint = { side: nodeB.side, t: nodeB.t };
+    if (targetNode.type === 'boundary') {
+      const waypointPoint = { side: targetNode.side, t: targetNode.t };
       if (pointExistsInPath(waypointPoint, existingEdges)) {
         return true;
       }
@@ -483,8 +486,9 @@ export function findRoutedPath(fromPoint, toPoint, existingEdges) {
   const startIdx = 0;
   const endIdx = allNodes.length - 1;
   
-  // Priority queue (using array sorted by f-score)
+  // Priority queue (using array sorted by f-score) and Set for O(1) membership check
   const openSet = [{ idx: startIdx, g: 0, f: distance(startNode, endNode) }];
+  const openSetIndices = new Set([startIdx]);
   const cameFrom = new Map();
   const gScore = new Map();
   gScore.set(startIdx, 0);
@@ -493,6 +497,7 @@ export function findRoutedPath(fromPoint, toPoint, existingEdges) {
     // Get node with lowest f-score
     openSet.sort((a, b) => a.f - b.f);
     const current = openSet.shift();
+    openSetIndices.delete(current.idx);
     
     if (current.idx === endIdx) {
       // Reconstruct path
@@ -551,9 +556,10 @@ export function findRoutedPath(fromPoint, toPoint, existingEdges) {
         
         const f = tentativeG + distance(neighborNode, endNode);
         
-        // Add to open set if not already there
-        if (!openSet.find(n => n.idx === neighborIdx)) {
+        // Add to open set if not already there (O(1) check with Set)
+        if (!openSetIndices.has(neighborIdx)) {
           openSet.push({ idx: neighborIdx, g: tentativeG, f });
+          openSetIndices.add(neighborIdx);
         }
       }
     }
