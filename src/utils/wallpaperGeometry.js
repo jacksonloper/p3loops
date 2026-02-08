@@ -268,6 +268,19 @@ export function getEntryPoint(exitSide, t) {
 }
 
 /**
+ * Check if an edge is a same-side edge (both endpoints on the same side).
+ * Same-side edges walk along the boundary and don't cross it.
+ * @param {Object} edge - Edge object with from/to points
+ * @returns {boolean} - True if both endpoints are on the same side
+ */
+function isSameSideEdge(edge) {
+  if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
+    return false;
+  }
+  return edge.from.side === edge.to.side;
+}
+
+/**
  * Convert a path (array of edges) to a continuous path in screen space,
  * "unfolding" the path as it crosses boundaries.
  * 
@@ -291,8 +304,10 @@ export function pathToWallpaperPath(edges) {
     // Add the end point
     points.push(pointToScreenSpace(edge.to, currentFrame));
     
-    // If the endpoint is on a boundary, update the reference frame for the next edge
-    if (!isInteriorPoint(edge.to)) {
+    // If the endpoint is on a boundary AND this is not a same-side edge,
+    // update the reference frame for the next edge.
+    // Same-side edges walk along the boundary without crossing it.
+    if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
       currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
     }
   }
