@@ -104,11 +104,13 @@ function CombinatorialRhombus({ edges, onAddEdge, onError, highlightedEdgeIndex 
       // Second click: create the first edge from start segment to selected segment
       const fromPoint = createPointInSegment(firstEdgeStartSegment, []);
       
-      // Create the end point - need to consider if it's on the same side
+      // Create the end point - for the first edge, we need to handle same-side specially
       let toPoint;
       if (selectedSegment.side === firstEdgeStartSegment.side) {
-        // Same side - create a second point with position 2
-        toPoint = { side: selectedSegment.side, position: 2 };
+        // Same side - create a point after the start point
+        // We need to use a temporary edge list that includes the from point
+        const tempEdges = [{ from: fromPoint, to: fromPoint }];
+        toPoint = createPointInSegment(selectedSegment, tempEdges);
       } else {
         toPoint = createPointInSegment(selectedSegment, [{ from: fromPoint, to: fromPoint }]);
       }

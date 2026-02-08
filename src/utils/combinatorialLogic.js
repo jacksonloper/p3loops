@@ -407,11 +407,11 @@ export function validatePath(edges) {
     if (!SIDES.includes(edge.to.side)) {
       return { valid: false, error: `Edge ${i} has invalid 'to' side` };
     }
-    if (typeof edge.from.position !== 'number' || edge.from.position < 1) {
-      return { valid: false, error: `Edge ${i} has invalid 'from' position` };
+    if (typeof edge.from.position !== 'number' || !Number.isInteger(edge.from.position) || edge.from.position < 1) {
+      return { valid: false, error: `Edge ${i} has invalid 'from' position (must be positive integer)` };
     }
-    if (typeof edge.to.position !== 'number' || edge.to.position < 1) {
-      return { valid: false, error: `Edge ${i} has invalid 'to' position` };
+    if (typeof edge.to.position !== 'number' || !Number.isInteger(edge.to.position) || edge.to.position < 1) {
+      return { valid: false, error: `Edge ${i} has invalid 'to' position (must be positive integer)` };
     }
   }
   
