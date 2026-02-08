@@ -402,6 +402,19 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     setPan({ x: 0, y: 0 });
   }, []);
   
+  // Combined mouse move handler for both hover feedback and panning
+  const handleCombinedMouseMove = useCallback((e) => {
+    handleMouseMove(e);
+    handleMouseMoveForPan(e);
+  }, [handleMouseMove, handleMouseMoveForPan]);
+  
+  // Click handler that only triggers if not panning
+  const handleClickIfNotPanning = useCallback((e) => {
+    if (!touchState.current.isPanning) {
+      handleClick(e);
+    }
+  }, [handleClick]);
+  
   // Corner positions for labels
   const nw = getPointOnSide('north', 0);
   const ne = getPointOnSide('north', 1);
@@ -428,11 +441,11 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         ref={svgRef}
         viewBox={viewBox}
         className="rhombus-svg"
-        onMouseMove={(e) => { handleMouseMove(e); handleMouseMoveForPan(e); }}
+        onMouseMove={handleCombinedMouseMove}
         onMouseLeave={handleMouseLeave}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        onClick={(e) => { if (!touchState.current.isPanning) handleClick(e); }}
+        onClick={handleClickIfNotPanning}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
