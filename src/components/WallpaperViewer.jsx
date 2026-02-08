@@ -71,6 +71,19 @@ function deduplicateFrames(frames) {
 }
 
 /**
+ * Check if an edge is a same-side edge (both endpoints on the same side).
+ * Same-side edges walk along the boundary and don't cross into a new rhombus.
+ * @param {Object} edge - Edge object with from/to points
+ * @returns {boolean} - True if both endpoints are on the same side
+ */
+function isSameSideEdge(edge) {
+  if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
+    return false;
+  }
+  return edge.from.side === edge.to.side;
+}
+
+/**
  * Generate the wallpaper data: path points and rhombus frames visited.
  * @param {Array} edges - Array of edge objects with from/to points
  * @param {number} repeats - Number of times to repeat the path (for closed loops)
@@ -99,12 +112,21 @@ function generateWallpaperData(edges, repeats = 1) {
       // Add the end point
       pathPoints.push(pointToScreenSpace(edge.to, currentFrame));
       
-      // If the endpoint is on a boundary, update the reference frame for the next edge
-      if (!isInteriorPoint(edge.to)) {
+      // If the endpoint is on a boundary AND this is not a same-side edge,
+      // update the reference frame for the next edge.
+      // Same-side edges walk along the boundary without crossing into a new rhombus.
+      if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
         currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
-        // Add this new rhombus frame (but only if there's more path to come)
+        
+        // Add this new rhombus frame only if:
+        // 1. This is not the last edge of the last repeat, AND
+        // 2. The next edge is not a same-side edge (which wouldn't enter the new rhombus)
         const isLastEdgeOfLastRepeat = (rep === repeats - 1 && i === edges.length - 1);
-        if (!isLastEdgeOfLastRepeat) {
+        const nextEdgeIndex = (i + 1) % edges.length;
+        const nextEdge = edges[nextEdgeIndex];
+        const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
+        
+        if (!isLastEdgeOfLastRepeat && !nextEdgeIsSameSide) {
           rhombusFrames.push({ ...currentFrame });
         }
       }
