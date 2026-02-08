@@ -280,8 +280,13 @@ function createGridTriangles() {
 }
 
 /**
- * Check the sign of the cross product for three points.
- * Used for determining if segments intersect.
+ * Calculate the sign of the cross product of vectors (p2-p1) and (p3-p1).
+ * Used for determining which side of a line a point lies on.
+ * 
+ * @param {number[]} p1 - First point as [x, y]
+ * @param {number[]} p2 - Second point as [x, y]
+ * @param {number[]} p3 - Third point as [x, y]
+ * @returns {number} Positive if p3 is counterclockwise from p1-p2, negative if clockwise, zero if collinear
  */
 function crossProductSign(p1, p2, p3) {
   return (p3[0] - p1[0]) * (p2[1] - p1[1]) - (p2[0] - p1[0]) * (p3[1] - p1[1]);
@@ -289,7 +294,14 @@ function crossProductSign(p1, p2, p3) {
 
 /**
  * Check if two line segments properly intersect (cross each other).
- * Does not count touching or collinear cases.
+ * A "proper" intersection means the segments cross at an interior point of both segments.
+ * Does not count touching at endpoints or collinear overlap.
+ * 
+ * @param {number[]} a1 - Start of first segment as [x, y]
+ * @param {number[]} a2 - End of first segment as [x, y]
+ * @param {number[]} b1 - Start of second segment as [x, y]
+ * @param {number[]} b2 - End of second segment as [x, y]
+ * @returns {boolean} True if segments properly cross
  */
 function segmentsProperlyIntersect(a1, a2, b1, b2) {
   const d1 = crossProductSign(b1, b2, a1);
@@ -307,6 +319,11 @@ function segmentsProperlyIntersect(a1, a2, b1, b2) {
 
 /**
  * Check if a line segment intersects any edge of a triangle.
+ * 
+ * @param {number[]} p1 - Start of line segment as [x, y]
+ * @param {number[]} p2 - End of line segment as [x, y]
+ * @param {number[][]} tri - Triangle as array of 3 vertices, each as [x, y]
+ * @returns {boolean} True if line segment crosses any triangle edge
  */
 function lineIntersectsTriangle(p1, p2, tri) {
   for (let i = 0; i < 3; i++) {

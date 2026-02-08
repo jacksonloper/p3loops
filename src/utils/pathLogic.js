@@ -83,8 +83,15 @@ function segmentsIntersectPaper(p1, p2, p3, p4) {
     return false;
   }
   
-  // Check if segment p1-p2 passes through p3 or p4 (endpoints of the other segment)
-  // If so, that's touching at an endpoint, which is allowed
+  /**
+   * Check if a point lies on a line segment strictly between its endpoints.
+   * Used to detect when a segment passes through an endpoint of another segment.
+   * 
+   * @param {Object} point - Point to test with {southward, eastward} coordinates
+   * @param {Object} segStart - Start of segment with {southward, eastward} coordinates
+   * @param {Object} segEnd - End of segment with {southward, eastward} coordinates
+   * @returns {boolean} True if point is on segment interior (not at endpoints)
+   */
   function pointOnSegmentInterior(point, segStart, segEnd) {
     // Returns true if point lies on segment strictly between endpoints
     const dx = segEnd.eastward - segStart.eastward;
