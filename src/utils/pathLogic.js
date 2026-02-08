@@ -289,15 +289,25 @@ export function getNextEdgeStartPoints(edges) {
 }
 
 /**
- * Check if a loop can be closed by adding an edge from the last point to the first point.
+ * Check if a value is between two other values (inclusive at endpoints).
+ */
+function isBetween(value, start, end) {
+  const minT = Math.min(start, end);
+  const maxT = Math.max(start, end);
+  return value >= minT - EPSILON && value <= maxT + EPSILON;
+}
+
+/**
+ * Check if a loop can be closed by walking along the boundary from last point to first point.
  * Returns { canClose: boolean, closingEdge?: Object, error?: string }
  * 
  * Requirements for closing:
  * - Path must have at least 2 edges
  * - First point must be a boundary point (not interior)
  * - Last point must be a boundary point (not interior)
- * - Closing edge must not be a same-side edge
- * - Closing edge must not cross any existing edges
+ * - The continuation point (identified version of last point) must be on the same side 
+ *   (or its complement) as the first point
+ * - No other point in the path can lie between the first and last points on that side
  */
 export function canCloseLoop(edges) {
   if (edges.length < 2) {
@@ -318,25 +328,59 @@ export function canCloseLoop(edges) {
   }
   
   // Get the continuation point (identified version of last point)
-  const continuationPoint = { side: getIdentifiedSide(lastPoint.side), t: lastPoint.t };
+  const continuationSide = getIdentifiedSide(lastPoint.side);
+  const continuationT = lastPoint.t;
   
-  // Create the closing edge
-  const closingEdge = { from: continuationPoint, to: firstPoint };
+  // The first point's side and its complement
+  const firstSide = firstPoint.side;
+  const firstSideComplement = getIdentifiedSide(firstSide);
   
-  // Check if same-side edge
-  if (isSameSideEdge(closingEdge)) {
-    return { canClose: false, error: 'Closing edge would be a same-side edge' };
-  }
-  
-  // Check if closing edge crosses any existing edges
-  const crossingResult = edgeCrossesPath(closingEdge, edges);
-  if (crossingResult.crosses) {
+  // Check if continuation point is on same side (or complement) as first point
+  if (continuationSide !== firstSide && continuationSide !== firstSideComplement) {
     return { 
       canClose: false, 
-      error: `Closing edge would cross existing edge #${crossingResult.crossingEdgeIndex + 1}`,
-      crossingEdgeIndex: crossingResult.crossingEdgeIndex
+      error: `Cannot close: current position is on ${continuationSide}, but start is on ${firstSide}/${firstSideComplement}` 
     };
   }
+  
+  // Determine the canonical side we're closing on (use firstSide's group)
+  // Both firstPoint and continuationPoint are on the same side or complement pair
+  const closingSide = firstSide;
+  const closingSideComplement = firstSideComplement;
+  
+  // Get t values on the canonical side
+  const firstT = firstPoint.t;
+  
+  // Check if any point in any edge lies between firstT and continuationT on this side (or its complement)
+  const allPoints = getAllPointsInPath(edges);
+  for (const point of allPoints) {
+    // Skip interior points
+    if (isInteriorPoint(point)) continue;
+    
+    // Check if point is on the same side or its complement
+    if (point.side === closingSide || point.side === closingSideComplement) {
+      const pointT = point.t;
+      
+      // Skip the first and last points themselves (they're allowed)
+      if (Math.abs(pointT - firstT) < EPSILON || Math.abs(pointT - continuationT) < EPSILON) {
+        continue;
+      }
+      
+      // Check if this point is between firstT and continuationT
+      if (isBetween(pointT, firstT, continuationT)) {
+        return { 
+          canClose: false, 
+          error: `Cannot close: point at ${point.side} ${(pointT * 100).toFixed(1)}% is between the start and end positions` 
+        };
+      }
+    }
+  }
+  
+  // Create the closing edge (same-side edge along the boundary)
+  const closingEdge = { 
+    from: { side: continuationSide, t: continuationT }, 
+    to: firstPoint 
+  };
   
   return { canClose: true, closingEdge };
 }
