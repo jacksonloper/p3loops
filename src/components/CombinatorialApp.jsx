@@ -257,6 +257,9 @@ function CombinatorialApp() {
     setLoadingExample(true);
     try {
       const res = await fetch(`/examples/${example.filename}`);
+      if (!res.ok) {
+        throw new Error(`Failed to load example: ${res.status}`);
+      }
       const data = await res.json();
       
       // Import into combinatorial format
@@ -271,7 +274,7 @@ function CombinatorialApp() {
     } catch (err) {
       const errorMsg = err instanceof SyntaxError 
         ? 'Invalid example format' 
-        : 'Network error loading example';
+        : err.message || 'Failed to load example';
       setValidationMessage(errorMsg);
     } finally {
       setLoadingExample(false);

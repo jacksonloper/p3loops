@@ -10,14 +10,6 @@ import { getEdgeCoordinates } from '../utils/pathLogic.js';
 import './CombinatorialRhombus.css';
 
 /**
- * Get the rhombus path without bowing (straight sides).
- * This is the same as the regular rhombus.
- */
-function getStraightRhombusPath() {
-  return getRhombusPath();
-}
-
-/**
  * CombinatorialRhombus component - renders the combinatorial rhombus visualization.
  * Shows points equally spaced on sides and highlights the selected segment.
  * 
@@ -48,7 +40,8 @@ function CombinatorialRhombus({
     return `${viewX} ${viewY} ${fullWidth} ${fullHeight}`;
   }, [size, padding]);
   
-  const rhombusPath = getStraightRhombusPath();
+  // Use the standard rhombus path (straight sides, not bowed)
+  const rhombusPath = getRhombusPath();
   
   // Get corner positions for labels
   const nw = getPointOnSide('north', 0);

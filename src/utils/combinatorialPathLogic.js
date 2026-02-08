@@ -464,13 +464,12 @@ export function addFirstEdge(state, fromSegment, fromSide, toSegment, toSide) {
     
     // Create the edge
     let fromPos = fromInsertIndex;
-    let toPos = toInsertIndex > fromInsertIndex ? toInsertIndex : toInsertIndex;
+    let toPos = toInsertIndex;
     
     // Since we inserted fromInsertIndex first, and toInsertIndex might have shifted
     if (toInsertIndex <= fromInsertIndex) {
       // toInsert was before fromInsert, so fromPos shifted
       fromPos = fromInsertIndex + 1;
-      toPos = toInsertIndex;
     }
     
     const newEdge = {
@@ -687,7 +686,7 @@ export function importFromFloatEdges(floatEdges) {
       }
     }
     
-    throw new Error(`Point not found: ${side} ${t}`);
+    throw new Error(`Point not found for side "${side}" at t=${t}`);
   }
   
   // Build the state
