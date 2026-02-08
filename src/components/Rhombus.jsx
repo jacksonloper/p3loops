@@ -81,7 +81,8 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
     isPanning: false,
     pinchStartDistance: null,
     pinchStartZoom: null,
-    pinchCenter: null
+    pinchCenter: null,        // Screen coordinates of pinch center
+    pinchCenterSvg: null      // SVG coordinates of pinch center (for zoom anchoring)
   });
   
   const size = getSize();
@@ -121,15 +122,28 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   const angleLabelOffsetLarge = { x: 25, y: 15 };
   const identTextOffset = { x: 35, y: 25, xLarge: 45, yLarge: 30 };
   
-  // Convert screen coordinates from mouse/touch event to SVG coordinates
-  const getMouseCoords = useCallback((e) => {
+  // Convert screen coordinates (clientX, clientY) to SVG coordinates
+  // Uses given zoom and pan values (useful for calculating transforms during pinch)
+  const screenToSvg = useCallback((clientX, clientY, currentZoom, currentPan) => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
     const rect = svg.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width * viewWidth + viewX;
-    const y = (e.clientY - rect.top) / rect.height * viewHeight + viewY;
+    
+    // Calculate viewBox parameters for the given zoom/pan
+    const vWidth = fullWidth / currentZoom;
+    const vHeight = fullHeight / currentZoom;
+    const vX = centerX - vWidth / 2 - currentPan.x / currentZoom;
+    const vY = centerY - vHeight / 2 - currentPan.y / currentZoom;
+    
+    const x = (clientX - rect.left) / rect.width * vWidth + vX;
+    const y = (clientY - rect.top) / rect.height * vHeight + vY;
     return { x, y };
-  }, [viewWidth, viewHeight, viewX, viewY]);
+  }, [fullWidth, fullHeight, centerX, centerY]);
+  
+  // Convert screen coordinates from mouse/touch event to SVG coordinates (using current zoom/pan)
+  const getMouseCoords = useCallback((e) => {
+    return screenToSvg(e.clientX, e.clientY, zoom, pan);
+  }, [screenToSvg, zoom, pan]);
   
   // Handle mouse move for hover feedback
   const handleMouseMove = useCallback((e) => {
@@ -327,11 +341,15 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   const handleTouchStart = useCallback((e) => {
     if (e.touches.length === 2) {
       // Pinch gesture starting
+      const pinchCenterScreen = getTouchCenter(e.touches);
+      // Convert pinch center to SVG coordinates for zoom anchoring
+      const pinchCenterSvgCoords = screenToSvg(pinchCenterScreen.x, pinchCenterScreen.y, zoom, pan);
       touchState.current = {
         ...touchState.current,
         pinchStartDistance: getTouchDistance(e.touches),
         pinchStartZoom: zoom,
-        pinchCenter: getTouchCenter(e.touches),
+        pinchCenter: pinchCenterScreen,
+        pinchCenterSvg: pinchCenterSvgCoords,
         startPan: { ...pan },
         isPanning: true
       };
@@ -346,7 +364,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         pinchStartDistance: null
       };
     }
-  }, [getTouchDistance, getTouchCenter, zoom, pan]);
+  }, [getTouchDistance, getTouchCenter, zoom, pan, screenToSvg]);
   
   const handleTouchMove = useCallback((e) => {
     if (e.touches.length === 2 && touchState.current.pinchStartDistance) {
@@ -355,16 +373,41 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       const currentDistance = getTouchDistance(e.touches);
       const scale = currentDistance / touchState.current.pinchStartDistance;
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, touchState.current.pinchStartZoom * scale));
-      setZoom(newZoom);
       
-      // Also pan with pinch center
-      const center = getTouchCenter(e.touches);
-      const startCenter = touchState.current.pinchCenter;
-      if (startCenter) {
-        setPan({
-          x: touchState.current.startPan.x + (center.x - startCenter.x),
-          y: touchState.current.startPan.y + (center.y - startCenter.y)
-        });
+      // Get current pinch center in screen coordinates
+      const currentCenter = getTouchCenter(e.touches);
+      const svg = svgRef.current;
+      
+      if (svg && touchState.current.pinchCenterSvg) {
+        const rect = svg.getBoundingClientRect();
+        const svgPoint = touchState.current.pinchCenterSvg;
+        
+        // Calculate what pan is needed to keep svgPoint at currentCenter screen position
+        // The SVG point should appear at currentCenter on screen
+        // Screen position formula: screenX = (svgX - viewX) / viewWidth * screenWidth
+        // viewX = centerX - viewWidth/2 - pan.x/zoom
+        // We need to solve for pan.x such that svgX appears at currentCenter.x
+        
+        // Normalized position of currentCenter in SVG element (0-1)
+        const normX = (currentCenter.x - rect.left) / rect.width;
+        const normY = (currentCenter.y - rect.top) / rect.height;
+        
+        // viewWidth and viewHeight at new zoom
+        const newViewWidth = fullWidth / newZoom;
+        const newViewHeight = fullHeight / newZoom;
+        
+        // We want: svgPoint.x = viewX + normX * viewWidth
+        // svgPoint.x = centerX - viewWidth/2 - pan.x/zoom + normX * viewWidth
+        // pan.x/zoom = centerX - viewWidth/2 + normX * viewWidth - svgPoint.x
+        // pan.x = zoom * (centerX - viewWidth/2 + normX * viewWidth - svgPoint.x)
+        
+        const newPanX = newZoom * (centerX - newViewWidth / 2 + normX * newViewWidth - svgPoint.x);
+        const newPanY = newZoom * (centerY - newViewHeight / 2 + normY * newViewHeight - svgPoint.y);
+        
+        setZoom(newZoom);
+        setPan({ x: newPanX, y: newPanY });
+      } else {
+        setZoom(newZoom);
       }
     } else if (e.touches.length === 1 && touchState.current.startPos) {
       // Single finger move - check if it's a pan
@@ -381,7 +424,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         });
       }
     }
-  }, [getTouchDistance, getTouchCenter]);
+  }, [getTouchDistance, getTouchCenter, fullWidth, fullHeight, centerX, centerY]);
   
   const handleTouchEnd = useCallback((e) => {
     const state = touchState.current;
@@ -398,7 +441,8 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         isPanning: false,
         pinchStartDistance: null,
         pinchStartZoom: null,
-        pinchCenter: null
+        pinchCenter: null,
+        pinchCenterSvg: null
       };
     } else if (e.touches.length === 1 && state.pinchStartDistance) {
       // Went from 2 fingers to 1 - reset to single finger pan
@@ -408,7 +452,8 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         startPan: { ...pan },
         pinchStartDistance: null,
         pinchStartZoom: null,
-        pinchCenter: null
+        pinchCenter: null,
+        pinchCenterSvg: null
       };
     }
   }, [pan]);
