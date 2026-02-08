@@ -377,8 +377,11 @@ export function canCloseLoop(edges) {
   }
   
   // Create the closing edge (same-side edge along the boundary)
+  // Use the first point's side for both endpoints so it walks along the boundary,
+  // not through the interior (even though the sides are identified, we want a
+  // same-side edge like north(0.493) → north(0.456), not east(0.493) → north(0.456))
   const closingEdge = { 
-    from: { side: continuationSide, t: continuationT }, 
+    from: { side: firstSide, t: continuationT }, 
     to: firstPoint 
   };
   
