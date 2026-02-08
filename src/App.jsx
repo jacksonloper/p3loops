@@ -216,6 +216,7 @@ function PathEditorApp() {
       <header className="app-header">
         <h1>P3 Loops Path Editor</h1>
         <p className="subtitle">Create non-crossing paths on a 120/60/120/60 rhombus with edge identifications</p>
+        <a href="#combinatorial" className="nav-link">→ Try Combinatorial Mode</a>
       </header>
 
       <main className="editor-main">
