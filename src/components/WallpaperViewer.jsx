@@ -113,21 +113,24 @@ function generateWallpaperData(edges, repeats = 1) {
       pathPoints.push(pointToScreenSpace(edge.to, currentFrame));
       
       // If the endpoint is on a boundary AND this is not a same-side edge,
-      // update the reference frame for the next edge.
+      // we might need to update the reference frame for the next edge.
       // Same-side edges walk along the boundary without crossing into a new rhombus.
       if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
-        currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
-        
-        // Add this new rhombus frame only if:
-        // 1. This is not the last edge of the last repeat, AND
-        // 2. The next edge is not a same-side edge (which wouldn't enter the new rhombus)
+        // Check if the next edge is a same-side edge
         const isLastEdgeOfLastRepeat = (rep === repeats - 1 && i === edges.length - 1);
         const nextEdgeIndex = (i + 1) % edges.length;
         const nextEdge = edges[nextEdgeIndex];
         const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
         
-        if (!isLastEdgeOfLastRepeat && !nextEdgeIsSameSide) {
-          rhombusFrames.push({ ...currentFrame });
+        // Only update the frame if the next edge is NOT a same-side edge.
+        // If the next edge is same-side, it stays in the current rhombus.
+        if (!nextEdgeIsSameSide) {
+          currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+          
+          // Add this new rhombus frame only if this is not the last edge
+          if (!isLastEdgeOfLastRepeat) {
+            rhombusFrames.push({ ...currentFrame });
+          }
         }
       }
     }

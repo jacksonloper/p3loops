@@ -307,8 +307,15 @@ export function pathToWallpaperPath(edges) {
     // If the endpoint is on a boundary AND this is not a same-side edge,
     // update the reference frame for the next edge.
     // Same-side edges walk along the boundary without crossing it.
+    // BUT: if the NEXT edge is a same-side edge, don't update the frame because
+    // the next edge will stay in the current rhombus.
     if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
-      currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+      const nextEdge = edges[i + 1];
+      const nextEdgeIsSameSide = nextEdge && isSameSideEdge(nextEdge);
+      
+      if (!nextEdgeIsSameSide) {
+        currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+      }
     }
   }
   
