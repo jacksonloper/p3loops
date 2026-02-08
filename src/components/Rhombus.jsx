@@ -54,8 +54,9 @@ function getEdgeArrow(edge) {
  * @param {function} onError - Callback for error messages, receives (message, crossingEdgeIndex?)
  * @param {boolean} interiorMode - Whether to allow selecting interior points
  * @param {number|null} highlightedEdgeIndex - Index of edge to highlight (for crossing errors)
+ * @param {boolean} disabled - Whether edge adding is disabled (e.g., when loop is closed)
  */
-function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError, interiorMode = false, highlightedEdgeIndex = null }) {
+function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onError, interiorMode = false, highlightedEdgeIndex = null, disabled = false }) {
   const [hoverPoint, setHoverPoint] = useState(null);
   
   const size = getSize();
@@ -75,6 +76,12 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   
   // Handle mouse move for hover feedback
   const handleMouseMove = useCallback((e) => {
+    // Don't show hover feedback when disabled
+    if (disabled) {
+      setHoverPoint(null);
+      return;
+    }
+    
     const { x, y } = getMouseCoords(e);
     
     const closest = findClosestPointOnBoundary(x, y);
@@ -89,7 +96,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       // Near boundary or outside rhombus - show boundary point
       setHoverPoint(closest);
     }
-  }, [getMouseCoords, interiorMode, selectedStartPoint]);
+  }, [getMouseCoords, interiorMode, selectedStartPoint, disabled]);
   
   const handleMouseLeave = useCallback(() => {
     setHoverPoint(null);
@@ -107,6 +114,9 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
 
   // Handle click to add edges
   const handleClick = useCallback((e) => {
+    // Don't allow adding edges when disabled
+    if (disabled) return;
+    
     const { x, y } = getMouseCoords(e);
     
     // Determine clicked point
@@ -172,7 +182,7 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       // Auto-chain: automatically select the next start point
       autoSelectNextStartPoint([...edges, newEdge]);
     }
-  }, [edges, selectedStartPoint, onAddEdge, onSelectStartPoint, onError, getMouseCoords, interiorMode, autoSelectNextStartPoint]);
+  }, [edges, selectedStartPoint, onAddEdge, onSelectStartPoint, onError, getMouseCoords, interiorMode, autoSelectNextStartPoint, disabled]);
   
   // Corner positions for labels
   const nw = getPointOnSide('north', 0);
@@ -323,10 +333,13 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
       </svg>
       
       <div className="rhombus-instructions">
-        {edges.length === 0 && !selectedStartPoint && (
+        {disabled && (
+          <p>Loop is closed. Click "Open Loop" to continue editing.</p>
+        )}
+        {!disabled && edges.length === 0 && !selectedStartPoint && (
           <p>Click anywhere to select a starting point on the boundary.</p>
         )}
-        {selectedStartPoint && (
+        {!disabled && selectedStartPoint && (
           <p>Click to add the next point.{interiorMode ? ' (Click inside for interior point)' : ''}</p>
         )}
       </div>

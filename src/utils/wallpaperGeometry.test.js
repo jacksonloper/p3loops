@@ -422,4 +422,34 @@ describe('edge length sanity check', () => {
       expect(edgeLength).toBeLessThanOrEqual(RHOMBUS_DIAMETER + TOLERANCE);
     }
   });
+
+  it('should produce short closing edge for same-side closed loop', () => {
+    // The "Simple Loop" example that gets closed with a same-side edge
+    const simpleLoopEdges = [
+      { from: { side: 'north', t: 0.456 }, to: { side: 'west', t: 0.611 } },
+      { from: { side: 'south', t: 0.611 }, to: { side: 'north', t: 0.72 } },
+      { from: { side: 'east', t: 0.72 }, to: { side: 'south', t: 0.375 } },
+      { from: { side: 'west', t: 0.375 }, to: { side: 'north', t: 0.207 } },
+      { from: { side: 'east', t: 0.207 }, to: { interior: true, southward: 0.744567501122939, eastward: 0.8517552568425605 } },
+      { from: { interior: true, southward: 0.744567501122939, eastward: 0.8517552568425605 }, to: { side: 'east', t: 0.573 } },
+      { from: { side: 'north', t: 0.573 }, to: { side: 'south', t: 0.8 } },
+      { from: { side: 'west', t: 0.8 }, to: { side: 'north', t: 0.493 } },
+      // Same-side closing edge: north(0.493) → north(0.456)
+      { from: { side: 'north', t: 0.493 }, to: { side: 'north', t: 0.456 } }
+    ];
+    
+    const points = pathToWallpaperPath(simpleLoopEdges);
+    
+    // The closing edge (last edge) should be short - just walking along the north boundary
+    // from t=0.493 to t=0.456, which is about 3.7% of a side length
+    const closingEdgeLength = distance(points[points.length - 2], points[points.length - 1]);
+    
+    // The closing edge should be much shorter than the rhombus diameter.
+    // The actual distance is about (0.493 - 0.456) * SIDE = 0.037 * 300 ≈ 11 units.
+    // We use 10% of SIDE (30 units) as an upper bound to allow for floating point
+    // tolerance while still catching the bug where the edge crossed a whole rhombus (~273 units).
+    const SAME_SIDE_EDGE_MAX_RATIO = 0.1; // 10% of side length
+    const expectedMaxLength = SAME_SIDE_EDGE_MAX_RATIO * SIDE;
+    expect(closingEdgeLength).toBeLessThan(expectedMaxLength);
+  });
 });

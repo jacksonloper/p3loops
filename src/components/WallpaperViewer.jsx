@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   createIdentityFrame, 
   applyReferenceFrame,
@@ -71,11 +71,25 @@ function deduplicateFrames(frames) {
 }
 
 /**
+ * Check if an edge is a same-side edge (both endpoints on the same side).
+ * Same-side edges walk along the boundary and don't cross into a new rhombus.
+ * @param {Object} edge - Edge object with from/to points
+ * @returns {boolean} - True if both endpoints are on the same side
+ */
+function isSameSideEdge(edge) {
+  if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
+    return false;
+  }
+  return edge.from.side === edge.to.side;
+}
+
+/**
  * Generate the wallpaper data: path points and rhombus frames visited.
  * @param {Array} edges - Array of edge objects with from/to points
+ * @param {number} repeats - Number of times to repeat the path (for closed loops)
  * @returns {{ pathPoints: Array, rhombusFrames: Array }}
  */
-function generateWallpaperData(edges) {
+function generateWallpaperData(edges, repeats = 1) {
   if (edges.length === 0) return { pathPoints: [], rhombusFrames: [] };
   
   const pathPoints = [];
@@ -85,23 +99,39 @@ function generateWallpaperData(edges) {
   // Add the first rhombus
   rhombusFrames.push({ ...currentFrame });
   
-  for (let i = 0; i < edges.length; i++) {
-    const edge = edges[i];
-    
-    // Add the starting point (except for subsequent edges where it's the same as previous end)
-    if (i === 0) {
-      pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
-    }
-    
-    // Add the end point
-    pathPoints.push(pointToScreenSpace(edge.to, currentFrame));
-    
-    // If the endpoint is on a boundary, update the reference frame for the next edge
-    if (!isInteriorPoint(edge.to)) {
-      currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
-      // Add this new rhombus frame (but only if there's more path to come)
-      if (i < edges.length - 1) {
-        rhombusFrames.push({ ...currentFrame });
+  // Repeat the path `repeats` times
+  for (let rep = 0; rep < repeats; rep++) {
+    for (let i = 0; i < edges.length; i++) {
+      const edge = edges[i];
+      
+      // Add the starting point (only for the very first edge of the first repeat)
+      if (rep === 0 && i === 0) {
+        pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
+      }
+      
+      // Add the end point
+      pathPoints.push(pointToScreenSpace(edge.to, currentFrame));
+      
+      // If the endpoint is on a boundary AND this is not a same-side edge,
+      // we might need to update the reference frame for the next edge.
+      // Same-side edges walk along the boundary without crossing into a new rhombus.
+      if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
+        // Check if the next edge is a same-side edge
+        const isLastEdgeOfLastRepeat = (rep === repeats - 1 && i === edges.length - 1);
+        const nextEdgeIndex = (i + 1) % edges.length;
+        const nextEdge = edges[nextEdgeIndex];
+        const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
+        
+        // Only update the frame if the next edge is NOT a same-side edge.
+        // If the next edge is same-side, it stays in the current rhombus.
+        if (!nextEdgeIsSameSide) {
+          currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+          
+          // Add this new rhombus frame only if this is not the last edge
+          if (!isLastEdgeOfLastRepeat) {
+            rhombusFrames.push({ ...currentFrame });
+          }
+        }
       }
     }
   }
@@ -147,16 +177,28 @@ function getNorthMarkerInfo(frame) {
   return { x, y, angle };
 }
 
+// Default number of repeats for closed loops
+const DEFAULT_CLOSED_LOOP_REPEATS = 2;
+
 /**
  * WallpaperViewer component - renders the path unfolded on R² with reference rhombi.
  * @param {Object[]} edges - Array of edge objects defining the path
+ * @param {boolean} isLoopClosed - Whether the loop is closed
  * @param {function} onClose - Callback to close the viewer
  */
-function WallpaperViewer({ edges, onClose }) {
+function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
+  // State for number of repeats (only applies when loop is closed)
+  // Note: The viewer is mounted fresh each time it's opened, so initial state
+  // correctly reflects the isLoopClosed prop at mount time.
+  const [repeats, setRepeats] = useState(isLoopClosed ? DEFAULT_CLOSED_LOOP_REPEATS : 1);
+  
+  // Effective repeats: must be 1 if loop is open
+  const effectiveRepeats = isLoopClosed ? repeats : 1;
+  
   // Generate wallpaper data
   const { pathPoints, rhombusFrames } = useMemo(() => 
-    generateWallpaperData(edges), 
-    [edges]
+    generateWallpaperData(edges, effectiveRepeats), 
+    [edges, effectiveRepeats]
   );
   
   // Deduplicate rhombus frames to avoid brightness stacking from overlapping elements
@@ -314,7 +356,23 @@ function WallpaperViewer({ edges, onClose }) {
         <div className="wallpaper-info">
           <p>
             Path unfolded onto R² • {pathPoints.length} points • {uniqueRhombusFrames.length} unique {uniqueRhombusFrames.length === 1 ? 'rhombus' : 'rhombi'}
+            {isLoopClosed && ` • ${effectiveRepeats} repeat${effectiveRepeats === 1 ? '' : 's'}`}
           </p>
+          
+          {isLoopClosed && (
+            <div className="repeats-control">
+              <label htmlFor="repeats-slider">Loop Repeats:</label>
+              <input
+                id="repeats-slider"
+                type="range"
+                min="1"
+                max="5"
+                value={repeats}
+                onChange={(e) => setRepeats(parseInt(e.target.value, 10))}
+              />
+              <span className="repeats-value">{repeats}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

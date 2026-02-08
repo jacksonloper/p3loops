@@ -3,7 +3,7 @@ import './App.css'
 import Rhombus from './components/Rhombus.jsx'
 import ThreeDViewer from './components/ThreeDViewer.jsx'
 import WallpaperViewer from './components/WallpaperViewer.jsx'
-import { validatePath, getNextEdgeStartPoints } from './utils/pathLogic.js'
+import { validatePath, getNextEdgeStartPoints, canCloseLoop } from './utils/pathLogic.js'
 
 /**
  * Determine message style class based on content.
@@ -29,6 +29,7 @@ function PathEditorApp() {
   const [examplesList, setExamplesList] = useState([])
   const [loadingExample, setLoadingExample] = useState(false)
   const [selectedExample, setSelectedExample] = useState('')
+  const [isLoopClosed, setIsLoopClosed] = useState(false)
 
   // Helper to auto-select the next start point based on edges
   const autoSelectStartPoint = useCallback((edges) => {
@@ -94,6 +95,7 @@ function PathEditorApp() {
       }
       
       setPathEdges(data)
+      setIsLoopClosed(false)
       // Auto-select start point for the loaded example
       autoSelectStartPoint(data)
       setValidationMessage(`Loaded example: ${example.name}`)
@@ -121,6 +123,19 @@ function PathEditorApp() {
   }, [])
 
   const removeLastEdge = useCallback(() => {
+    // If loop is closed, removing last edge opens the loop
+    if (isLoopClosed) {
+      setIsLoopClosed(false)
+      setPathEdges(current => {
+        const newEdges = current.slice(0, -1)
+        // Auto-select start point for the remaining edges
+        autoSelectStartPoint(newEdges)
+        return newEdges
+      })
+      setValidationMessage('Loop opened')
+      return
+    }
+    
     setPathEdges(current => {
       const newEdges = current.slice(0, -1)
       // Auto-select start point for the remaining edges
@@ -128,13 +143,31 @@ function PathEditorApp() {
       return newEdges
     })
     setValidationMessage('')
-  }, [autoSelectStartPoint])
+  }, [autoSelectStartPoint, isLoopClosed])
 
   const clearEntirePath = useCallback(() => {
     setPathEdges([])
     setActiveStartPoint(null)
+    setIsLoopClosed(false)
     setValidationMessage('')
   }, [])
+
+  const closeLoop = useCallback(() => {
+    const result = canCloseLoop(pathEdges)
+    if (!result.canClose) {
+      setValidationMessage(result.error)
+      if (result.crossingEdgeIndex !== undefined) {
+        setHighlightedEdgeIndex(result.crossingEdgeIndex)
+      }
+      return
+    }
+    
+    // Add the closing edge and mark loop as closed
+    setPathEdges(current => [...current, result.closingEdge])
+    setIsLoopClosed(true)
+    setActiveStartPoint(null)
+    setValidationMessage('Loop closed!')
+  }, [pathEdges])
 
   const handleJsonImport = useCallback(() => {
     try {
@@ -152,6 +185,7 @@ function PathEditorApp() {
       }
 
       setPathEdges(parsedData)
+      setIsLoopClosed(false)
       // Auto-select start point for the imported data
       autoSelectStartPoint(parsedData)
       setValidationMessage('Path imported successfully!')
@@ -194,6 +228,7 @@ function PathEditorApp() {
             onError={handleEdgeError}
             interiorMode={interiorMode}
             highlightedEdgeIndex={highlightedEdgeIndex}
+            disabled={isLoopClosed}
           />
         </section>
 
@@ -204,15 +239,26 @@ function PathEditorApp() {
               disabled={pathEdges.length === 0}
               className="control-btn danger-btn"
             >
-              Remove Last Edge
+              {isLoopClosed ? 'Open Loop' : 'Remove Last Edge'}
             </button>
-            <button 
-              onClick={clearEntirePath}
-              disabled={pathEdges.length === 0}
-              className="control-btn warning-btn"
-            >
-              Clear All
-            </button>
+            {!isLoopClosed && (
+              <>
+                <button 
+                  onClick={closeLoop}
+                  disabled={pathEdges.length < 2}
+                  className="control-btn primary-btn"
+                >
+                  Close Loop
+                </button>
+                <button 
+                  onClick={clearEntirePath}
+                  disabled={pathEdges.length === 0}
+                  className="control-btn warning-btn"
+                >
+                  Clear All
+                </button>
+              </>
+            )}
             <button 
               onClick={copyPathToClipboard}
               disabled={pathEdges.length === 0}
@@ -338,6 +384,7 @@ function PathEditorApp() {
       {showWallpaperViewer && (
         <WallpaperViewer 
           edges={pathEdges}
+          isLoopClosed={isLoopClosed}
           onClose={() => setShowWallpaperViewer(false)}
         />
       )}
