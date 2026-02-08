@@ -152,6 +152,9 @@ function getNorthMarkerInfo(frame) {
   return { x, y, angle };
 }
 
+// Default number of repeats for closed loops
+const DEFAULT_CLOSED_LOOP_REPEATS = 2;
+
 /**
  * WallpaperViewer component - renders the path unfolded on R² with reference rhombi.
  * @param {Object[]} edges - Array of edge objects defining the path
@@ -160,7 +163,9 @@ function getNorthMarkerInfo(frame) {
  */
 function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   // State for number of repeats (only applies when loop is closed)
-  const [repeats, setRepeats] = useState(isLoopClosed ? 2 : 1);
+  // Note: The viewer is mounted fresh each time it's opened, so initial state
+  // correctly reflects the isLoopClosed prop at mount time.
+  const [repeats, setRepeats] = useState(isLoopClosed ? DEFAULT_CLOSED_LOOP_REPEATS : 1);
   
   // Effective repeats: must be 1 if loop is open
   const effectiveRepeats = isLoopClosed ? repeats : 1;
