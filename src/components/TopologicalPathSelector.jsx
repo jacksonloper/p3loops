@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { getTopologicalOptions, planPathToSegment, getAllSegments } from '../utils/topologicalSegments.js';
+import { getTopologicalOptions, planPathToSegment, getAllSegments, formatSegmentDescription } from '../utils/topologicalSegments.js';
 import { isInteriorPoint, getIdentifiedSide, SIDES } from '../utils/geometry.js';
 import { canAddEdge } from '../utils/pathLogic.js';
 import './TopologicalPathSelector.css';
@@ -50,7 +50,7 @@ function TopologicalPathSelector({ edges, activeStartPoint, onAddEdges, onError,
         options.push({
           side,
           segment,
-          description: formatSegmentDesc(side, segment),
+          description: formatSegmentDescription(side, segment),
           fromPoint: activeStartPoint,
           type: 'first-edge'
         });
@@ -353,36 +353,6 @@ function TopologicalPathSelector({ edges, activeStartPoint, onAddEdges, onError,
       )}
     </div>
   );
-}
-
-/**
- * Helper to format segment description.
- */
-function formatSegmentDesc(side, segment) {
-  const startPct = Math.round(segment.start * 100);
-  const endPct = Math.round(segment.end * 100);
-  const corners = {
-    north: { start: 'NW', end: 'NE' },
-    east: { start: 'SE', end: 'NE' },
-    south: { start: 'SE', end: 'SW' },
-    west: { start: 'NW', end: 'SW' }
-  };
-  
-  const bounds = [];
-  if (segment.start === 0) {
-    bounds.push(corners[side].start);
-  } else {
-    bounds.push(`${startPct}%`);
-  }
-  
-  if (segment.end === 1) {
-    bounds.push(corners[side].end);
-  } else {
-    bounds.push(`${endPct}%`);
-  }
-  
-  const sideName = side.charAt(0).toUpperCase() + side.slice(1);
-  return `${sideName}: ${bounds[0]} to ${bounds[1]}`;
 }
 
 export default TopologicalPathSelector;

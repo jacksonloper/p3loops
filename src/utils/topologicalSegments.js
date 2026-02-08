@@ -204,7 +204,7 @@ export function getReachableSegments(edges) {
 /**
  * Format a human-readable description of a segment.
  */
-function formatSegmentDescription(side, segment) {
+export function formatSegmentDescription(side, segment) {
   const startPct = Math.round(segment.start * 100);
   const endPct = Math.round(segment.end * 100);
   
@@ -293,7 +293,7 @@ export function planPathToSegment(fromPoint, targetSide, segment, existingEdges)
   const toCoords = getPointCoordinates(toPoint);
   
   try {
-    const navmesh = createNavMesh(existingEdges);
+    const navmesh = createNavMesh();
     const path = navmesh.findPath([fromCoords.x, fromCoords.y], [toCoords.x, toCoords.y]);
     
     if (!path || path.length < 2) {
