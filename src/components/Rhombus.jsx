@@ -116,6 +116,11 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
   const baseSmallFontSize = 10;
   const baseRhombusStrokeWidth = 2;
   
+  // Position offsets for labels (in SVG units at zoom 1)
+  const angleLabelOffset = { x: 10, y: 10 };
+  const angleLabelOffsetLarge = { x: 25, y: 15 };
+  const identTextOffset = { x: 35, y: 25, xLarge: 45, yLarge: 30 };
+  
   // Convert screen coordinates from mouse/touch event to SVG coordinates
   const getMouseCoords = useCallback((e) => {
     const svg = svgRef.current;
@@ -466,14 +471,14 @@ function Rhombus({ edges, onAddEdge, selectedStartPoint, onSelectStartPoint, onE
         <path d={rhombusPath} className="rhombus-path" strokeWidth={baseRhombusStrokeWidth * strokeScale} />
         
         {/* Corner angle indicators */}
-        <text x={ne.x + 10 * strokeScale} y={ne.y - 10 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
-        <text x={sw.x - 25 * strokeScale} y={sw.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
-        <text x={nw.x - 25 * strokeScale} y={nw.y - 5 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
-        <text x={se.x + 10 * strokeScale} y={se.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
+        <text x={ne.x + angleLabelOffset.x * strokeScale} y={ne.y - angleLabelOffset.y * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={sw.x - angleLabelOffsetLarge.x * strokeScale} y={sw.y + angleLabelOffsetLarge.y * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={nw.x - angleLabelOffsetLarge.x * strokeScale} y={nw.y - 5 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
+        <text x={se.x + angleLabelOffset.x * strokeScale} y={se.y + angleLabelOffsetLarge.y * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
         
         {/* Identification indicators */}
-        <text x={ne.x + 35 * strokeScale} y={ne.y - 25 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>N≡E</text>
-        <text x={sw.x - 45 * strokeScale} y={sw.y + 30 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>S≡W</text>
+        <text x={ne.x + identTextOffset.x * strokeScale} y={ne.y - identTextOffset.y * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>N≡E</text>
+        <text x={sw.x - identTextOffset.xLarge * strokeScale} y={sw.y + identTextOffset.yLarge * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>S≡W</text>
         
         {/* Side labels */}
         {sideLabels.map(({ key, x, y, label }) => (
