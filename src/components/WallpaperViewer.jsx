@@ -9,7 +9,7 @@ import {
   SE_CORNER,
   SW_CORNER
 } from '../utils/wallpaperGeometry.js';
-import { isInteriorPoint } from '../utils/geometry.js';
+import { isInteriorPoint, getIdentifiedSide } from '../utils/geometry.js';
 import './WallpaperViewer.css';
 
 /**
@@ -71,16 +71,20 @@ function deduplicateFrames(frames) {
 }
 
 /**
- * Check if an edge is a same-side edge (both endpoints on the same side).
+ * Check if an edge is a same-side edge (both endpoints on the same or identified sides).
  * Same-side edges walk along the boundary and don't cross into a new rhombus.
+ * This includes edges between identified sides (north↔east, south↔west).
  * @param {Object} edge - Edge object with from/to points
- * @returns {boolean} - True if both endpoints are on the same side
+ * @returns {boolean} - True if both endpoints are on the same or identified sides
  */
 function isSameSideEdge(edge) {
   if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
     return false;
   }
-  return edge.from.side === edge.to.side;
+  // Check if same side OR identified sides (north↔east, south↔west)
+  const fromSide = edge.from.side;
+  const toSide = edge.to.side;
+  return fromSide === toSide || getIdentifiedSide(fromSide) === toSide;
 }
 
 /**

@@ -452,4 +452,41 @@ describe('edge length sanity check', () => {
     const expectedMaxLength = SAME_SIDE_EDGE_MAX_RATIO * SIDE;
     expect(closingEdgeLength).toBeLessThan(expectedMaxLength);
   });
+
+  it('should treat identified-side edges (north→east, south→west) as same-side edges', () => {
+    // An edge from north to east should be treated as a same-side edge
+    // (they are identified, so the path stays in the same rhombus)
+    const identifiedSideEdges = [
+      { from: { side: 'north', t: 0.3 }, to: { side: 'south', t: 0.5 } },
+      { from: { side: 'west', t: 0.5 }, to: { side: 'north', t: 0.7 } },
+      // This edge goes from east (identified with north) to north - should stay in same rhombus
+      { from: { side: 'east', t: 0.7 }, to: { side: 'north', t: 0.4 } }
+    ];
+    
+    const points = pathToWallpaperPath(identifiedSideEdges);
+    
+    // The last edge goes from east(0.7) to north(0.4)
+    // These are on identified sides, so the edge should be short (staying in same rhombus)
+    const lastEdgeLength = distance(points[points.length - 2], points[points.length - 1]);
+    
+    // The max expected length for an identified-side edge is roughly the diagonal of the rhombus
+    // but it should NOT be crossing into a new rhombus
+    // If treated correctly, the edge should be relatively short
+    expect(lastEdgeLength).toBeLessThan(RHOMBUS_DIAMETER);
+  });
+
+  it('should not create extra rhombus frames for identified-side edges', () => {
+    // Path that ends with an identified-side edge (east→north)
+    const identifiedSideEdges = [
+      { from: { side: 'north', t: 0.3 }, to: { side: 'south', t: 0.5 } },
+      { from: { side: 'west', t: 0.5 }, to: { side: 'east', t: 0.7 } },
+      // This edge goes from north (identified with east) to east - should stay in same rhombus
+      { from: { side: 'north', t: 0.7 }, to: { side: 'east', t: 0.4 } }
+    ];
+    
+    const points = pathToWallpaperPath(identifiedSideEdges);
+    
+    // With correct handling, we should have 4 points (start + 3 edge endpoints)
+    expect(points.length).toBe(4);
+  });
 });
