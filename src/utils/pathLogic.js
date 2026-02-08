@@ -60,8 +60,12 @@ export function pointExistsInPath(point, edges) {
 
 /**
  * Line segment intersection detection in paper coordinates.
- * Returns true if line segment (p1, p2) intersects (p3, p4)
+ * Returns true if line segment (p1, p2) PROPERLY intersects (p3, p4)
  * where p1, p2, p3, p4 are {southward, eastward} coordinates.
+ * 
+ * "Proper" intersection means the segments cross at an interior point of BOTH segments.
+ * If the crossing happens at an endpoint of either segment, it's NOT considered crossing.
+ * This allows paths to "go around" edge endpoints.
  */
 function segmentsIntersectPaper(p1, p2, p3, p4) {
   function ccw(A, B, C) {
@@ -76,6 +80,36 @@ function segmentsIntersectPaper(p1, p2, p3, p4) {
   
   // Segments sharing an endpoint are allowed to touch
   if (pointsClose(p1, p3) || pointsClose(p1, p4) || pointsClose(p2, p3) || pointsClose(p2, p4)) {
+    return false;
+  }
+  
+  // Check if segment p1-p2 passes through p3 or p4 (endpoints of the other segment)
+  // If so, that's touching at an endpoint, which is allowed
+  function pointOnSegmentInterior(point, segStart, segEnd) {
+    // Returns true if point lies on segment strictly between endpoints
+    const dx = segEnd.eastward - segStart.eastward;
+    const dy = segEnd.southward - segStart.southward;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < EPSILON) return false;
+    
+    // Check if point is on the infinite line
+    const cross = (point.southward - segStart.southward) * dx - (point.eastward - segStart.eastward) * dy;
+    if (Math.abs(cross) > EPSILON * len) return false;
+    
+    // Check parameter t along segment
+    const t = ((point.eastward - segStart.eastward) * dx + (point.southward - segStart.southward) * dy) / (len * len);
+    // Interior means strictly between endpoints
+    return t > EPSILON && t < 1 - EPSILON;
+  }
+  
+  // If p3 (endpoint of blocking edge) lies on interior of segment p1-p2, it's allowed
+  // because we're passing through the edge's endpoint (going around it)
+  if (pointOnSegmentInterior(p3, p1, p2) || pointOnSegmentInterior(p4, p1, p2)) {
+    return false;
+  }
+  
+  // Similarly, if p1 or p2 (our segment's endpoints) lie on the blocking edge, it's allowed
+  if (pointOnSegmentInterior(p1, p3, p4) || pointOnSegmentInterior(p2, p3, p4)) {
     return false;
   }
   
