@@ -287,3 +287,56 @@ export function getNextEdgeStartPoints(edges) {
   const identifiedSide = getIdentifiedSide(endPoint.side);
   return [{ side: identifiedSide, t: endPoint.t }];
 }
+
+/**
+ * Check if a loop can be closed by adding an edge from the last point to the first point.
+ * Returns { canClose: boolean, closingEdge?: Object, error?: string }
+ * 
+ * Requirements for closing:
+ * - Path must have at least 2 edges
+ * - First point must be a boundary point (not interior)
+ * - Last point must be a boundary point (not interior)
+ * - Closing edge must not be a same-side edge
+ * - Closing edge must not cross any existing edges
+ */
+export function canCloseLoop(edges) {
+  if (edges.length < 2) {
+    return { canClose: false, error: 'Need at least 2 edges to close a loop' };
+  }
+  
+  const firstPoint = edges[0].from;
+  const lastPoint = edges[edges.length - 1].to;
+  
+  // First point must be on boundary
+  if (isInteriorPoint(firstPoint)) {
+    return { canClose: false, error: 'First point must be on boundary to close loop' };
+  }
+  
+  // Last point must be on boundary
+  if (isInteriorPoint(lastPoint)) {
+    return { canClose: false, error: 'Last point must be on boundary to close loop' };
+  }
+  
+  // Get the continuation point (identified version of last point)
+  const continuationPoint = { side: getIdentifiedSide(lastPoint.side), t: lastPoint.t };
+  
+  // Create the closing edge
+  const closingEdge = { from: continuationPoint, to: firstPoint };
+  
+  // Check if same-side edge
+  if (isSameSideEdge(closingEdge)) {
+    return { canClose: false, error: 'Closing edge would be a same-side edge' };
+  }
+  
+  // Check if closing edge crosses any existing edges
+  const crossingResult = edgeCrossesPath(closingEdge, edges);
+  if (crossingResult.crosses) {
+    return { 
+      canClose: false, 
+      error: `Closing edge would cross existing edge #${crossingResult.crossingEdgeIndex + 1}`,
+      crossingEdgeIndex: crossingResult.crossingEdgeIndex
+    };
+  }
+  
+  return { canClose: true, closingEdge };
+}
