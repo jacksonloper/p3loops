@@ -432,6 +432,46 @@ export function edgesCross(edge1, edge2, state) {
     return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
   }
   
+  /**
+   * Check if a same-side arc contains an endpoint of another edge.
+   * A same-side arc from pos A to pos B contains pos C if C is strictly between A and B.
+   * This is a crossing because the arc must go around and cross the other edge.
+   */
+  function arcContainsEndpoint(arcEdge, otherEdge) {
+    // The arc is on a single side (same from.side and to.side)
+    if (arcEdge.from.side !== arcEdge.to.side) {
+      return false; // Not a same-side arc
+    }
+    
+    const arcSide = arcEdge.from.side;
+    const arcGroup = getSideGroup(arcSide);
+    const arcMin = Math.min(arcEdge.from.pos, arcEdge.to.pos);
+    const arcMax = Math.max(arcEdge.from.pos, arcEdge.to.pos);
+    
+    // Check if the other edge has an endpoint strictly inside this arc
+    // The endpoint must be on the SAME SIDE (not just same group) and going to a DIFFERENT side
+    function checkEndpoint(point, otherPoint) {
+      // Point must be on the same side as the arc
+      if (point.side !== arcSide) {
+        return false;
+      }
+      // The other point of this edge must go to a different side (not just along the boundary)
+      if (otherPoint.side === arcSide) {
+        return false; // Both endpoints on same side - this is another arc, handled separately
+      }
+      // Check if position is strictly inside arc
+      return point.pos > arcMin && point.pos < arcMax;
+    }
+    
+    return checkEndpoint(otherEdge.from, otherEdge.to) || 
+           checkEndpoint(otherEdge.to, otherEdge.from);
+  }
+  
+  // Check for same-side arc containing endpoint of the other edge
+  if (arcContainsEndpoint(edge1, edge2) || arcContainsEndpoint(edge2, edge1)) {
+    return true;
+  }
+  
   const e1_from = toPaper(edge1.from);
   const e1_to = toPaper(edge1.to);
   const e2_from = toPaper(edge2.from);

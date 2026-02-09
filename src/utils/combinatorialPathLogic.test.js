@@ -19,7 +19,8 @@ import {
   removeLastEdge,
   getNextStartPoint,
   importFromFloatEdges,
-  canCloseLoop
+  canCloseLoop,
+  getValidSegments
 } from './combinatorialPathLogic.js';
 
 describe('getSideGroup', () => {
@@ -201,6 +202,36 @@ describe('edgesCross', () => {
     };
     
     expect(edgesCross(edge1, edge2, state)).toBe(false);
+  });
+
+  it('should detect crossing when same-side arc contains endpoint of cross-group edge', () => {
+    // Bug fix test: A same-side arc from west(1) to west(3) that contains west(2),
+    // where an existing edge ends at west(2), should be detected as a crossing.
+    // This is because the arc must "go around" and cross the edge geometrically.
+    let state = createInitialState();
+    // Create 4 points on SW group (for west(0), west(1), west(2), west(3))
+    state = insertPoint(state, 'SW', 0, 'west');
+    state = insertPoint(state, 'SW', 1, 'west');
+    state = insertPoint(state, 'SW', 2, 'west');
+    state = insertPoint(state, 'SW', 3, 'west');
+    // Create 2 points on NE group (for north(0), north(1))
+    state = insertPoint(state, 'NE', 0, 'north');
+    state = insertPoint(state, 'NE', 1, 'north');
+    
+    // Same-side arc from west(1) to west(3)
+    const arcEdge = { 
+      from: { side: 'west', pos: 1 }, 
+      to: { side: 'west', pos: 3 } 
+    };
+    
+    // Cross-group edge that ends at west(2) - strictly inside the arc
+    const crossEdge = { 
+      from: { side: 'north', pos: 1 }, 
+      to: { side: 'west', pos: 2 } 
+    };
+    
+    // The arc contains the endpoint of the cross-group edge, so they cross
+    expect(edgesCross(arcEdge, crossEdge, state)).toBe(true);
   });
 });
 
@@ -537,5 +568,38 @@ describe('ordering preservation', () => {
       expect(getSideGroup(convFrom.side)).toBe(getSideGroup(origFrom.side));
       expect(getSideGroup(convTo.side)).toBe(getSideGroup(origTo.side));
     }
+  });
+});
+
+describe('getValidSegments - same-side arc crossing detection', () => {
+  it('should not allow west "after pt 3" when arc would contain edge endpoint', () => {
+    // Bug fix test: User reported that "west after point 3" was shown as valid
+    // when it should not be, because the arc would contain the endpoint of edge 2.
+    const floatEdges = [
+      { from: { side: "north", t: 0.125 }, to: { side: "west", t: 0.16666666666666666 } },
+      { from: { side: "south", t: 0.16666666666666666 }, to: { side: "east", t: 0.375 } },
+      { from: { side: "north", t: 0.375 }, to: { side: "west", t: 0.8333333333333334 } },
+      { from: { side: "south", t: 0.8333333333333334 }, to: { side: "east", t: 0.875 } },
+      { from: { side: "north", t: 0.875 }, to: { side: "north", t: 0.625 } },
+      { from: { side: "east", t: 0.625 }, to: { side: "south", t: 0.5 } }
+    ];
+    
+    const state = importFromFloatEdges(floatEdges);
+    const nextStart = getNextStartPoint(state);
+    
+    // nextStart should be west(1), since edge 5 ends at south(1), which continues from west(1)
+    expect(nextStart.side).toBe('west');
+    expect(nextStart.pos).toBe(1);
+    
+    const validSegments = getValidSegments(state, nextStart);
+    
+    // "west after pt 3" would be { startPos: 2, endPos: null, side: 'west' }
+    // This should NOT be in the valid segments because the arc from west(1) to west(3)
+    // would contain west(2), which is the endpoint of edge 2.
+    const westAfterPt3 = validSegments.find(
+      s => s.side === 'west' && s.startPos === 2 && s.endPos === null
+    );
+    
+    expect(westAfterPt3).toBeUndefined();
   });
 });
