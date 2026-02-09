@@ -507,4 +507,29 @@ describe('edge length sanity check', () => {
     // With correct handling, we should have 4 points (start + 3 edge endpoints)
     expect(points.length).toBe(4);
   });
+
+  it('should draw same-side edge along boundary, not across rhombus', () => {
+    // This is the example from the issue:
+    // The last edge is east(0.125) → east(0.625) which should stay along the east boundary
+    const sameSideEdges = [
+      { from: { side: 'north', t: 0.375 }, to: { side: 'west', t: 0.75 } },
+      { from: { side: 'south', t: 0.75 }, to: { side: 'north', t: 0.875 } },
+      { from: { side: 'east', t: 0.875 }, to: { side: 'south', t: 0.25 } },
+      { from: { side: 'west', t: 0.25 }, to: { side: 'north', t: 0.125 } },
+      // Same-side edge: east(0.125) → east(0.625)
+      // This should walk along the east boundary, not cross the rhombus
+      { from: { side: 'east', t: 0.125 }, to: { side: 'east', t: 0.625 } }
+    ];
+    
+    const points = pathToWallpaperPath(sameSideEdges);
+    
+    // The last edge should be short - just walking along the east boundary
+    // from t=0.125 to t=0.625, which is about 50% of a side length
+    const lastEdgeLength = distance(points[points.length - 2], points[points.length - 1]);
+    
+    // The edge should be at most the side length (300 * 0.5 = 150 units)
+    // but NOT crossing the entire rhombus (~519 units diameter)
+    const expectedMaxLength = SIDE * 0.6; // 60% of side length with tolerance
+    expect(lastEdgeLength).toBeLessThan(expectedMaxLength);
+  });
 });

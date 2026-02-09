@@ -308,6 +308,10 @@ function isSameSideEdge(edge) {
  * Convert a path (array of edges) to a continuous path in screen space,
  * "unfolding" the path as it crosses boundaries.
  * 
+ * Handles identified sides correctly: when the path crosses a boundary,
+ * the next edge's start point is at the same geometric position as the
+ * previous edge's end point, even if they're on identified sides.
+ * 
  * @param {Array} edges - Array of edge objects with from/to points
  * @returns {Array<{ x: number, y: number }>} - Array of screen-space points
  */
@@ -316,17 +320,84 @@ export function pathToWallpaperPath(edges) {
   
   const points = [];
   let currentFrame = createIdentityFrame();
+  // Track the "continuation side" - when crossing boundaries, we may need to
+  // draw the next edge's start point using the identified side's geometry
+  let lastEndSide = null;
+  let lastEndT = null;
   
   for (let i = 0; i < edges.length; i++) {
     const edge = edges[i];
     
-    // Add the starting point (except for subsequent edges where it's the same as previous end)
+    // Add the starting point
     if (i === 0) {
+      // First edge - use the from point directly
       points.push(pointToScreenSpace(edge.from, currentFrame));
+    } else {
+      // For subsequent edges, we already added the end point of the previous edge.
+      // But if this edge starts on an identified side (different from the previous end),
+      // we should NOT add a new point because it's geometrically the same position.
+      // The path should be continuous.
+      // 
+      // However, we need to check if the edge.from matches the expected continuation.
+      // If edge.from.side differs from lastEndSide but they're identified, it's the same point.
+      // If they're not identified, there's a gap (which shouldn't happen in valid paths).
+      
+      // Skip this logic for interior points or when we don't have previous side info
+      if (isInteriorPoint(edge.from) || lastEndSide === null) {
+        // Interior point or no previous side - add the from point
+        points.push(pointToScreenSpace(edge.from, currentFrame));
+      } else {
+        const fromSide = edge.from.side;
+        const fromT = edge.from.t;
+        
+        // Check if the from point is the same as the last end point (possibly via identification)
+        const sameSide = fromSide === lastEndSide;
+        const identifiedSide = getIdentifiedSide(lastEndSide) === fromSide;
+        const sameT = lastEndT !== null && Math.abs(fromT - lastEndT) < EPSILON;
+        
+        // If they're not at the same position (even considering identification), 
+        // we have a discontinuous path - add the from point
+        if (!((sameSide || identifiedSide) && sameT)) {
+          points.push(pointToScreenSpace(edge.from, currentFrame));
+        }
+        // Otherwise, skip adding the from point since it's the same as the last end point
+      }
+    }
+    
+    // Determine how to draw the endpoint
+    // If this is a same-side edge AND we entered from the identified side,
+    // we need to convert the to point to use the continuation side for proper visualization
+    let toPointForDrawing = edge.to;
+    
+    // Check if this edge is same-side but the sides are identified
+    // (e.g., edge.from.side is 'east' but we entered from 'north')
+    // In this case, we should draw using the north geometry to stay consistent
+    if (isSameSideEdge(edge) && lastEndSide !== null) {
+      const edgeFromSide = edge.from.side;
+      const expectedContinuationSide = getIdentifiedSide(lastEndSide);
+      
+      // If we entered from lastEndSide, and this edge is on the identified side,
+      // convert the to point to use the lastEndSide for drawing
+      if (edgeFromSide === expectedContinuationSide && edgeFromSide !== lastEndSide) {
+        // The edge is on the identified side - convert to use lastEndSide
+        // Since this is a same-side edge, to.side === from.side
+        // We should draw it using lastEndSide instead
+        toPointForDrawing = { side: lastEndSide, t: edge.to.t };
+      }
     }
     
     // Add the end point
-    points.push(pointToScreenSpace(edge.to, currentFrame));
+    points.push(pointToScreenSpace(toPointForDrawing, currentFrame));
+    
+    // Track the last endpoint (only for boundary points)
+    if (!isInteriorPoint(toPointForDrawing)) {
+      lastEndSide = toPointForDrawing.side;
+      lastEndT = toPointForDrawing.t;
+    } else {
+      // Interior point - reset tracking since we can't continue via identification
+      lastEndSide = null;
+      lastEndT = null;
+    }
     
     // If the endpoint is on a boundary AND this is not a same-side edge,
     // update the reference frame for the next edge.
