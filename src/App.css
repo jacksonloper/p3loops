@@ -21,9 +21,19 @@
 }
 
 .subtitle {
-  margin: 0;
+  margin: 0 0 0.5rem;
   opacity: 0.7;
   font-size: 0.95rem;
+}
+
+.nav-link {
+  color: #667eea;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
 }
 
 .editor-main {
