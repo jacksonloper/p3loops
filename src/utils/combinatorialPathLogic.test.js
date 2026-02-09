@@ -150,7 +150,7 @@ describe('pointsEqual', () => {
 });
 
 describe('edgesCross', () => {
-  it('should detect crossing chords', () => {
+  it('should detect crossing cross-group chords when positions interleave', () => {
     // Create a state with 2 points on each group
     let state = createInitialState();
     state = insertPoint(state, 'NE', 0, 'north');
@@ -164,7 +164,8 @@ describe('edgesCross', () => {
       to: { side: 'south', pos: 1 } 
     };
     
-    // Edge from NE[1] to SW[0] - this should cross edge1
+    // Edge from NE[1] to SW[0] - positions INTERLEAVE (0<1 && 1>0)
+    // These edges should CROSS
     const edge2 = { 
       from: { side: 'north', pos: 1 }, 
       to: { side: 'south', pos: 0 } 
@@ -173,7 +174,7 @@ describe('edgesCross', () => {
     expect(edgesCross(edge1, edge2, state)).toBe(true);
   });
 
-  it('should not detect crossing for parallel chords', () => {
+  it('should not detect crossing for parallel cross-group chords', () => {
     let state = createInitialState();
     state = insertPoint(state, 'NE', 0, 'north');
     state = insertPoint(state, 'NE', 1, 'north');
@@ -186,7 +187,8 @@ describe('edgesCross', () => {
       to: { side: 'south', pos: 0 } 
     };
     
-    // Edge from NE[1] to SW[1] - parallel, no crossing
+    // Edge from NE[1] to SW[1] - parallel, positions DON'T interleave
+    // These edges should NOT cross
     const edge2 = { 
       from: { side: 'north', pos: 1 }, 
       to: { side: 'south', pos: 1 } 

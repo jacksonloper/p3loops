@@ -364,17 +364,24 @@ export function segmentToString(segment) {
 /**
  * Check if two chords (edges) cross combinatorially.
  * 
+ * Due to side identifications (north≡east, south≡west), there are effectively
+ * TWO boundary components:
+ *   - NE boundary: north and east are identified (same ordered set of points)
+ *   - SW boundary: south and west are identified (same ordered set of points)
+ * 
  * Edge types:
- * 1. Cross-group edge (e.g., north→south): crosses between NE and SW groups
- * 2. Same-side edge (e.g., north→north): stays on one side of the boundary
- * 3. Cross-corner edge (e.g., north→east): crosses between identified sides in same group
+ * 1. Cross-group edge (NE→SW or SW→NE): like a chord between two parallel lines
+ * 2. Same-group edge (within NE or within SW): an arc along the boundary
  * 
- * For cross-group edges, we use the classic chord crossing check:
- *   - NE positions interleave with SW positions
+ * For cross-group edges, crossing is checked by the "interleaving" condition:
+ *   Edge 1: NE(a) → SW(b)
+ *   Edge 2: NE(c) → SW(d)
+ *   They cross iff (a < c && b > d) || (a > c && b < d)
  * 
- * For same-side edges, we check if position intervals overlap properly.
+ * For same-group edges (arcs), they cross if their intervals interleave.
  * 
- * For cross-corner edges, we convert to float positions and do geometric checking.
+ * For mixed cases (one cross-group, one same-group), the cross-group edge
+ * crosses the arc if it "passes through" the arc's interval on that boundary.
  * 
  * @param {Object} edge1 - First edge { from: point, to: point }
  * @param {Object} edge2 - Second edge { from: point, to: point }
@@ -390,128 +397,75 @@ export function edgesCross(edge1, edge2, state) {
   const edge1CrossGroup = group1from !== group1to;
   const edge2CrossGroup = group2from !== group2to;
   
-  const edge1SameSide = edge1.from.side === edge1.to.side;
-  const edge2SameSide = edge2.from.side === edge2.to.side;
+  const edge1SameGroup = !edge1CrossGroup;
+  const edge2SameGroup = !edge2CrossGroup;
   
-  const edge1CrossCorner = !edge1CrossGroup && !edge1SameSide;
-  const edge2CrossCorner = !edge2CrossGroup && !edge2SameSide;
-  
-  // Case 1: Both edges cross between groups
+  // Case 1: Both edges cross between groups (NE↔SW)
+  // They cross if their positions "interleave"
   if (edge1CrossGroup && edge2CrossGroup) {
-    let a, b, c, d;
+    // Normalize so we always have NE→SW
+    let ne1, sw1, ne2, sw2;
     
     if (group1from === 'NE') {
-      a = edge1.from.pos;
-      b = edge1.to.pos;
+      ne1 = edge1.from.pos;
+      sw1 = edge1.to.pos;
     } else {
-      a = edge1.to.pos;
-      b = edge1.from.pos;
+      ne1 = edge1.to.pos;
+      sw1 = edge1.from.pos;
     }
     
     if (group2from === 'NE') {
-      c = edge2.from.pos;
-      d = edge2.to.pos;
+      ne2 = edge2.from.pos;
+      sw2 = edge2.to.pos;
     } else {
-      c = edge2.to.pos;
-      d = edge2.from.pos;
+      ne2 = edge2.to.pos;
+      sw2 = edge2.from.pos;
     }
     
-    const maxNE = countPointsInGroup(state, 'NE');
-    const maxSW = countPointsInGroup(state, 'SW');
-    
-    const na = a / maxNE;
-    const nc = c / maxNE;
-    const nb = b / maxSW;
-    const nd = d / maxSW;
-    
-    return (na < nc && nd < nb) || (nc < na && nb < nd);
+    // Interleaving condition: (ne1 < ne2 && sw1 > sw2) || (ne1 > ne2 && sw1 < sw2)
+    return (ne1 < ne2 && sw1 > sw2) || (ne1 > ne2 && sw1 < sw2);
   }
   
-  // Case 2: Both edges are same-side
-  if (edge1SameSide && edge2SameSide) {
-    if (edge1.from.side !== edge2.from.side) {
-      return false; // Different sides, can't cross
+  // Case 2: Both edges are same-group (arcs within NE or SW)
+  if (edge1SameGroup && edge2SameGroup) {
+    // Different groups can't cross
+    if (group1from !== group2from) {
+      return false;
     }
     
+    // Same group: check if arc intervals interleave
     let a1 = edge1.from.pos, b1 = edge1.to.pos;
     let a2 = edge2.from.pos, b2 = edge2.to.pos;
     if (a1 > b1) [a1, b1] = [b1, a1];
     if (a2 > b2) [a2, b2] = [b2, a2];
     
+    // Interleaving: one arc starts inside the other and ends outside
     return (a1 < a2 && a2 < b1 && b1 < b2) || (a2 < a1 && a1 < b2 && b2 < b1);
   }
   
-  // Case 3: Cross-corner edge(s) involved
-  // Convert to float positions and use geometric intersection
-  if (edge1CrossCorner || edge2CrossCorner) {
-    const nNE = countPointsInGroup(state, 'NE');
-    const nSW = countPointsInGroup(state, 'SW');
-    
-    // Convert a point to paper coordinates (eastward, southward)
-    function toFloat(point) {
-      const group = getSideGroup(point.side);
-      const n = group === 'NE' ? nNE : nSW;
-      const t = (point.pos + 0.5) / Math.max(n, 1);
-      
-      // Map to paper coordinates based on side geometry
-      // north: NW (0,0) to NE (1,0)
-      // east: SE (1,1) to NE (1,0)
-      // south: SE (1,1) to SW (0,1)
-      // west: NW (0,0) to SW (0,1)
-      switch (point.side) {
-        case 'north': return { eastward: t, southward: 0 };
-        case 'east': return { eastward: 1, southward: 1 - t };
-        case 'south': return { eastward: 1 - t, southward: 1 };
-        case 'west': return { eastward: 0, southward: t };
-        default: throw new Error(`Unknown side: ${point.side}`);
-      }
-    }
-    
-    // Check segment intersection
-    function segmentsIntersect(p1, p2, p3, p4) {
-      function ccw(A, B, C) {
-        return (C.eastward - A.eastward) * (B.southward - A.southward) > 
-               (B.eastward - A.eastward) * (C.southward - A.southward);
-      }
-      
-      function pointsClose(a, b) {
-        const eps = 0.0001;
-        return Math.abs(a.southward - b.southward) < eps && 
-               Math.abs(a.eastward - b.eastward) < eps;
-      }
-      
-      if (pointsClose(p1, p3) || pointsClose(p1, p4) || pointsClose(p2, p3) || pointsClose(p2, p4)) {
-        return false;
-      }
-      
-      return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
-    }
-    
-    const e1_from = toFloat(edge1.from);
-    const e1_to = toFloat(edge1.to);
-    const e2_from = toFloat(edge2.from);
-    const e2_to = toFloat(edge2.to);
-    
-    return segmentsIntersect(e1_from, e1_to, e2_from, e2_to);
-  }
-  
-  // Case 4: One edge crosses groups, the other is same-side
+  // Case 3: One edge crosses groups, the other is same-group
+  // The cross-group edge has one endpoint in each group.
+  // The same-group edge is an arc within one group.
+  // They cross if the cross-group edge "passes through" the arc's interval.
   const crossEdge = edge1CrossGroup ? edge1 : edge2;
-  const sameEdge = edge1CrossGroup ? edge2 : edge1;
+  const arcEdge = edge1CrossGroup ? edge2 : edge1;
   
-  const sameGroup = getSideGroup(sameEdge.from.side);
+  const arcGroup = getSideGroup(arcEdge.from.side);
   
+  // Get the cross-group edge's position in the arc's group
   let crossPos;
-  if (getSideGroup(crossEdge.from.side) === sameGroup) {
+  if (getSideGroup(crossEdge.from.side) === arcGroup) {
     crossPos = crossEdge.from.pos;
   } else {
     crossPos = crossEdge.to.pos;
   }
   
-  let sameMin = Math.min(sameEdge.from.pos, sameEdge.to.pos);
-  let sameMax = Math.max(sameEdge.from.pos, sameEdge.to.pos);
+  // Get the arc's interval
+  let arcMin = Math.min(arcEdge.from.pos, arcEdge.to.pos);
+  let arcMax = Math.max(arcEdge.from.pos, arcEdge.to.pos);
   
-  return crossPos > sameMin && crossPos < sameMax;
+  // Cross-group edge crosses the arc if its position is strictly inside the arc interval
+  return crossPos > arcMin && crossPos < arcMax;
 }
 
 /**
