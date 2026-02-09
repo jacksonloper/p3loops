@@ -2,9 +2,9 @@ import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import {
   getPointOnBowedSide,
   getBowedRhombusPath,
+  getBowedSideSegmentPath,
   getSize,
   getShear,
-  getIdentifiedSide,
   getPointOnSide
 } from '../utils/geometry.js';
 import { getSideGroup } from '../utils/combinatorialPathLogic.js';
@@ -22,49 +22,51 @@ const TAP_MAX_DISTANCE = 10;      // Maximum movement for a tap (in screen pixel
 /**
  * Calculate segment coordinates for display/interaction using bowed positions.
  * Now segment has a specific `side` (not just group).
- * Returns coordinates only for that specific side.
+ * Returns coordinates only for that specific side, including an SVG path
+ * that follows the curved boundary.
  */
 function getSegmentCoords(segment, allPoints) {
   const side = segment.side;
   const group = getSideGroup(side);
-  const canonicalSide = group === 'NE' ? 'north' : 'south';
-  const identifiedSide = getIdentifiedSide(canonicalSide);
   
-  // Get the points in this group (for position calculation)
-  const groupPoints = allPoints.filter(p => 
-    p.side === canonicalSide || p.side === identifiedSide
-  ).sort((a, b) => a.t - b.t);
+  // Get the points in this group (filter by group, not by side, since all points
+  // in a group share the same t values regardless of which identified side they're on)
+  const groupPoints = allPoints.filter(p => p.group === group);
   
-  // Determine t range for the segment
+  // Determine t range for the segment by looking up points by their pos field,
+  // NOT by array index. The segment.startPos/endPos are position indices that
+  // correspond to the point's pos field, not array indices.
   let startT, endT;
   if (segment.startPos === null && segment.endPos === null) {
     startT = 0;
     endT = 1;
   } else if (segment.startPos === null) {
+    const endPoint = groupPoints.find(p => p.pos === segment.endPos);
     startT = 0;
-    endT = groupPoints[segment.endPos]?.t ?? 0;
+    endT = endPoint?.t ?? 0;
   } else if (segment.endPos === null) {
-    startT = groupPoints[segment.startPos]?.t ?? 1;
+    const startPoint = groupPoints.find(p => p.pos === segment.startPos);
+    startT = startPoint?.t ?? 1;
     endT = 1;
   } else {
-    startT = groupPoints[segment.startPos]?.t ?? 0;
-    endT = groupPoints[segment.endPos]?.t ?? 1;
+    const startPoint = groupPoints.find(p => p.pos === segment.startPos);
+    const endPoint = groupPoints.find(p => p.pos === segment.endPos);
+    startT = startPoint?.t ?? 0;
+    endT = endPoint?.t ?? 1;
   }
   
   // Calculate the midpoint (where the new point would go)
   const midT = (startT + endT) / 2;
   
-  // Get coordinates only for the segment's specific side (using bowed positions)
-  const startPt = getPointOnBowedSide(side, startT);
-  const endPt = getPointOnBowedSide(side, endT);
+  // Get the SVG path for this curved segment
+  const pathD = getBowedSideSegmentPath(side, startT, endT);
+  
+  // Get the midpoint coordinates for the marker
   const midPt = getPointOnBowedSide(side, midT);
   
   return [{
     side,
-    x1: startPt.x,
-    y1: startPt.y,
-    x2: endPt.x,
-    y2: endPt.y,
+    pathD,
     midX: midPt.x,
     midY: midPt.y,
     startT,
@@ -455,26 +457,22 @@ function CombinatorialRhombus({
         {/* Clickable segment regions (for each available segment) */}
         {onSegmentClick && availableSegmentCoords.map(({ segment, index, coords }) => {
           const isSelected = isSegmentSelected(segment);
-          return coords.map((line, lineIdx) => (
+          return coords.map((segmentData, lineIdx) => (
             <g key={`clickable-${index}-${lineIdx}`}>
               {/* Invisible wider hit area for easier clicking */}
-              <line
-                x1={line.x1}
-                y1={line.y1}
-                x2={line.x2}
-                y2={line.y2}
+              <path
+                d={segmentData.pathD}
                 className="segment-hitarea"
                 strokeWidth={baseSegmentHitareaWidth * strokeScale}
+                fill="none"
                 onClick={() => handleSegmentClick(segment)}
               />
               {/* Visible segment indicator */}
-              <line
-                x1={line.x1}
-                y1={line.y1}
-                x2={line.x2}
-                y2={line.y2}
+              <path
+                d={segmentData.pathD}
                 className={`segment-available ${isSelected ? 'segment-selected' : ''}`}
                 strokeWidth={baseSegmentStrokeWidth * strokeScale}
+                fill="none"
                 onClick={() => handleSegmentClick(segment)}
               />
             </g>
@@ -482,19 +480,17 @@ function CombinatorialRhombus({
         })}
         
         {/* "From" segment highlight for first edge creation (green) */}
-        {fromSegmentCoords && fromSegmentCoords.map((line, idx) => (
+        {fromSegmentCoords && fromSegmentCoords.map((segmentData, idx) => (
           <g key={`from-${idx}`}>
-            <line
-              x1={line.x1}
-              y1={line.y1}
-              x2={line.x2}
-              y2={line.y2}
+            <path
+              d={segmentData.pathD}
               className="segment-from"
               strokeWidth={6 * strokeScale}
+              fill="none"
             />
             <circle
-              cx={line.midX}
-              cy={line.midY}
+              cx={segmentData.midX}
+              cy={segmentData.midY}
               r={baseMidpointRadius * strokeScale}
               className="segment-from-midpoint"
               strokeWidth={2 * strokeScale}
@@ -503,19 +499,17 @@ function CombinatorialRhombus({
         ))}
         
         {/* Selected segment highlight on both identified sides */}
-        {selectedSegmentCoords && selectedSegmentCoords.map((line, idx) => (
+        {selectedSegmentCoords && selectedSegmentCoords.map((segmentData, idx) => (
           <g key={`selected-${idx}`}>
-            <line
-              x1={line.x1}
-              y1={line.y1}
-              x2={line.x2}
-              y2={line.y2}
+            <path
+              d={segmentData.pathD}
               className="segment-highlight"
               strokeWidth={6 * strokeScale}
+              fill="none"
             />
             <circle
-              cx={line.midX}
-              cy={line.midY}
+              cx={segmentData.midX}
+              cy={segmentData.midY}
               r={baseMidpointRadius * strokeScale}
               className="segment-midpoint"
               strokeWidth={2 * strokeScale}
