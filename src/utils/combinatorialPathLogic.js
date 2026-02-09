@@ -144,43 +144,50 @@ export function pointsEqual(p1, p2) {
 }
 
 /**
- * Get all segments on a side group.
+ * Get all segments on a specific side.
  * A segment is between two adjacent points, or from "start" to first point,
  * or from last point to "end".
  * 
- * Returns array of { startPos: number | null, endPos: number | null, group: string }
+ * Returns array of { startPos: number | null, endPos: number | null, side: string }
  * where null represents the boundary (before first / after last).
+ * 
+ * @param {Object} state - Current state
+ * @param {string} side - The specific side (north, east, south, west)
  */
-export function getSegmentsInGroup(state, group) {
+export function getSegmentsOnSide(state, side) {
+  const group = getSideGroup(side);
   const points = getPointsInGroup(state, group);
   const segments = [];
   
   // If no points, there's one segment spanning the whole side
   if (points.length === 0) {
-    segments.push({ startPos: null, endPos: null, group });
+    segments.push({ startPos: null, endPos: null, side });
   } else {
     // Segment from start to first point
-    segments.push({ startPos: null, endPos: 0, group });
+    segments.push({ startPos: null, endPos: 0, side });
     
     // Segments between adjacent points
     for (let i = 0; i < points.length - 1; i++) {
-      segments.push({ startPos: i, endPos: i + 1, group });
+      segments.push({ startPos: i, endPos: i + 1, side });
     }
     
     // Segment from last point to end
-    segments.push({ startPos: points.length - 1, endPos: null, group });
+    segments.push({ startPos: points.length - 1, endPos: null, side });
   }
   
   return segments;
 }
 
 /**
- * Get all available segments (on all side groups) that can be targeted.
+ * Get all available segments on all four sides.
+ * Each segment now includes its specific side, not just the group.
  */
 export function getAllSegments(state) {
   return [
-    ...getSegmentsInGroup(state, 'NE'),
-    ...getSegmentsInGroup(state, 'SW')
+    ...getSegmentsOnSide(state, 'north'),
+    ...getSegmentsOnSide(state, 'east'),
+    ...getSegmentsOnSide(state, 'south'),
+    ...getSegmentsOnSide(state, 'west')
   ];
 }
 
@@ -190,10 +197,12 @@ export function getAllSegments(state) {
  * 
  * @param {Object} state - Current state
  * @param {Object} fromPoint - Starting point { side, pos }
- * @param {Object} segment - Target segment { startPos, endPos, group }
+ * @param {Object} segment - Target segment { startPos, endPos, side }
  * @returns {boolean} True if the edge would cause a crossing
  */
 export function wouldSegmentCauseCrossing(state, fromPoint, segment) {
+  const segmentGroup = getSideGroup(segment.side);
+  
   // Calculate where the new point would be inserted
   let insertIndex;
   if (segment.startPos === null) {
@@ -204,22 +213,22 @@ export function wouldSegmentCauseCrossing(state, fromPoint, segment) {
   
   // Adjust the fromPoint's position if it's in the same group and at or after the insert position
   let adjustedFromPoint = { ...fromPoint };
-  if (getSideGroup(fromPoint.side) === segment.group && fromPoint.pos >= insertIndex) {
+  if (getSideGroup(fromPoint.side) === segmentGroup && fromPoint.pos >= insertIndex) {
     adjustedFromPoint = { ...fromPoint, pos: fromPoint.pos + 1 };
   }
   
   // Create a temporary state with the new point inserted
-  const tempState = insertPoint(state, segment.group, insertIndex, segment.group === 'NE' ? 'north' : 'south');
+  const tempState = insertPoint(state, segmentGroup, insertIndex, segment.side);
   
   // Adjust existing edge positions in temp state
   const adjustedEdges = tempState.edges.map(edge => {
     let newFrom = { ...edge.from };
     let newTo = { ...edge.to };
     
-    if (getSideGroup(edge.from.side) === segment.group && edge.from.pos >= insertIndex) {
+    if (getSideGroup(edge.from.side) === segmentGroup && edge.from.pos >= insertIndex) {
       newFrom = { ...edge.from, pos: edge.from.pos + 1 };
     }
-    if (getSideGroup(edge.to.side) === segment.group && edge.to.pos >= insertIndex) {
+    if (getSideGroup(edge.to.side) === segmentGroup && edge.to.pos >= insertIndex) {
       newTo = { ...edge.to, pos: edge.to.pos + 1 };
     }
     
@@ -228,8 +237,8 @@ export function wouldSegmentCauseCrossing(state, fromPoint, segment) {
   
   const tempStateWithAdjustedEdges = { ...tempState, edges: adjustedEdges };
   
-  // Create the hypothetical new edge
-  const newToPoint = { side: segment.group === 'NE' ? 'north' : 'south', pos: insertIndex };
+  // Create the hypothetical new edge using the segment's specific side
+  const newToPoint = { side: segment.side, pos: insertIndex };
   const newEdge = { from: adjustedFromPoint, to: newToPoint };
   
   // Check if it would cross
@@ -257,19 +266,28 @@ export function getValidSegments(state, fromPoint) {
 }
 
 /**
+ * Capitalize first letter of a string.
+ */
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
  * Convert a segment to a descriptive string for UI.
+ * Now shows the specific side with its identification noted.
  */
 export function segmentToString(segment) {
-  const groupName = segment.group === 'NE' ? 'North/East' : 'South/West';
+  const sideName = capitalize(segment.side);
+  const identifiedSide = capitalize(getIdentifiedSide(segment.side));
   
   if (segment.startPos === null && segment.endPos === null) {
-    return `${groupName}: entire side`;
+    return `${sideName} (≡${identifiedSide}): entire side`;
   } else if (segment.startPos === null) {
-    return `${groupName}: before point ${segment.endPos + 1}`;
+    return `${sideName}: before pt ${segment.endPos + 1}`;
   } else if (segment.endPos === null) {
-    return `${groupName}: after point ${segment.startPos + 1}`;
+    return `${sideName}: after pt ${segment.startPos + 1}`;
   } else {
-    return `${groupName}: between points ${segment.startPos + 1} and ${segment.endPos + 1}`;
+    return `${sideName}: pts ${segment.startPos + 1}–${segment.endPos + 1}`;
   }
 }
 
@@ -422,18 +440,15 @@ export function getNextStartPoint(state) {
 /**
  * Add a new edge to a segment.
  * This creates a new point in the segment and adds the edge.
+ * Now the segment already contains the specific side (not just group).
  * 
  * @param {Object} state - Current state
  * @param {Object} fromPoint - Starting point { side, pos }
- * @param {Object} segment - Target segment { startPos, endPos, group }
- * @param {string} targetSide - The side to place the new point on (north, east, south, west)
+ * @param {Object} segment - Target segment { startPos, endPos, side }
  * @returns {{ newState: Object, error?: string }}
  */
-export function addEdgeToSegment(state, fromPoint, segment, targetSide) {
-  // Validate that targetSide matches the segment's group
-  if (getSideGroup(targetSide) !== segment.group) {
-    return { newState: null, error: 'Target side does not match segment group' };
-  }
+export function addEdgeToSegment(state, fromPoint, segment) {
+  const segmentGroup = getSideGroup(segment.side);
   
   // Calculate where to insert the new point
   // If segment is { startPos: null, endPos: 0 }, insert at position 0
@@ -447,12 +462,12 @@ export function addEdgeToSegment(state, fromPoint, segment, targetSide) {
   }
   
   // Insert the new point
-  let newState = insertPoint(state, segment.group, insertIndex, targetSide);
+  let newState = insertPoint(state, segmentGroup, insertIndex, segment.side);
   
   // The fromPoint's position might need adjustment if it's in the same group
   // and at or after the insert position
   let adjustedFromPoint = { ...fromPoint };
-  if (getSideGroup(fromPoint.side) === segment.group && fromPoint.pos >= insertIndex) {
+  if (getSideGroup(fromPoint.side) === segmentGroup && fromPoint.pos >= insertIndex) {
     adjustedFromPoint = { ...fromPoint, pos: fromPoint.pos + 1 };
   }
   
@@ -461,10 +476,10 @@ export function addEdgeToSegment(state, fromPoint, segment, targetSide) {
     let newFrom = { ...edge.from };
     let newTo = { ...edge.to };
     
-    if (getSideGroup(edge.from.side) === segment.group && edge.from.pos >= insertIndex) {
+    if (getSideGroup(edge.from.side) === segmentGroup && edge.from.pos >= insertIndex) {
       newFrom = { ...edge.from, pos: edge.from.pos + 1 };
     }
-    if (getSideGroup(edge.to.side) === segment.group && edge.to.pos >= insertIndex) {
+    if (getSideGroup(edge.to.side) === segmentGroup && edge.to.pos >= insertIndex) {
       newTo = { ...edge.to, pos: edge.to.pos + 1 };
     }
     
@@ -473,8 +488,8 @@ export function addEdgeToSegment(state, fromPoint, segment, targetSide) {
   
   newState = { ...newState, edges: adjustedEdges };
   
-  // Create the new edge
-  const newToPoint = { side: targetSide, pos: insertIndex };
+  // Create the new edge using the segment's specific side
+  const newToPoint = { side: segment.side, pos: insertIndex };
   const newEdge = { from: adjustedFromPoint, to: newToPoint };
   
   // Check for crossing (need to temporarily add the new point to state for crossing check)
@@ -506,25 +521,27 @@ export function addEdgeToSegment(state, fromPoint, segment, targetSide) {
 
 /**
  * Add the first edge (no previous edge to chain from).
+ * Now segments already contain their specific side (not just group).
  * 
  * @param {Object} state - Current state
- * @param {Object} fromSegment - Starting segment 
- * @param {string} fromSide - Side for the starting point
- * @param {Object} toSegment - Target segment
- * @param {string} toSide - Side for the ending point
+ * @param {Object} fromSegment - Starting segment { startPos, endPos, side }
+ * @param {Object} toSegment - Target segment { startPos, endPos, side }
  */
-export function addFirstEdge(state, fromSegment, fromSide, toSegment, toSide) {
+export function addFirstEdge(state, fromSegment, toSegment) {
   // Insert both points
   let newState = state;
+  
+  const fromGroup = getSideGroup(fromSegment.side);
+  const toGroup = getSideGroup(toSegment.side);
   
   // Calculate insert indices
   let fromInsertIndex = fromSegment.startPos === null ? 0 : fromSegment.startPos + 1;
   let toInsertIndex = toSegment.startPos === null ? 0 : toSegment.startPos + 1;
   
   // If both are in the same group, we need to be careful about ordering
-  if (fromSegment.group === toSegment.group) {
+  if (fromGroup === toGroup) {
     // Insert the first point
-    newState = insertPoint(newState, fromSegment.group, fromInsertIndex, fromSide);
+    newState = insertPoint(newState, fromGroup, fromInsertIndex, fromSegment.side);
     
     // Adjust toInsertIndex if it's at or after fromInsertIndex
     if (toInsertIndex >= fromInsertIndex) {
@@ -532,7 +549,7 @@ export function addFirstEdge(state, fromSegment, fromSide, toSegment, toSide) {
     }
     
     // Insert the second point
-    newState = insertPoint(newState, toSegment.group, toInsertIndex, toSide);
+    newState = insertPoint(newState, toGroup, toInsertIndex, toSegment.side);
     
     // Create the edge
     let fromPos = fromInsertIndex;
@@ -545,19 +562,19 @@ export function addFirstEdge(state, fromSegment, fromSide, toSegment, toSide) {
     }
     
     const newEdge = {
-      from: { side: fromSide, pos: fromPos },
-      to: { side: toSide, pos: toPos }
+      from: { side: fromSegment.side, pos: fromPos },
+      to: { side: toSegment.side, pos: toPos }
     };
     
     newState = { ...newState, edges: [newEdge] };
   } else {
     // Different groups, simpler
-    newState = insertPoint(newState, fromSegment.group, fromInsertIndex, fromSide);
-    newState = insertPoint(newState, toSegment.group, toInsertIndex, toSide);
+    newState = insertPoint(newState, fromGroup, fromInsertIndex, fromSegment.side);
+    newState = insertPoint(newState, toGroup, toInsertIndex, toSegment.side);
     
     const newEdge = {
-      from: { side: fromSide, pos: fromInsertIndex },
-      to: { side: toSide, pos: toInsertIndex }
+      from: { side: fromSegment.side, pos: fromInsertIndex },
+      to: { side: toSegment.side, pos: toInsertIndex }
     };
     
     newState = { ...newState, edges: [newEdge] };

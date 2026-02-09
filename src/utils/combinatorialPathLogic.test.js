@@ -8,7 +8,7 @@ import {
   getSideGroup,
   sidesAreIdentified,
   insertPoint,
-  getSegmentsInGroup,
+  getSegmentsOnSide,
   getAllSegments,
   pointsEqual,
   edgesCross,
@@ -83,46 +83,49 @@ describe('insertPoint', () => {
   });
 });
 
-describe('getSegmentsInGroup', () => {
-  it('should return one segment for empty group', () => {
+describe('getSegmentsOnSide', () => {
+  it('should return one segment for empty side', () => {
     const state = createInitialState();
-    const segments = getSegmentsInGroup(state, 'NE');
+    const segments = getSegmentsOnSide(state, 'north');
     
     expect(segments.length).toBe(1);
-    expect(segments[0]).toEqual({ startPos: null, endPos: null, group: 'NE' });
+    expect(segments[0]).toEqual({ startPos: null, endPos: null, side: 'north' });
   });
 
   it('should return two segments for one point', () => {
     let state = createInitialState();
     state = insertPoint(state, 'NE', 0, 'north');
-    const segments = getSegmentsInGroup(state, 'NE');
+    const segments = getSegmentsOnSide(state, 'north');
     
     expect(segments.length).toBe(2);
-    expect(segments[0]).toEqual({ startPos: null, endPos: 0, group: 'NE' });
-    expect(segments[1]).toEqual({ startPos: 0, endPos: null, group: 'NE' });
+    expect(segments[0]).toEqual({ startPos: null, endPos: 0, side: 'north' });
+    expect(segments[1]).toEqual({ startPos: 0, endPos: null, side: 'north' });
   });
 
   it('should return three segments for two points', () => {
     let state = createInitialState();
     state = insertPoint(state, 'NE', 0, 'north');
     state = insertPoint(state, 'NE', 1, 'east');
-    const segments = getSegmentsInGroup(state, 'NE');
+    const segments = getSegmentsOnSide(state, 'north');
     
     expect(segments.length).toBe(3);
-    expect(segments[0]).toEqual({ startPos: null, endPos: 0, group: 'NE' });
-    expect(segments[1]).toEqual({ startPos: 0, endPos: 1, group: 'NE' });
-    expect(segments[2]).toEqual({ startPos: 1, endPos: null, group: 'NE' });
+    expect(segments[0]).toEqual({ startPos: null, endPos: 0, side: 'north' });
+    expect(segments[1]).toEqual({ startPos: 0, endPos: 1, side: 'north' });
+    expect(segments[2]).toEqual({ startPos: 1, endPos: null, side: 'north' });
   });
 });
 
 describe('getAllSegments', () => {
-  it('should return segments from both groups', () => {
+  it('should return segments from all four sides', () => {
     const state = createInitialState();
     const segments = getAllSegments(state);
     
-    expect(segments.length).toBe(2);
-    expect(segments.some(s => s.group === 'NE')).toBe(true);
-    expect(segments.some(s => s.group === 'SW')).toBe(true);
+    // 4 sides, each with 1 segment (empty state)
+    expect(segments.length).toBe(4);
+    expect(segments.some(s => s.side === 'north')).toBe(true);
+    expect(segments.some(s => s.side === 'east')).toBe(true);
+    expect(segments.some(s => s.side === 'south')).toBe(true);
+    expect(segments.some(s => s.side === 'west')).toBe(true);
   });
 });
 
@@ -194,12 +197,12 @@ describe('edgesCross', () => {
 });
 
 describe('addFirstEdge', () => {
-  it('should add the first edge between two groups', () => {
+  it('should add the first edge between two sides', () => {
     const state = createInitialState();
-    const fromSegment = { startPos: null, endPos: null, group: 'NE' };
-    const toSegment = { startPos: null, endPos: null, group: 'SW' };
+    const fromSegment = { startPos: null, endPos: null, side: 'north' };
+    const toSegment = { startPos: null, endPos: null, side: 'south' };
     
-    const { newState } = addFirstEdge(state, fromSegment, 'north', toSegment, 'south');
+    const { newState } = addFirstEdge(state, fromSegment, toSegment);
     
     expect(newState.points.NE.length).toBe(1);
     expect(newState.points.SW.length).toBe(1);
@@ -212,19 +215,19 @@ describe('addFirstEdge', () => {
 describe('addEdgeToSegment', () => {
   it('should add an edge from existing point to segment', () => {
     const state = createInitialState();
-    const fromSegment = { startPos: null, endPos: null, group: 'NE' };
-    const toSegment = { startPos: null, endPos: null, group: 'SW' };
+    const fromSegment = { startPos: null, endPos: null, side: 'north' };
+    const toSegment = { startPos: null, endPos: null, side: 'south' };
     
-    const { newState: state1 } = addFirstEdge(state, fromSegment, 'north', toSegment, 'south');
+    const { newState: state1 } = addFirstEdge(state, fromSegment, toSegment);
     
     // Now add from identified side (west, which equals south)
     const startPoint = getNextStartPoint(state1);
     expect(startPoint.side).toBe('west');
     
-    // Add edge to a new segment on NE
-    const segments = getSegmentsInGroup(state1, 'NE');
+    // Add edge to a new segment on north side
+    const segments = getSegmentsOnSide(state1, 'north');
     // There should be 2 segments now (before and after the one point)
-    const result = addEdgeToSegment(state1, startPoint, segments[1], 'north');
+    const result = addEdgeToSegment(state1, startPoint, segments[1]);
     
     expect(result.newState.edges.length).toBe(2);
     expect(result.newState.points.NE.length).toBe(2);
@@ -253,10 +256,10 @@ describe('edgeToFloat', () => {
 describe('removeLastEdge', () => {
   it('should remove the last edge and its endpoint', () => {
     const state = createInitialState();
-    const fromSegment = { startPos: null, endPos: null, group: 'NE' };
-    const toSegment = { startPos: null, endPos: null, group: 'SW' };
+    const fromSegment = { startPos: null, endPos: null, side: 'north' };
+    const toSegment = { startPos: null, endPos: null, side: 'south' };
     
-    const { newState: state1 } = addFirstEdge(state, fromSegment, 'north', toSegment, 'south');
+    const { newState: state1 } = addFirstEdge(state, fromSegment, toSegment);
     
     expect(state1.edges.length).toBe(1);
     expect(state1.points.SW.length).toBe(1);

@@ -7,17 +7,21 @@ import {
   getIdentifiedSide
 } from '../utils/geometry.js';
 import { getEdgeCoordinates } from '../utils/pathLogic.js';
+import { getSideGroup } from '../utils/combinatorialPathLogic.js';
 import './CombinatorialRhombus.css';
 
 /**
  * Calculate segment coordinates for display/interaction.
+ * Now segment has a specific `side` (not just group).
+ * Returns coordinates only for that specific side.
  */
 function getSegmentCoords(segment, allPoints) {
-  const group = segment.group;
+  const side = segment.side;
+  const group = getSideGroup(side);
   const canonicalSide = group === 'NE' ? 'north' : 'south';
   const identifiedSide = getIdentifiedSide(canonicalSide);
   
-  // Get the points in this group
+  // Get the points in this group (for position calculation)
   const groupPoints = allPoints.filter(p => 
     p.side === canonicalSide || p.side === identifiedSide
   ).sort((a, b) => a.t - b.t);
@@ -41,28 +45,23 @@ function getSegmentCoords(segment, allPoints) {
   // Calculate the midpoint (where the new point would go)
   const midT = (startT + endT) / 2;
   
-  // Get coordinates on both identified sides
-  const lines = [];
-  for (const side of [canonicalSide, identifiedSide]) {
-    const startPt = getPointOnSide(side, startT);
-    const endPt = getPointOnSide(side, endT);
-    const midPt = getPointOnSide(side, midT);
-    
-    lines.push({
-      side,
-      x1: startPt.x,
-      y1: startPt.y,
-      x2: endPt.x,
-      y2: endPt.y,
-      midX: midPt.x,
-      midY: midPt.y,
-      startT,
-      endT,
-      midT
-    });
-  }
+  // Get coordinates only for the segment's specific side
+  const startPt = getPointOnSide(side, startT);
+  const endPt = getPointOnSide(side, endT);
+  const midPt = getPointOnSide(side, midT);
   
-  return lines;
+  return [{
+    side,
+    x1: startPt.x,
+    y1: startPt.y,
+    x2: endPt.x,
+    y2: endPt.y,
+    midX: midPt.x,
+    midY: midPt.y,
+    startT,
+    endT,
+    midT
+  }];
 }
 
 /**
@@ -72,26 +71,22 @@ function getSegmentCoords(segment, allPoints) {
  * 
  * @param {Object[]} floatEdges - Array of float edge objects for visualization
  * @param {Object[]} allPoints - Array of point info { side, pos, group, t }
- * @param {Object|null} selectedSegment - Currently selected segment { startPos, endPos, group }
- * @param {string|null} selectedTargetSide - The specific side (north/east/south/west) selected
+ * @param {Object|null} selectedSegment - Currently selected segment { startPos, endPos, side }
  * @param {Object[]} availableSegments - Array of valid segments that can be clicked
  * @param {Object|null} nextStartPoint - The starting point for the next edge
  * @param {number|null} highlightedEdgeIndex - Index of edge to highlight (for crossing errors)
  * @param {Function|null} onSegmentClick - Callback when a segment is clicked
  * @param {Object|null} firstEdgeFromSegment - The "from" segment when creating first edge
- * @param {string|null} firstEdgeFromSide - The specific side for the "from" segment
  */
 function CombinatorialRhombus({ 
   floatEdges, 
   allPoints, 
   selectedSegment, 
-  selectedTargetSide = null,
   availableSegments = [],
   nextStartPoint,
   highlightedEdgeIndex = null,
   onSegmentClick = null,
-  firstEdgeFromSegment = null,
-  firstEdgeFromSide = null
+  firstEdgeFromSegment = null
 }) {
   const size = getSize();
   const shear = getShear();
@@ -135,28 +130,17 @@ function CombinatorialRhombus({
   }, [availableSegments, allPoints]);
   
   // Calculate highlighted segment line if a segment is selected
-  // If a specific side is selected, only show that side
+  // Since segment now has specific side, just use it directly
   const selectedSegmentCoords = useMemo(() => {
     if (!selectedSegment) return null;
-    const allCoords = getSegmentCoords(selectedSegment, allPoints);
-    // If a specific target side is selected, only return that side's coords
-    if (selectedTargetSide) {
-      return allCoords.filter(coord => coord.side === selectedTargetSide);
-    }
-    return allCoords;
-  }, [selectedSegment, selectedTargetSide, allPoints]);
+    return getSegmentCoords(selectedSegment, allPoints);
+  }, [selectedSegment, allPoints]);
   
   // Calculate "from" segment highlight for first edge creation
-  // If a specific side is selected, only show that side
   const fromSegmentCoords = useMemo(() => {
     if (!firstEdgeFromSegment) return null;
-    const allCoords = getSegmentCoords(firstEdgeFromSegment, allPoints);
-    // If a specific from side is selected, only return that side's coords
-    if (firstEdgeFromSide) {
-      return allCoords.filter(coord => coord.side === firstEdgeFromSide);
-    }
-    return allCoords;
-  }, [firstEdgeFromSegment, firstEdgeFromSide, allPoints]);
+    return getSegmentCoords(firstEdgeFromSegment, allPoints);
+  }, [firstEdgeFromSegment, allPoints]);
   
   // Handle segment click
   const handleSegmentClick = useCallback((segment) => {
@@ -168,7 +152,7 @@ function CombinatorialRhombus({
   // Check if a segment is the selected one
   const isSegmentSelected = useCallback((segment) => {
     if (!selectedSegment) return false;
-    return segment.group === selectedSegment.group && 
+    return segment.side === selectedSegment.side && 
            segment.startPos === selectedSegment.startPos && 
            segment.endPos === selectedSegment.endPos;
   }, [selectedSegment]);

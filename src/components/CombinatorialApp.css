@@ -74,19 +74,45 @@
   color: #888;
 }
 
-.segment-group {
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+/* 2x2 grid for 4 sides */
+.sides-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
 }
+
+.segment-group {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+
+.segment-group h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.segment-group .side-id {
+  font-weight: normal;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+/* Color-code each side */
+.side-north h4 { color: #4fc3f7; }
+.side-east h4 { color: #64b5f6; }
+.side-south h4 { color: #ff8a65; }
+.side-west h4 { color: #ffb74d; }
 
 .segment-radio {
   display: block;
-  padding: 0.5rem;
-  margin-bottom: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.2rem;
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.2s;
+  font-size: 0.85rem;
 }
 
 .segment-radio:hover {
@@ -94,7 +120,7 @@
 }
 
 .segment-radio input {
-  margin-right: 0.5rem;
+  margin-right: 0.4rem;
 }
 
 .target-side-selection {
