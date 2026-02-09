@@ -27,7 +27,7 @@
  *   y' = c*x + d*y + ty
  */
 
-import { getPointPaperCoordinates, getIdentifiedSide, isInteriorPoint } from './geometry.js';
+import { getPointPaperCoordinates, getIdentifiedSide, isInteriorPoint, EPSILON } from './geometry.js';
 
 // ============================================================================
 // TRUE RHOMBUS GEOMETRY
@@ -297,7 +297,6 @@ function isSameSideEdge(edge) {
   
   // Check for identified sides (north↔east, south↔west)
   // Only treat as same-side if the t values are equal (same point via identification)
-  const EPSILON = 0.0001;
   if (getIdentifiedSide(fromSide) === toSide && Math.abs(fromT - toT) < EPSILON) {
     return true;
   }

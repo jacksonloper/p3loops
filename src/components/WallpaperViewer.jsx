@@ -9,7 +9,7 @@ import {
   SE_CORNER,
   SW_CORNER
 } from '../utils/wallpaperGeometry.js';
-import { isInteriorPoint, getIdentifiedSide } from '../utils/geometry.js';
+import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.js';
 import './WallpaperViewer.css';
 
 /**
@@ -100,7 +100,6 @@ function isSameSideEdge(edge) {
   
   // Check for identified sides (north↔east, south↔west)
   // Only treat as same-side if the t values are equal (same point via identification)
-  const EPSILON = 0.0001;
   if (getIdentifiedSide(fromSide) === toSide && Math.abs(fromT - toT) < EPSILON) {
     return true;
   }
