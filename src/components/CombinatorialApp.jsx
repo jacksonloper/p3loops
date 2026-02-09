@@ -5,6 +5,7 @@ import WallpaperViewer from './WallpaperViewer.jsx';
 import {
   createInitialState,
   getAllSegments,
+  getValidSegments,
   segmentToString,
   addEdgeToSegment,
   addFirstEdge,
@@ -15,8 +16,7 @@ import {
   importFromFloatEdges,
   canCloseLoop,
   closeLoop,
-  pointToFloat,
-  getSideGroup
+  pointToFloat
 } from '../utils/combinatorialPathLogic.js';
 import './CombinatorialApp.css';
 
@@ -37,7 +37,6 @@ function getMessageStyleClass(message) {
 function CombinatorialApp() {
   const [state, setState] = useState(createInitialState());
   const [selectedSegment, setSelectedSegment] = useState(null);
-  const [selectedTargetSide, setSelectedTargetSide] = useState('north');
   const [validationMessage, setValidationMessage] = useState('');
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
@@ -46,6 +45,8 @@ function CombinatorialApp() {
   const [examplesList, setExamplesList] = useState([]);
   const [selectedExample, setSelectedExample] = useState('');
   const [loadingExample, setLoadingExample] = useState(false);
+  const [firstEdgeMode, setFirstEdgeMode] = useState(false);
+  const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
 
   // Load examples manifest on mount
   useEffect(() => {
@@ -89,20 +90,21 @@ function CombinatorialApp() {
     return getNextStartPoint(state);
   }, [state, isLoopClosed]);
 
-  // Get available segments
+  // Get available segments - filter to only show valid (non-crossing) options
   const availableSegments = useMemo(() => {
-    return getAllSegments(state);
-  }, [state]);
+    // For first edge or first edge mode, show all segments
+    if (state.edges.length === 0 || firstEdgeMode) {
+      return getAllSegments(state);
+    }
+    // For subsequent edges, only show segments that won't cause crossings
+    const startPoint = nextStartPointCombinatorial;
+    if (!startPoint) return [];
+    return getValidSegments(state, startPoint);
+  }, [state, firstEdgeMode, nextStartPointCombinatorial]);
 
-  // Handle segment selection from radio
+  // Handle segment selection from radio or click on rhombus
   const handleSegmentChange = useCallback((segment) => {
     setSelectedSegment(segment);
-    // Auto-select appropriate target side based on segment group
-    if (segment.group === 'NE') {
-      setSelectedTargetSide('north');
-    } else {
-      setSelectedTargetSide('south');
-    }
     setValidationMessage('');
   }, []);
 
@@ -113,16 +115,8 @@ function CombinatorialApp() {
       return;
     }
     
-    // Validate target side matches segment group
-    if (getSideGroup(selectedTargetSide) !== selectedSegment.group) {
-      setValidationMessage(`Target side "${selectedTargetSide}" does not match segment group "${selectedSegment.group}"`);
-      return;
-    }
-    
     if (state.edges.length === 0) {
       // First edge - need to select both from and to segments
-      // For now, we'll add a simple first edge
-      // User should select two segments for the first edge
       setValidationMessage('First edge: select "from" segment and "to" segment');
       return;
     }
@@ -134,7 +128,9 @@ function CombinatorialApp() {
       return;
     }
     
-    const result = addEdgeToSegment(state, startPoint, selectedSegment, selectedTargetSide);
+    // Auto-select target side based on segment group
+    const targetSide = selectedSegment.group === 'NE' ? 'north' : 'south';
+    const result = addEdgeToSegment(state, startPoint, selectedSegment, targetSide);
     
     if (result.error) {
       setValidationMessage(result.error);
@@ -146,13 +142,8 @@ function CombinatorialApp() {
     
     setState(result.newState);
     setSelectedSegment(null);
-    setValidationMessage('Edge added successfully!');
-  }, [selectedSegment, selectedTargetSide, state, nextStartPointCombinatorial]);
-
-  // State for first edge selection
-  const [firstEdgeMode, setFirstEdgeMode] = useState(false);
-  const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
-  const [firstEdgeFromSide, setFirstEdgeFromSide] = useState('north');
+    setValidationMessage('Edge added!');
+  }, [selectedSegment, state, nextStartPointCombinatorial]);
 
   // Handle starting first edge mode
   const handleStartFirstEdge = useCallback(() => {
@@ -161,11 +152,10 @@ function CombinatorialApp() {
       return;
     }
     setFirstEdgeFromSegment(selectedSegment);
-    setFirstEdgeFromSide(selectedTargetSide);
     setFirstEdgeMode(true);
     setSelectedSegment(null);
     setValidationMessage('Now select the destination segment');
-  }, [selectedSegment, selectedTargetSide]);
+  }, [selectedSegment]);
 
   // Handle completing first edge
   const handleCompleteFirstEdge = useCallback(() => {
@@ -174,12 +164,16 @@ function CombinatorialApp() {
       return;
     }
     
+    // Auto-select target sides based on segment groups
+    const fromSide = firstEdgeFromSegment.group === 'NE' ? 'north' : 'south';
+    const toSide = selectedSegment.group === 'NE' ? 'north' : 'south';
+    
     const result = addFirstEdge(
       state, 
       firstEdgeFromSegment, 
-      firstEdgeFromSide, 
+      fromSide, 
       selectedSegment, 
-      selectedTargetSide
+      toSide
     );
     
     if (result.error) {
@@ -192,7 +186,7 @@ function CombinatorialApp() {
     setFirstEdgeFromSegment(null);
     setSelectedSegment(null);
     setValidationMessage('First edge added!');
-  }, [state, firstEdgeFromSegment, firstEdgeFromSide, selectedSegment, selectedTargetSide]);
+  }, [state, firstEdgeFromSegment, selectedSegment]);
 
   // Handle cancel first edge mode
   const handleCancelFirstEdge = useCallback(() => {
@@ -301,6 +295,9 @@ function CombinatorialApp() {
     [availableSegments]
   );
 
+  // Check if there are no valid segments (path might be stuck)
+  const noValidSegments = state.edges.length > 0 && !firstEdgeMode && availableSegments.length === 0;
+
   return (
     <div className="combinatorial-app-container">
       <header className="app-header">
@@ -318,93 +315,103 @@ function CombinatorialApp() {
               floatEdges={floatEdges}
               allPoints={allPoints}
               selectedSegment={selectedSegment}
+              availableSegments={availableSegments}
               nextStartPoint={nextStartPoint}
               highlightedEdgeIndex={highlightedEdgeIndex}
+              onSegmentClick={isLoopClosed ? null : handleSegmentChange}
+              firstEdgeFromSegment={firstEdgeFromSegment}
             />
+            
+            {/* Add Edge button - prominent and near the rhombus for mobile */}
+            {selectedSegment && !isLoopClosed && (
+              <div className="quick-action-bar">
+                {state.edges.length === 0 && !firstEdgeMode && (
+                  <button
+                    onClick={handleStartFirstEdge}
+                    className="quick-action-btn primary"
+                  >
+                    Set as Start →
+                  </button>
+                )}
+                
+                {firstEdgeMode && (
+                  <>
+                    <button
+                      onClick={handleCompleteFirstEdge}
+                      className="quick-action-btn primary"
+                    >
+                      Complete First Edge ✓
+                    </button>
+                    <button
+                      onClick={handleCancelFirstEdge}
+                      className="quick-action-btn secondary"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+                
+                {state.edges.length > 0 && !firstEdgeMode && (
+                  <button
+                    onClick={handleAcceptSegment}
+                    className="quick-action-btn primary"
+                  >
+                    Add Edge Here ✓
+                  </button>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="segment-selection-section">
-            <h3>Select Segment</h3>
+            <h3>
+              {firstEdgeMode 
+                ? 'Select Destination' 
+                : state.edges.length === 0 
+                  ? 'Select Starting Segment'
+                  : 'Select Next Segment'}
+            </h3>
+            <p className="segment-help">
+              {isLoopClosed 
+                ? 'Loop is closed. Open it to continue editing.'
+                : noValidSegments
+                  ? 'No valid segments available. Try removing the last edge or closing the loop.'
+                  : 'Click on the rhombus or select from the list below:'}
+            </p>
             
-            <div className="segment-group">
-              <h4>North/East Side</h4>
-              {neSegments.map((segment, idx) => (
-                <label key={`ne-${idx}`} className="segment-radio">
-                  <input
-                    type="radio"
-                    name="segment"
-                    checked={selectedSegment === segment}
-                    onChange={() => handleSegmentChange(segment)}
-                    disabled={isLoopClosed}
-                  />
-                  {segmentToString(segment)}
-                </label>
-              ))}
-            </div>
+            {neSegments.length > 0 && (
+              <div className="segment-group">
+                <h4>North/East Side</h4>
+                {neSegments.map((segment, idx) => (
+                  <label key={`ne-${idx}`} className={`segment-radio ${selectedSegment === segment ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="segment"
+                      checked={selectedSegment === segment}
+                      onChange={() => handleSegmentChange(segment)}
+                      disabled={isLoopClosed}
+                    />
+                    {segmentToString(segment)}
+                  </label>
+                ))}
+              </div>
+            )}
 
-            <div className="segment-group">
-              <h4>South/West Side</h4>
-              {swSegments.map((segment, idx) => (
-                <label key={`sw-${idx}`} className="segment-radio">
-                  <input
-                    type="radio"
-                    name="segment"
-                    checked={selectedSegment === segment}
-                    onChange={() => handleSegmentChange(segment)}
-                    disabled={isLoopClosed}
-                  />
+            {swSegments.length > 0 && (
+              <div className="segment-group">
+                <h4>South/West Side</h4>
+                {swSegments.map((segment, idx) => (
+                  <label key={`sw-${idx}`} className={`segment-radio ${selectedSegment === segment ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="segment"
+                      checked={selectedSegment === segment}
+                      onChange={() => handleSegmentChange(segment)}
+                      disabled={isLoopClosed}
+                    />
                   {segmentToString(segment)}
-                </label>
-              ))}
-            </div>
-
-            {selectedSegment && (
-              <div className="target-side-selection">
-                <h4>Target Side</h4>
-                <label className="side-radio">
-                  <input
-                    type="radio"
-                    name="targetSide"
-                    value="north"
-                    checked={selectedTargetSide === 'north'}
-                    onChange={(e) => setSelectedTargetSide(e.target.value)}
-                    disabled={selectedSegment.group !== 'NE'}
-                  />
-                  North
-                </label>
-                <label className="side-radio">
-                  <input
-                    type="radio"
-                    name="targetSide"
-                    value="east"
-                    checked={selectedTargetSide === 'east'}
-                    onChange={(e) => setSelectedTargetSide(e.target.value)}
-                    disabled={selectedSegment.group !== 'NE'}
-                  />
-                  East
-                </label>
-                <label className="side-radio">
-                  <input
-                    type="radio"
-                    name="targetSide"
-                    value="south"
-                    checked={selectedTargetSide === 'south'}
-                    onChange={(e) => setSelectedTargetSide(e.target.value)}
-                    disabled={selectedSegment.group !== 'SW'}
-                  />
-                  South
-                </label>
-                <label className="side-radio">
-                  <input
-                    type="radio"
-                    name="targetSide"
-                    value="west"
-                    checked={selectedTargetSide === 'west'}
-                    onChange={(e) => setSelectedTargetSide(e.target.value)}
-                    disabled={selectedSegment.group !== 'SW'}
-                  />
-                  West
-                </label>
+                  </label>
+                ))}
               </div>
             )}
           </section>
@@ -412,52 +419,6 @@ function CombinatorialApp() {
 
         <section className="controls-section">
           <div className="button-row">
-            {state.edges.length === 0 && !firstEdgeMode && (
-              <button
-                onClick={handleStartFirstEdge}
-                disabled={!selectedSegment || isLoopClosed}
-                className="control-btn primary-btn"
-              >
-                Start First Edge Here
-              </button>
-            )}
-            
-            {firstEdgeMode && (
-              <>
-                <button
-                  onClick={handleCompleteFirstEdge}
-                  disabled={!selectedSegment}
-                  className="control-btn primary-btn"
-                >
-                  Complete First Edge Here
-                </button>
-                <button
-                  onClick={handleCancelFirstEdge}
-                  className="control-btn secondary-btn"
-                >
-                  Cancel
-                </button>
-              </>
-            )}
-            
-            {state.edges.length > 0 && !firstEdgeMode && !isLoopClosed && (
-              <button
-                onClick={handleAcceptSegment}
-                disabled={!selectedSegment}
-                className="control-btn primary-btn"
-              >
-                Add Edge to Selected Segment
-              </button>
-            )}
-            
-            <button 
-              onClick={handleRemoveLastEdge} 
-              disabled={state.edges.length === 0}
-              className="control-btn danger-btn"
-            >
-              {isLoopClosed ? 'Open Loop' : 'Remove Last Edge'}
-            </button>
-            
             {!isLoopClosed && state.edges.length >= 2 && (
               <button
                 onClick={handleCloseLoop}
@@ -466,6 +427,14 @@ function CombinatorialApp() {
                 Close Loop
               </button>
             )}
+            
+            <button 
+              onClick={handleRemoveLastEdge} 
+              disabled={state.edges.length === 0}
+              className="control-btn danger-btn"
+            >
+              {isLoopClosed ? 'Open Loop' : 'Undo'}
+            </button>
             
             <button 
               onClick={handleClearAll}

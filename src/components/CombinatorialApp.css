@@ -270,6 +270,61 @@
   opacity: 0.8;
 }
 
+/* Quick action bar - appears below rhombus when segment is selected */
+.quick-action-bar {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(255,255,255,0.08);
+  border-radius: 8px;
+}
+
+.quick-action-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-action-btn.primary {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.4);
+}
+
+.quick-action-btn.primary:hover {
+  background: linear-gradient(135deg, #218838, #1aa179);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.5);
+}
+
+.quick-action-btn.secondary {
+  background: rgba(255,255,255,0.15);
+  color: #e0e0e0;
+}
+
+.quick-action-btn.secondary:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+/* Segment help text */
+.segment-help {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 0 0 1rem;
+}
+
+/* Selected segment radio highlight */
+.segment-radio.selected {
+  background: rgba(255, 193, 7, 0.15);
+  border: 1px solid rgba(255, 193, 7, 0.4);
+}
+
 .info-section {
   background: rgba(255,255,255,0.03);
   border-radius: 12px;

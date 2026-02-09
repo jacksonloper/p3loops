@@ -185,6 +185,78 @@ export function getAllSegments(state) {
 }
 
 /**
+ * Check if adding an edge to a specific segment would cause a crossing.
+ * This is used to filter out invalid segment options in the UI.
+ * 
+ * @param {Object} state - Current state
+ * @param {Object} fromPoint - Starting point { side, pos }
+ * @param {Object} segment - Target segment { startPos, endPos, group }
+ * @returns {boolean} True if the edge would cause a crossing
+ */
+export function wouldSegmentCauseCrossing(state, fromPoint, segment) {
+  // Calculate where the new point would be inserted
+  let insertIndex;
+  if (segment.startPos === null) {
+    insertIndex = 0;
+  } else {
+    insertIndex = segment.startPos + 1;
+  }
+  
+  // Adjust the fromPoint's position if it's in the same group and at or after the insert position
+  let adjustedFromPoint = { ...fromPoint };
+  if (getSideGroup(fromPoint.side) === segment.group && fromPoint.pos >= insertIndex) {
+    adjustedFromPoint = { ...fromPoint, pos: fromPoint.pos + 1 };
+  }
+  
+  // Create a temporary state with the new point inserted
+  const tempState = insertPoint(state, segment.group, insertIndex, segment.group === 'NE' ? 'north' : 'south');
+  
+  // Adjust existing edge positions in temp state
+  const adjustedEdges = tempState.edges.map(edge => {
+    let newFrom = { ...edge.from };
+    let newTo = { ...edge.to };
+    
+    if (getSideGroup(edge.from.side) === segment.group && edge.from.pos >= insertIndex) {
+      newFrom = { ...edge.from, pos: edge.from.pos + 1 };
+    }
+    if (getSideGroup(edge.to.side) === segment.group && edge.to.pos >= insertIndex) {
+      newTo = { ...edge.to, pos: edge.to.pos + 1 };
+    }
+    
+    return { from: newFrom, to: newTo };
+  });
+  
+  const tempStateWithAdjustedEdges = { ...tempState, edges: adjustedEdges };
+  
+  // Create the hypothetical new edge
+  const newToPoint = { side: segment.group === 'NE' ? 'north' : 'south', pos: insertIndex };
+  const newEdge = { from: adjustedFromPoint, to: newToPoint };
+  
+  // Check if it would cross
+  const crossingResult = edgeCrossesPath(newEdge, tempStateWithAdjustedEdges);
+  return crossingResult.crosses;
+}
+
+/**
+ * Get all valid segments that can be targeted without causing crossings.
+ * 
+ * @param {Object} state - Current state
+ * @param {Object} fromPoint - Starting point for the next edge (or null for first edge)
+ * @returns {Array} Array of valid segments
+ */
+export function getValidSegments(state, fromPoint) {
+  const allSegments = getAllSegments(state);
+  
+  // If no fromPoint (first edge), all segments are valid
+  if (!fromPoint) {
+    return allSegments;
+  }
+  
+  // Filter out segments that would cause crossings
+  return allSegments.filter(segment => !wouldSegmentCauseCrossing(state, fromPoint, segment));
+}
+
+/**
  * Convert a segment to a descriptive string for UI.
  */
 export function segmentToString(segment) {

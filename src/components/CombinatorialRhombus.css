@@ -73,6 +73,36 @@
   }
 }
 
+/* Clickable segment hit area - invisible but wider for easier clicking */
+.segment-hitarea {
+  stroke: transparent;
+  stroke-width: 20;
+  stroke-linecap: round;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+/* Available segment indicator - shows where user can click */
+.segment-available {
+  stroke: rgba(100, 200, 255, 0.4);
+  stroke-width: 4;
+  stroke-linecap: round;
+  cursor: pointer;
+  transition: stroke 0.2s, stroke-width 0.2s;
+}
+
+.segment-available:hover {
+  stroke: rgba(100, 200, 255, 0.8);
+  stroke-width: 6;
+}
+
+/* Selected segment highlight */
+.segment-selected {
+  stroke: #ffc107;
+  stroke-width: 6;
+  stroke-opacity: 0.8;
+}
+
 .segment-highlight {
   stroke: #ffc107;
   stroke-width: 6;
@@ -85,6 +115,20 @@
   stroke: #fff;
   stroke-width: 2;
   stroke-opacity: 0.8;
+}
+
+/* "From" segment for first edge (green) */
+.segment-from {
+  stroke: #00ff88;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-opacity: 0.6;
+}
+
+.segment-from-midpoint {
+  fill: #00ff88;
+  stroke: #fff;
+  stroke-width: 2;
 }
 
 .side-label {
