@@ -325,6 +325,60 @@
   border: 1px solid rgba(255, 193, 7, 0.4);
 }
 
+/* Side picker - for choosing specific side within segment group */
+.side-picker {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.side-picker h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #ffc107;
+}
+
+.side-picker-help {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin: 0 0 0.75rem;
+}
+
+.side-options {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.side-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.side-option:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.side-option.selected {
+  background: rgba(255, 193, 7, 0.2);
+  border-color: #ffc107;
+  color: #ffc107;
+}
+
+.side-option input {
+  margin-right: 0.5rem;
+}
+
 .info-section {
   background: rgba(255,255,255,0.03);
   border-radius: 12px;

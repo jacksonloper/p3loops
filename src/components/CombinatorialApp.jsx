@@ -37,6 +37,8 @@ function getMessageStyleClass(message) {
 function CombinatorialApp() {
   const [state, setState] = useState(createInitialState());
   const [selectedSegment, setSelectedSegment] = useState(null);
+  // Which specific side within the segment's group (north/east or south/west)
+  const [selectedTargetSide, setSelectedTargetSide] = useState(null);
   const [validationMessage, setValidationMessage] = useState('');
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
@@ -47,6 +49,8 @@ function CombinatorialApp() {
   const [loadingExample, setLoadingExample] = useState(false);
   const [firstEdgeMode, setFirstEdgeMode] = useState(false);
   const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
+  // For first edge, we also need to track the selected side for the "from" segment
+  const [firstEdgeFromSide, setFirstEdgeFromSide] = useState(null);
 
   // Load examples manifest on mount
   useEffect(() => {
@@ -105,13 +109,29 @@ function CombinatorialApp() {
   // Handle segment selection from radio or click on rhombus
   const handleSegmentChange = useCallback((segment) => {
     setSelectedSegment(segment);
+    // Auto-select the first side option when segment changes
+    if (segment) {
+      setSelectedTargetSide(segment.group === 'NE' ? 'north' : 'south');
+    } else {
+      setSelectedTargetSide(null);
+    }
     setValidationMessage('');
+  }, []);
+
+  // Handle target side selection within a segment group
+  const handleTargetSideChange = useCallback((side) => {
+    setSelectedTargetSide(side);
   }, []);
 
   // Handle accepting the selected segment (adding an edge)
   const handleAcceptSegment = useCallback(() => {
     if (!selectedSegment) {
       setValidationMessage('Please select a segment first');
+      return;
+    }
+    
+    if (!selectedTargetSide) {
+      setValidationMessage('Please select which side (north/east or south/west)');
       return;
     }
     
@@ -128,9 +148,8 @@ function CombinatorialApp() {
       return;
     }
     
-    // Auto-select target side based on segment group
-    const targetSide = selectedSegment.group === 'NE' ? 'north' : 'south';
-    const result = addEdgeToSegment(state, startPoint, selectedSegment, targetSide);
+    // Use the user-selected target side
+    const result = addEdgeToSegment(state, startPoint, selectedSegment, selectedTargetSide);
     
     if (result.error) {
       setValidationMessage(result.error);
@@ -142,8 +161,9 @@ function CombinatorialApp() {
     
     setState(result.newState);
     setSelectedSegment(null);
+    setSelectedTargetSide(null);
     setValidationMessage('Edge added!');
-  }, [selectedSegment, state, nextStartPointCombinatorial]);
+  }, [selectedSegment, selectedTargetSide, state, nextStartPointCombinatorial]);
 
   // Handle starting first edge mode
   const handleStartFirstEdge = useCallback(() => {
@@ -151,11 +171,17 @@ function CombinatorialApp() {
       setValidationMessage('Please select a starting segment first');
       return;
     }
+    if (!selectedTargetSide) {
+      setValidationMessage('Please select which side for the starting point');
+      return;
+    }
     setFirstEdgeFromSegment(selectedSegment);
+    setFirstEdgeFromSide(selectedTargetSide);
     setFirstEdgeMode(true);
     setSelectedSegment(null);
-    setValidationMessage('Now select the destination segment');
-  }, [selectedSegment]);
+    setSelectedTargetSide(null);
+    setValidationMessage('Now select the destination segment and side');
+  }, [selectedSegment, selectedTargetSide]);
 
   // Handle completing first edge
   const handleCompleteFirstEdge = useCallback(() => {
@@ -163,17 +189,18 @@ function CombinatorialApp() {
       setValidationMessage('Please select both segments');
       return;
     }
+    if (!firstEdgeFromSide || !selectedTargetSide) {
+      setValidationMessage('Please select sides for both endpoints');
+      return;
+    }
     
-    // Auto-select target sides based on segment groups
-    const fromSide = firstEdgeFromSegment.group === 'NE' ? 'north' : 'south';
-    const toSide = selectedSegment.group === 'NE' ? 'north' : 'south';
-    
+    // Use the user-selected sides
     const result = addFirstEdge(
       state, 
       firstEdgeFromSegment, 
-      fromSide, 
+      firstEdgeFromSide, 
       selectedSegment, 
-      toSide
+      selectedTargetSide
     );
     
     if (result.error) {
@@ -184,15 +211,19 @@ function CombinatorialApp() {
     setState(result.newState);
     setFirstEdgeMode(false);
     setFirstEdgeFromSegment(null);
+    setFirstEdgeFromSide(null);
     setSelectedSegment(null);
+    setSelectedTargetSide(null);
     setValidationMessage('First edge added!');
-  }, [state, firstEdgeFromSegment, selectedSegment]);
+  }, [state, firstEdgeFromSegment, firstEdgeFromSide, selectedSegment, selectedTargetSide]);
 
   // Handle cancel first edge mode
   const handleCancelFirstEdge = useCallback(() => {
     setFirstEdgeMode(false);
     setFirstEdgeFromSegment(null);
+    setFirstEdgeFromSide(null);
     setSelectedSegment(null);
+    setSelectedTargetSide(null);
     setValidationMessage('');
   }, []);
 
@@ -315,11 +346,13 @@ function CombinatorialApp() {
               floatEdges={floatEdges}
               allPoints={allPoints}
               selectedSegment={selectedSegment}
+              selectedTargetSide={selectedTargetSide}
               availableSegments={availableSegments}
               nextStartPoint={nextStartPoint}
               highlightedEdgeIndex={highlightedEdgeIndex}
               onSegmentClick={isLoopClosed ? null : handleSegmentChange}
               firstEdgeFromSegment={firstEdgeFromSegment}
+              firstEdgeFromSide={firstEdgeFromSide}
             />
             
             {/* Add Edge button - prominent and near the rhombus for mobile */}
@@ -412,6 +445,61 @@ function CombinatorialApp() {
                   {segmentToString(segment)}
                   </label>
                 ))}
+              </div>
+            )}
+            
+            {/* Side picker - allows choosing between identified sides */}
+            {selectedSegment && (
+              <div className="side-picker">
+                <h4>Which Side?</h4>
+                <p className="side-picker-help">
+                  Choose the specific side for the new point (affects winding):
+                </p>
+                <div className="side-options">
+                  {selectedSegment.group === 'NE' ? (
+                    <>
+                      <label className={`side-option ${selectedTargetSide === 'north' ? 'selected' : ''}`}>
+                        <input
+                          type="radio"
+                          name="targetSide"
+                          checked={selectedTargetSide === 'north'}
+                          onChange={() => handleTargetSideChange('north')}
+                        />
+                        North
+                      </label>
+                      <label className={`side-option ${selectedTargetSide === 'east' ? 'selected' : ''}`}>
+                        <input
+                          type="radio"
+                          name="targetSide"
+                          checked={selectedTargetSide === 'east'}
+                          onChange={() => handleTargetSideChange('east')}
+                        />
+                        East
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label className={`side-option ${selectedTargetSide === 'south' ? 'selected' : ''}`}>
+                        <input
+                          type="radio"
+                          name="targetSide"
+                          checked={selectedTargetSide === 'south'}
+                          onChange={() => handleTargetSideChange('south')}
+                        />
+                        South
+                      </label>
+                      <label className={`side-option ${selectedTargetSide === 'west' ? 'selected' : ''}`}>
+                        <input
+                          type="radio"
+                          name="targetSide"
+                          checked={selectedTargetSide === 'west'}
+                          onChange={() => handleTargetSideChange('west')}
+                        />
+                        West
+                      </label>
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </section>

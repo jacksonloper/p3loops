@@ -73,21 +73,25 @@ function getSegmentCoords(segment, allPoints) {
  * @param {Object[]} floatEdges - Array of float edge objects for visualization
  * @param {Object[]} allPoints - Array of point info { side, pos, group, t }
  * @param {Object|null} selectedSegment - Currently selected segment { startPos, endPos, group }
+ * @param {string|null} selectedTargetSide - The specific side (north/east/south/west) selected
  * @param {Object[]} availableSegments - Array of valid segments that can be clicked
  * @param {Object|null} nextStartPoint - The starting point for the next edge
  * @param {number|null} highlightedEdgeIndex - Index of edge to highlight (for crossing errors)
  * @param {Function|null} onSegmentClick - Callback when a segment is clicked
  * @param {Object|null} firstEdgeFromSegment - The "from" segment when creating first edge
+ * @param {string|null} firstEdgeFromSide - The specific side for the "from" segment
  */
 function CombinatorialRhombus({ 
   floatEdges, 
   allPoints, 
   selectedSegment, 
+  selectedTargetSide = null,
   availableSegments = [],
   nextStartPoint,
   highlightedEdgeIndex = null,
   onSegmentClick = null,
-  firstEdgeFromSegment = null
+  firstEdgeFromSegment = null,
+  firstEdgeFromSide = null
 }) {
   const size = getSize();
   const shear = getShear();
@@ -131,16 +135,28 @@ function CombinatorialRhombus({
   }, [availableSegments, allPoints]);
   
   // Calculate highlighted segment line if a segment is selected
+  // If a specific side is selected, only show that side
   const selectedSegmentCoords = useMemo(() => {
     if (!selectedSegment) return null;
-    return getSegmentCoords(selectedSegment, allPoints);
-  }, [selectedSegment, allPoints]);
+    const allCoords = getSegmentCoords(selectedSegment, allPoints);
+    // If a specific target side is selected, only return that side's coords
+    if (selectedTargetSide) {
+      return allCoords.filter(coord => coord.side === selectedTargetSide);
+    }
+    return allCoords;
+  }, [selectedSegment, selectedTargetSide, allPoints]);
   
   // Calculate "from" segment highlight for first edge creation
+  // If a specific side is selected, only show that side
   const fromSegmentCoords = useMemo(() => {
     if (!firstEdgeFromSegment) return null;
-    return getSegmentCoords(firstEdgeFromSegment, allPoints);
-  }, [firstEdgeFromSegment, allPoints]);
+    const allCoords = getSegmentCoords(firstEdgeFromSegment, allPoints);
+    // If a specific from side is selected, only return that side's coords
+    if (firstEdgeFromSide) {
+      return allCoords.filter(coord => coord.side === firstEdgeFromSide);
+    }
+    return allCoords;
+  }, [firstEdgeFromSegment, firstEdgeFromSide, allPoints]);
   
   // Handle segment click
   const handleSegmentClick = useCallback((segment) => {
