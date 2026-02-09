@@ -390,9 +390,14 @@ describe('canCloseLoop', () => {
     const result = canCloseLoop(state);
     expect(result.canClose).toBe(true);
     
-    // The closing edge should be from east(1) to east(0) - same side!
-    // NOT from north(1) to east(0) which would cross the rhombus
+    // The path ends at north(1), but the first point is on east(0).
+    // Since north and east are identified, they're in the same side group.
+    // The closing edge should be from east(1) to east(0) - staying on east.
+    // This is correct because we use firstPoint.side (east) for the closing edge,
+    // NOT the continuation side (north) which would create a cross-rhombus edge.
     expect(result.closingEdge.from.side).toBe(result.closingEdge.to.side);
+    expect(result.closingEdge.from.side).toBe('east');
+    expect(result.closingEdge.to.side).toBe('east');
   });
 });
 
