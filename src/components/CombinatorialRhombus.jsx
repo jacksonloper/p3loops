@@ -1,17 +1,17 @@
 import { useMemo, useCallback } from 'react';
 import {
-  getPointOnSide,
+  getPointOnBowedSide,
   getBowedRhombusPath,
   getSize,
   getShear,
-  getIdentifiedSide
+  getIdentifiedSide,
+  getPointOnSide
 } from '../utils/geometry.js';
-import { getEdgeCoordinates } from '../utils/pathLogic.js';
 import { getSideGroup } from '../utils/combinatorialPathLogic.js';
 import './CombinatorialRhombus.css';
 
 /**
- * Calculate segment coordinates for display/interaction.
+ * Calculate segment coordinates for display/interaction using bowed positions.
  * Now segment has a specific `side` (not just group).
  * Returns coordinates only for that specific side.
  */
@@ -45,10 +45,10 @@ function getSegmentCoords(segment, allPoints) {
   // Calculate the midpoint (where the new point would go)
   const midT = (startT + endT) / 2;
   
-  // Get coordinates only for the segment's specific side
-  const startPt = getPointOnSide(side, startT);
-  const endPt = getPointOnSide(side, endT);
-  const midPt = getPointOnSide(side, midT);
+  // Get coordinates only for the segment's specific side (using bowed positions)
+  const startPt = getPointOnBowedSide(side, startT);
+  const endPt = getPointOnBowedSide(side, endT);
+  const midPt = getPointOnBowedSide(side, midT);
   
   return [{
     side,
@@ -62,6 +62,17 @@ function getSegmentCoords(segment, allPoints) {
     endT,
     midT
   }];
+}
+
+/**
+ * Get bowed coordinates for a float edge (from combinatorial edge).
+ * @param {Object} edge - Float edge with { from: { side, t }, to: { side, t } }
+ */
+function getBowedEdgeCoordinates(edge) {
+  return {
+    from: getPointOnBowedSide(edge.from.side, edge.from.t),
+    to: getPointOnBowedSide(edge.to.side, edge.to.t)
+  };
 }
 
 /**
@@ -247,7 +258,7 @@ function CombinatorialRhombus({
         
         {/* Edges */}
         {floatEdges.map((edge, index) => {
-          const coords = getEdgeCoordinates(edge);
+          const coords = getBowedEdgeCoordinates(edge);
           const isHighlighted = highlightedEdgeIndex === index;
           const midX = (coords.from.x + coords.to.x) / 2;
           const midY = (coords.from.y + coords.to.y) / 2;
@@ -278,9 +289,9 @@ function CombinatorialRhombus({
           );
         })}
         
-        {/* All points (equally spaced) */}
+        {/* All points (equally spaced) - using bowed positions */}
         {allPoints.map((point, index) => {
-          const coords = getPointOnSide(point.side, point.t);
+          const coords = getPointOnBowedSide(point.side, point.t);
           return (
             <circle
               key={`point-${index}`}
@@ -292,11 +303,11 @@ function CombinatorialRhombus({
           );
         })}
         
-        {/* Next start point indicator */}
+        {/* Next start point indicator - using bowed position */}
         {nextStartPoint && (
           <circle
-            cx={getPointOnSide(nextStartPoint.side, nextStartPoint.t).x}
-            cy={getPointOnSide(nextStartPoint.side, nextStartPoint.t).y}
+            cx={getPointOnBowedSide(nextStartPoint.side, nextStartPoint.t).x}
+            cy={getPointOnBowedSide(nextStartPoint.side, nextStartPoint.t).y}
             r={10}
             className="start-point"
           />

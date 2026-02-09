@@ -161,14 +161,15 @@ export function getRhombusPath() {
   return `M ${nw.x} ${nw.y} L ${ne.x} ${ne.y} L ${se.x} ${se.y} L ${sw.x} ${sw.y} Z`;
 }
 
+// Default bow amount for the bowed rhombus (in SVG units, same coordinate system as SIZE=300)
+const DEFAULT_BOW_AMOUNT = 60;
+
 /**
- * Get SVG path for the rhombus outline with bowed (curved outward) sides.
- * This is used in combinatorial mode to better visualize edges from a side 
- * to the same side by creating visual space between the path and the boundary.
- * @param {number} bowAmount - How much to bow the sides outward in SVG units (default: 20).
- *                             This is in the same coordinate system as the rhombus SIZE (300 units).
+ * Get the control points for the bowed rhombus sides.
+ * Returns { nw, ne, se, sw, northMid, eastMid, southMid, westMid }
+ * @param {number} bowAmount - How much to bow the sides outward in SVG units.
  */
-export function getBowedRhombusPath(bowAmount = 20) {
+function getBowedRhombusControlPoints(bowAmount = DEFAULT_BOW_AMOUNT) {
   const nw = unitSquareToRhombus(0, 0);
   const ne = unitSquareToRhombus(0, 1);
   const se = unitSquareToRhombus(1, 1);
@@ -189,13 +190,73 @@ export function getBowedRhombusPath(bowAmount = 20) {
   // West side (sw -> nw): push leftward (negative x)
   const westMid = { x: (sw.x + nw.x) / 2 - bowAmount, y: (sw.y + nw.y) / 2 };
   
+  return { nw, ne, se, sw, northMid, eastMid, southMid, westMid };
+}
+
+/**
+ * Evaluate a quadratic bezier curve at parameter t.
+ * B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+ * @param {Object} p0 - Start point { x, y }
+ * @param {Object} p1 - Control point { x, y }
+ * @param {Object} p2 - End point { x, y }
+ * @param {number} t - Parameter from 0 to 1
+ */
+function evaluateQuadraticBezier(p0, p1, p2, t) {
+  const oneMinusT = 1 - t;
+  const oneMinusT2 = oneMinusT * oneMinusT;
+  const t2 = t * t;
+  
+  return {
+    x: oneMinusT2 * p0.x + 2 * oneMinusT * t * p1.x + t2 * p2.x,
+    y: oneMinusT2 * p0.y + 2 * oneMinusT * t * p1.y + t2 * p2.y
+  };
+}
+
+/**
+ * Get screen coordinates for a point on a bowed side at percentage t.
+ * This is used in combinatorial mode where edges should start/end on the curved boundary.
+ * @param {string} side - The side ('north', 'east', 'south', 'west')
+ * @param {number} t - Parameter from 0 to 1 along the side
+ * @param {number} bowAmount - How much the sides are bowed outward (default: DEFAULT_BOW_AMOUNT)
+ */
+export function getPointOnBowedSide(side, t, bowAmount = DEFAULT_BOW_AMOUNT) {
+  const cp = getBowedRhombusControlPoints(bowAmount);
+  
+  switch (side) {
+    case 'north':
+      // North side: nw -> ne, control point is northMid
+      return evaluateQuadraticBezier(cp.nw, cp.northMid, cp.ne, t);
+    case 'east':
+      // East side: ne -> se, control point is eastMid
+      return evaluateQuadraticBezier(cp.ne, cp.eastMid, cp.se, t);
+    case 'south':
+      // South side: se -> sw, control point is southMid
+      return evaluateQuadraticBezier(cp.se, cp.southMid, cp.sw, t);
+    case 'west':
+      // West side: sw -> nw, control point is westMid
+      return evaluateQuadraticBezier(cp.sw, cp.westMid, cp.nw, t);
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
+}
+
+/**
+ * Get SVG path for the rhombus outline with bowed (curved outward) sides.
+ * This is used in combinatorial mode to better visualize edges from a side 
+ * to the same side by creating visual space between the path and the boundary.
+ * @param {number} bowAmount - How much to bow the sides outward in SVG units (default: 60).
+ *                             This is in the same coordinate system as the rhombus SIZE (300 units).
+ */
+export function getBowedRhombusPath(bowAmount = DEFAULT_BOW_AMOUNT) {
+  const cp = getBowedRhombusControlPoints(bowAmount);
+  
   // Build path using quadratic bezier curves (Q command)
   const pathSegments = [
-    `M ${nw.x} ${nw.y}`,
-    `Q ${northMid.x} ${northMid.y} ${ne.x} ${ne.y}`,
-    `Q ${eastMid.x} ${eastMid.y} ${se.x} ${se.y}`,
-    `Q ${southMid.x} ${southMid.y} ${sw.x} ${sw.y}`,
-    `Q ${westMid.x} ${westMid.y} ${nw.x} ${nw.y} Z`
+    `M ${cp.nw.x} ${cp.nw.y}`,
+    `Q ${cp.northMid.x} ${cp.northMid.y} ${cp.ne.x} ${cp.ne.y}`,
+    `Q ${cp.eastMid.x} ${cp.eastMid.y} ${cp.se.x} ${cp.se.y}`,
+    `Q ${cp.southMid.x} ${cp.southMid.y} ${cp.sw.x} ${cp.sw.y}`,
+    `Q ${cp.westMid.x} ${cp.westMid.y} ${cp.nw.x} ${cp.nw.y} Z`
   ];
   return pathSegments.join(' ');
 }
