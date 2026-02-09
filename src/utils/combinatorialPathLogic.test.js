@@ -233,6 +233,78 @@ describe('edgesCross', () => {
     // The arc contains the endpoint of the cross-group edge, so they cross
     expect(edgesCross(arcEdge, crossEdge, state)).toBe(true);
   });
+
+  it('should not detect crossing for edges sharing an endpoint', () => {
+    let state = createInitialState();
+    state = insertPoint(state, 'NE', 0, 'north');
+    state = insertPoint(state, 'NE', 1, 'north');
+    state = insertPoint(state, 'SW', 0, 'south');
+    
+    // Edge from north(0) to south(0)
+    const edge1 = { 
+      from: { side: 'north', pos: 0 }, 
+      to: { side: 'south', pos: 0 } 
+    };
+    
+    // Edge from north(1) to south(0) - shares endpoint with edge1
+    const edge2 = { 
+      from: { side: 'north', pos: 1 }, 
+      to: { side: 'south', pos: 0 } 
+    };
+    
+    expect(edgesCross(edge1, edge2, state)).toBe(false);
+  });
+
+  it('should handle edges on identified sides correctly (north-east identification)', () => {
+    let state = createInitialState();
+    // 3 points in NE group, 3 in SW group
+    state = insertPoint(state, 'NE', 0, 'north');
+    state = insertPoint(state, 'NE', 1, 'north');
+    state = insertPoint(state, 'NE', 2, 'east');
+    state = insertPoint(state, 'SW', 0, 'south');
+    state = insertPoint(state, 'SW', 1, 'south');
+    state = insertPoint(state, 'SW', 2, 'west');
+    
+    // Edge from north(0) to south(1)
+    const edge1 = { 
+      from: { side: 'north', pos: 0 }, 
+      to: { side: 'south', pos: 1 } 
+    };
+    
+    // Edge from east(2) to west(0) - on different sides but same groups
+    // These should cross in the middle of the square
+    const edge2 = { 
+      from: { side: 'east', pos: 2 }, 
+      to: { side: 'west', pos: 0 } 
+    };
+    
+    expect(edgesCross(edge1, edge2, state)).toBe(true);
+  });
+
+  it('should handle same-side wrap-around arcs', () => {
+    let state = createInitialState();
+    // 4 points in NE group
+    state = insertPoint(state, 'NE', 0, 'north');
+    state = insertPoint(state, 'NE', 1, 'north');
+    state = insertPoint(state, 'NE', 2, 'north');
+    state = insertPoint(state, 'NE', 3, 'north');
+    state = insertPoint(state, 'SW', 0, 'south');
+    
+    // Edge from north(3) to north(1) - same-side arc going "backward"
+    const arcEdge = { 
+      from: { side: 'north', pos: 3 }, 
+      to: { side: 'north', pos: 1 } 
+    };
+    
+    // Edge from north(2) to south(0) - has endpoint at north(2)
+    // north(2) is between north(1) and north(3), so this should cross
+    const crossEdge = { 
+      from: { side: 'north', pos: 2 }, 
+      to: { side: 'south', pos: 0 } 
+    };
+    
+    expect(edgesCross(arcEdge, crossEdge, state)).toBe(true);
+  });
 });
 
 describe('addFirstEdge', () => {
