@@ -6,6 +6,7 @@ import {
   createInitialState,
   getAllSegments,
   getValidSegments,
+  getFirstEdgeToSegments,
   segmentToString,
   addEdgeToSegment,
   addFirstEdge,
@@ -92,15 +93,19 @@ function CombinatorialApp() {
 
   // Get available segments - filter to only show valid (non-crossing) options
   const availableSegments = useMemo(() => {
-    // For first edge or first edge mode, show all segments
-    if (state.edges.length === 0 || firstEdgeMode) {
+    // First edge mode WITH a from segment selected - use relative segments
+    if (firstEdgeMode && firstEdgeFromSegment) {
+      return getFirstEdgeToSegments(firstEdgeFromSegment);
+    }
+    // First edge selection (choosing the "from" segment) - show all segments
+    if (state.edges.length === 0) {
       return getAllSegments(state);
     }
     // For subsequent edges, only show segments that won't cause crossings
     const startPoint = nextStartPointCombinatorial;
     if (!startPoint) return [];
     return getValidSegments(state, startPoint);
-  }, [state, firstEdgeMode, nextStartPointCombinatorial]);
+  }, [state, firstEdgeMode, firstEdgeFromSegment, nextStartPointCombinatorial]);
 
   // Handle segment selection from radio or click on rhombus
   const handleSegmentChange = useCallback((segment) => {

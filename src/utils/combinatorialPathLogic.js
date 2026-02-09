@@ -266,10 +266,91 @@ export function getValidSegments(state, fromPoint) {
 }
 
 /**
+ * Get available target segments for the FIRST edge based on the starting segment.
+ * 
+ * For the first edge, the starting point doesn't exist yet, so we need to 
+ * calculate target segments based on where the starting point will be placed.
+ * 
+ * The rhombus has side identifications: north ≡ east, south ≡ west.
+ * 
+ * Given a starting side S:
+ * - Sides in a different group (other pair): entire side is one segment
+ * - Same side (S → S): "before start" and "after start" (different winding)
+ * - Other side in same group (S's identified partner): "before start" and "after start"
+ * 
+ * Example: Starting from North:
+ * - South, West (different group): entire side available
+ * - North (same side): before start, after start
+ * - East (north's identified partner): before start, after start
+ * 
+ * @param {Object} fromSegment - The starting segment { startPos, endPos, side }
+ * @returns {Array} Array of valid target segments
+ */
+export function getFirstEdgeToSegments(fromSegment) {
+  const fromSide = fromSegment.side;
+  const fromGroup = getSideGroup(fromSide);
+  const identifiedSide = getIdentifiedSide(fromSide);
+  
+  const allSides = ['north', 'east', 'south', 'west'];
+  const segments = [];
+  
+  for (const side of allSides) {
+    const sideGroup = getSideGroup(side);
+    
+    if (sideGroup !== fromGroup) {
+      // Different group - entire side is available
+      segments.push({ startPos: null, endPos: null, side });
+    } else {
+      // Same group - need "before start" and "after start"
+      // The fromSegment defines where the start point will be
+      // "before start" is the segment from boundary to start point
+      // "after start" is the segment from start point to boundary
+      
+      // Note: since no points exist yet, we're defining segments relative
+      // to the start point that will be created at position 0.
+      // "before start" means pos 0 in the ordering
+      // "after start" means pos 1 in the ordering (after start is inserted)
+      
+      // For same side (e.g., North → North):
+      // - "before start" = going backward along the side
+      // - "after start" = going forward along the side
+      
+      // For identified side (e.g., North → East):
+      // - Same logic but on the identified side
+      
+      // We represent these as:
+      // - "before start": { startPos: null, endPos: 0, side } - goes to position before the new point
+      // - "after start": { startPos: 0, endPos: null, side } - goes to position after the new point
+      
+      // But we need special labels for these first-edge segments
+      segments.push({ 
+        startPos: null, 
+        endPos: 0, 
+        side, 
+        firstEdgeLabel: 'before start' 
+      });
+      segments.push({ 
+        startPos: 0, 
+        endPos: null, 
+        side, 
+        firstEdgeLabel: 'after start' 
+      });
+    }
+  }
+  
+  return segments;
+}
+
+/**
  * Convert a segment to a descriptive string for UI.
  * Shows the segment position description (identification is shown in the header).
  */
 export function segmentToString(segment) {
+  // For first-edge segments, use the special label
+  if (segment.firstEdgeLabel) {
+    return segment.firstEdgeLabel;
+  }
+  
   if (segment.startPos === null && segment.endPos === null) {
     return 'entire side';
   } else if (segment.startPos === null) {
