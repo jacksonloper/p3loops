@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import {
   getPointOnSide,
-  getRhombusPath,
+  getBowedRhombusPath,
   getSize,
   getShear,
   getIdentifiedSide
@@ -102,8 +102,8 @@ function CombinatorialRhombus({
     return `${viewX} ${viewY} ${fullWidth} ${fullHeight}`;
   }, [size, padding]);
   
-  // Use the standard rhombus path (straight sides, not bowed)
-  const rhombusPath = getRhombusPath();
+  // Use the bowed rhombus path (curved sides) for better visualization of same-side edges
+  const rhombusPath = getBowedRhombusPath();
   
   // Get corner positions for labels
   const nw = getPointOnSide('north', 0);

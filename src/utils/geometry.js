@@ -162,6 +162,45 @@ export function getRhombusPath() {
 }
 
 /**
+ * Get SVG path for the rhombus outline with bowed (curved outward) sides.
+ * This is used in combinatorial mode to better visualize edges from a side 
+ * to the same side by creating visual space between the path and the boundary.
+ * @param {number} bowAmount - How much to bow the sides outward in SVG units (default: 20).
+ *                             This is in the same coordinate system as the rhombus SIZE (300 units).
+ */
+export function getBowedRhombusPath(bowAmount = 20) {
+  const nw = unitSquareToRhombus(0, 0);
+  const ne = unitSquareToRhombus(0, 1);
+  const se = unitSquareToRhombus(1, 1);
+  const sw = unitSquareToRhombus(1, 0);
+  
+  // Calculate control points for quadratic bezier curves
+  // Each control point is the midpoint of the side, pushed outward
+  
+  // North side (nw -> ne): push upward (negative y)
+  const northMid = { x: (nw.x + ne.x) / 2, y: (nw.y + ne.y) / 2 - bowAmount };
+  
+  // East side (ne -> se): push rightward (positive x)
+  const eastMid = { x: (ne.x + se.x) / 2 + bowAmount, y: (ne.y + se.y) / 2 };
+  
+  // South side (se -> sw): push downward (positive y)
+  const southMid = { x: (se.x + sw.x) / 2, y: (se.y + sw.y) / 2 + bowAmount };
+  
+  // West side (sw -> nw): push leftward (negative x)
+  const westMid = { x: (sw.x + nw.x) / 2 - bowAmount, y: (sw.y + nw.y) / 2 };
+  
+  // Build path using quadratic bezier curves (Q command)
+  const pathSegments = [
+    `M ${nw.x} ${nw.y}`,
+    `Q ${northMid.x} ${northMid.y} ${ne.x} ${ne.y}`,
+    `Q ${eastMid.x} ${eastMid.y} ${se.x} ${se.y}`,
+    `Q ${southMid.x} ${southMid.y} ${sw.x} ${sw.y}`,
+    `Q ${westMid.x} ${westMid.y} ${nw.x} ${nw.y} Z`
+  ];
+  return pathSegments.join(' ');
+}
+
+/**
  * Get the SIZE constant for external use.
  */
 export function getSize() {
