@@ -241,6 +241,99 @@ export function getPointOnBowedSide(side, t, bowAmount = DEFAULT_BOW_AMOUNT) {
 }
 
 /**
+ * Split a quadratic Bézier curve at parameter t using de Casteljau's algorithm.
+ * Returns two sets of control points: one for the curve from 0 to t, and one for t to 1.
+ * @param {Object} p0 - Start point { x, y }
+ * @param {Object} p1 - Control point { x, y }
+ * @param {Object} p2 - End point { x, y }
+ * @param {number} t - Parameter at which to split (0 to 1)
+ * @returns {Object} { left: { p0, p1, p2 }, right: { p0, p1, p2 } }
+ */
+function splitQuadraticBezier(p0, p1, p2, t) {
+  // Linear interpolation helper
+  const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  
+  // First level: points along p0-p1 and p1-p2
+  const q0 = lerp(p0, p1, t);
+  const q1 = lerp(p1, p2, t);
+  
+  // Second level: point on the curve at t
+  const r = lerp(q0, q1, t);
+  
+  return {
+    left: { p0: p0, p1: q0, p2: r },
+    right: { p0: r, p1: q1, p2: p2 }
+  };
+}
+
+/**
+ * Extract a portion of a quadratic Bézier curve from t1 to t2.
+ * @param {Object} p0 - Start point { x, y }
+ * @param {Object} p1 - Control point { x, y }
+ * @param {Object} p2 - End point { x, y }
+ * @param {number} t1 - Start parameter (0 to 1)
+ * @param {number} t2 - End parameter (0 to 1)
+ * @returns {Object} { p0, p1, p2 } - Control points for the sub-curve
+ */
+function extractQuadraticBezierSegment(p0, p1, p2, t1, t2) {
+  if (t1 >= t2) {
+    // Degenerate case: return a point
+    const pt = evaluateQuadraticBezier(p0, p1, p2, t1);
+    return { p0: pt, p1: pt, p2: pt };
+  }
+  
+  // First, split at t1 to get the right portion (t1 to 1)
+  const split1 = splitQuadraticBezier(p0, p1, p2, t1);
+  
+  // Now we have a curve from t1 to 1
+  // We need to extract from 0 to (t2-t1)/(1-t1) of this new curve
+  const newT2 = (t2 - t1) / (1 - t1);
+  
+  // Split the right portion at newT2 to get the left portion (which is our segment)
+  const split2 = splitQuadraticBezier(split1.right.p0, split1.right.p1, split1.right.p2, newT2);
+  
+  return split2.left;
+}
+
+/**
+ * Get the control points (p0, p1, p2) for a bowed side.
+ * @param {string} side - The side ('north', 'east', 'south', 'west')
+ * @param {number} bowAmount - How much the sides are bowed outward
+ * @returns {Object} { p0, p1, p2 } - Start, control, and end points
+ */
+function getBowedSideControlPoints(side, bowAmount = DEFAULT_BOW_AMOUNT) {
+  const cp = getBowedRhombusControlPoints(bowAmount);
+  
+  switch (side) {
+    case 'north':
+      return { p0: cp.nw, p1: cp.northMid, p2: cp.ne };
+    case 'east':
+      return { p0: cp.se, p1: cp.eastMid, p2: cp.ne };
+    case 'south':
+      return { p0: cp.se, p1: cp.southMid, p2: cp.sw };
+    case 'west':
+      return { p0: cp.nw, p1: cp.westMid, p2: cp.sw };
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
+}
+
+/**
+ * Get an SVG path string for a portion of a bowed side.
+ * @param {string} side - The side ('north', 'east', 'south', 'west')
+ * @param {number} t1 - Start parameter (0 to 1)
+ * @param {number} t2 - End parameter (0 to 1)
+ * @param {number} bowAmount - How much the sides are bowed outward
+ * @returns {string} SVG path string (M ... Q ...)
+ */
+export function getBowedSideSegmentPath(side, t1, t2, bowAmount = DEFAULT_BOW_AMOUNT) {
+  const sideCP = getBowedSideControlPoints(side, bowAmount);
+  const segment = extractQuadraticBezierSegment(sideCP.p0, sideCP.p1, sideCP.p2, t1, t2);
+  
+  return `M ${segment.p0.x} ${segment.p0.y} Q ${segment.p1.x} ${segment.p1.y} ${segment.p2.x} ${segment.p2.y}`;
+}
+
+/**
  * Get SVG path for the rhombus outline with bowed (curved outward) sides.
  * This is used in combinatorial mode to better visualize edges from a side 
  * to the same side by creating visual space between the path and the boundary.
