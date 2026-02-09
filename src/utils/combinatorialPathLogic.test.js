@@ -212,8 +212,9 @@ describe('addFirstEdge', () => {
   });
 
   it('should produce valid t values when going from north to east "after start"', () => {
-    // This tests the t=1.25 bug: when both points are in the same group
-    // and we go to "after start", the t values must still be in [0, 1]
+    // Bug fix test: Previously, creating an edge from north to east "after start"
+    // would result in t=1.25 because position calculations were incorrect.
+    // Valid t values must be in range [0, 1], representing position along a side.
     const state = createInitialState();
     const fromSegment = { startPos: null, endPos: null, side: 'north' };
     // "after start" segment has startPos: 0, endPos: null
