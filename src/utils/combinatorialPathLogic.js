@@ -380,14 +380,14 @@ function perimeterKey(point, nNE, nSW) {
   
   // Walking CCW from NW corner: north (W→E) → east (N→S) → south (E→W) → west (S→N)
   // 
-  // North: t increases W→E, so positions increase in walk direction
+  // North: Walking W→E, positions increase in walk direction
   //   key = pos
-  // East: t=0 at SE corner, t=1 at NE corner (from toPaper)
-  //   Walking N→S: high t first, so key = nNE + (nNE - 1 - pos)
-  // South: t=0 at SE corner, t=1 at SW corner (from toPaper)
-  //   Walking E→W: low t first, so key = 2*nNE + pos
-  // West: t=0 at NW corner, t=1 at SW corner (from toPaper)
-  //   Walking S→N: high t first, so key = 2*nNE + nSW + (nSW - 1 - pos)
+  // East: Walking N→S, positions decrease in walk direction
+  //   key = nNE + (nNE - 1 - pos)
+  // South: Walking E→W, positions increase in walk direction
+  //   key = 2*nNE + pos
+  // West: Walking S→N, positions decrease in walk direction
+  //   key = 2*nNE + nSW + (nSW - 1 - pos)
   
   switch (side) {
     case 'north':
