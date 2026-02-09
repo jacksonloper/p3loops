@@ -5,7 +5,6 @@ import {
   getBowedSideSegmentPath,
   getSize,
   getShear,
-  getIdentifiedSide,
   getPointOnSide
 } from '../utils/geometry.js';
 import { getSideGroup } from '../utils/combinatorialPathLogic.js';
@@ -29,28 +28,31 @@ const TAP_MAX_DISTANCE = 10;      // Maximum movement for a tap (in screen pixel
 function getSegmentCoords(segment, allPoints) {
   const side = segment.side;
   const group = getSideGroup(side);
-  const canonicalSide = group === 'NE' ? 'north' : 'south';
-  const identifiedSide = getIdentifiedSide(canonicalSide);
   
-  // Get the points in this group (for position calculation)
-  const groupPoints = allPoints.filter(p => 
-    p.side === canonicalSide || p.side === identifiedSide
-  ).sort((a, b) => a.t - b.t);
+  // Get the points in this group (filter by group, not by side, since all points
+  // in a group share the same t values regardless of which identified side they're on)
+  const groupPoints = allPoints.filter(p => p.group === group);
   
-  // Determine t range for the segment
+  // Determine t range for the segment by looking up points by their pos field,
+  // NOT by array index. The segment.startPos/endPos are position indices that
+  // correspond to the point's pos field, not array indices.
   let startT, endT;
   if (segment.startPos === null && segment.endPos === null) {
     startT = 0;
     endT = 1;
   } else if (segment.startPos === null) {
+    const endPoint = groupPoints.find(p => p.pos === segment.endPos);
     startT = 0;
-    endT = groupPoints[segment.endPos]?.t ?? 0;
+    endT = endPoint?.t ?? 0;
   } else if (segment.endPos === null) {
-    startT = groupPoints[segment.startPos]?.t ?? 1;
+    const startPoint = groupPoints.find(p => p.pos === segment.startPos);
+    startT = startPoint?.t ?? 1;
     endT = 1;
   } else {
-    startT = groupPoints[segment.startPos]?.t ?? 0;
-    endT = groupPoints[segment.endPos]?.t ?? 1;
+    const startPoint = groupPoints.find(p => p.pos === segment.startPos);
+    const endPoint = groupPoints.find(p => p.pos === segment.endPos);
+    startT = startPoint?.t ?? 0;
+    endT = endPoint?.t ?? 1;
   }
   
   // Calculate the midpoint (where the new point would go)
