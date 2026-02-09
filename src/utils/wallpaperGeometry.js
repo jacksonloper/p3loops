@@ -268,20 +268,41 @@ export function getEntryPoint(exitSide, t) {
 }
 
 /**
- * Check if an edge is a same-side edge (both endpoints on the same or identified sides).
- * Same-side edges walk along the boundary and don't cross into a new rhombus.
- * This includes edges between identified sides (north↔east, south↔west).
+ * Check if an edge is a same-side edge (stays within the same rhombus).
+ * An edge stays in the same rhombus if:
+ * 1. Both endpoints are on the SAME side (e.g., north→north)
+ * 2. Both endpoints are on IDENTIFIED sides AND at the SAME t value (within tolerance)
+ *    (e.g., north(0.5)→east(0.5) represents the same point and doesn't cross)
+ * 
+ * If the endpoints are on identified sides but at DIFFERENT t values, the edge
+ * actually crosses the rhombus interior and enters a new rhombus.
+ * 
  * @param {Object} edge - Edge object with from/to points
- * @returns {boolean} - True if both endpoints are on the same or identified sides
+ * @returns {boolean} - True if the edge stays within the same rhombus
  */
 function isSameSideEdge(edge) {
   if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
     return false;
   }
-  // Check if same side OR identified sides (north↔east, south↔west)
+  
   const fromSide = edge.from.side;
   const toSide = edge.to.side;
-  return fromSide === toSide || getIdentifiedSide(fromSide) === toSide;
+  const fromT = edge.from.t;
+  const toT = edge.to.t;
+  
+  // Same literal side - always stays in same rhombus
+  if (fromSide === toSide) {
+    return true;
+  }
+  
+  // Check for identified sides (north↔east, south↔west)
+  // Only treat as same-side if the t values are equal (same point via identification)
+  const EPSILON = 0.0001;
+  if (getIdentifiedSide(fromSide) === toSide && Math.abs(fromT - toT) < EPSILON) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**

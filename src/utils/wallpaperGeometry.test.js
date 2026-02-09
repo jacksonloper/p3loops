@@ -453,38 +453,56 @@ describe('edge length sanity check', () => {
     expect(closingEdgeLength).toBeLessThan(expectedMaxLength);
   });
 
-  it('should treat identified-side edges (north→east, south→west) as same-side edges', () => {
-    // An edge from north to east should be treated as a same-side edge
-    // (they are identified, so the path stays in the same rhombus)
-    const identifiedSideEdges = [
+  it('should treat edges between identified sides with SAME t value as same-side edges', () => {
+    // An edge from north(0.7) to east(0.7) is essentially a zero-length edge (same point)
+    // This should stay in the same rhombus
+    const identifiedSameTPosEdges = [
       { from: { side: 'north', t: 0.3 }, to: { side: 'south', t: 0.5 } },
       { from: { side: 'west', t: 0.5 }, to: { side: 'north', t: 0.7 } },
-      // This edge goes from east (identified with north) to north - should stay in same rhombus
+      // This edge goes from east(0.7) to north(0.7) - same t value, so same point
+      { from: { side: 'east', t: 0.7 }, to: { side: 'north', t: 0.7 } }
+    ];
+    
+    const points = pathToWallpaperPath(identifiedSameTPosEdges);
+    
+    // The last edge is essentially zero-length (same point via identification)
+    const lastEdgeLength = distance(points[points.length - 2], points[points.length - 1]);
+    
+    // The edge should be nearly zero length since it connects the same point
+    expect(lastEdgeLength).toBeLessThan(1); // Very small, accounting for floating point
+  });
+
+  it('should treat edges between identified sides with DIFFERENT t values as crossing edges', () => {
+    // An edge from east(0.7) to north(0.4) goes between identified sides but at different
+    // t values, so it actually crosses the rhombus and enters a new rhombus
+    const identifiedDiffTPosEdges = [
+      { from: { side: 'north', t: 0.3 }, to: { side: 'south', t: 0.5 } },
+      { from: { side: 'west', t: 0.5 }, to: { side: 'north', t: 0.7 } },
+      // This edge goes from east(0.7) to north(0.4) - different t values
       { from: { side: 'east', t: 0.7 }, to: { side: 'north', t: 0.4 } }
     ];
     
-    const points = pathToWallpaperPath(identifiedSideEdges);
+    const points = pathToWallpaperPath(identifiedDiffTPosEdges);
     
-    // The last edge goes from east(0.7) to north(0.4)
-    // These are on identified sides, so the edge should be short (staying in same rhombus)
+    // With 3 edges where the last one crosses the rhombus, we should have 4 points
+    expect(points.length).toBe(4);
+    
+    // The last edge should cross the rhombus, so it will be longer than a same-side edge
     const lastEdgeLength = distance(points[points.length - 2], points[points.length - 1]);
-    
-    // The max expected length for an identified-side edge is roughly the diagonal of the rhombus
-    // but it should NOT be crossing into a new rhombus
-    // If treated correctly, the edge should be relatively short
-    expect(lastEdgeLength).toBeLessThan(RHOMBUS_DIAMETER);
+    // It should be a significant length (not nearly zero like a same-point edge)
+    expect(lastEdgeLength).toBeGreaterThan(10);
   });
 
-  it('should not create extra rhombus frames for identified-side edges', () => {
-    // Path that ends with an identified-side edge (east→north)
-    const identifiedSideEdges = [
+  it('should not create extra rhombus frames for same-point identified-side edges', () => {
+    // Path that ends with an identified-side edge at the SAME t value
+    const identifiedSameTPosEdges = [
       { from: { side: 'north', t: 0.3 }, to: { side: 'south', t: 0.5 } },
       { from: { side: 'west', t: 0.5 }, to: { side: 'east', t: 0.7 } },
-      // This edge goes from north (identified with east) to east - should stay in same rhombus
-      { from: { side: 'north', t: 0.7 }, to: { side: 'east', t: 0.4 } }
+      // This edge goes from north(0.7) to east(0.7) - same point via identification
+      { from: { side: 'north', t: 0.7 }, to: { side: 'east', t: 0.7 } }
     ];
     
-    const points = pathToWallpaperPath(identifiedSideEdges);
+    const points = pathToWallpaperPath(identifiedSameTPosEdges);
     
     // With correct handling, we should have 4 points (start + 3 edge endpoints)
     expect(points.length).toBe(4);
