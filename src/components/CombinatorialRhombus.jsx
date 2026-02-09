@@ -343,6 +343,20 @@ function CombinatorialRhombus({
     setPan({ x: 0, y: 0 });
   }, []);
   
+  // Scale factors for visual elements to maintain screen size when zooming
+  // All sizes divided by zoom to appear constant on screen
+  const strokeScale = 1 / zoom;
+  const baseEdgeStrokeWidth = 3;
+  const baseSegmentStrokeWidth = 4;
+  const baseSegmentHitareaWidth = 20;
+  const basePointRadius = 6;
+  const baseStartPointRadius = 10;
+  const baseMidpointRadius = 8;
+  const baseFontSize = 12;
+  const baseSmallFontSize = 10;
+  const baseRhombusStrokeWidth = 2;
+  const baseLabelDist = 15;
+  
   // Use the bowed rhombus path (curved sides) for better visualization of same-side edges
   const rhombusPath = getBowedRhombusPath();
   
@@ -419,21 +433,21 @@ function CombinatorialRhombus({
         onTouchEnd={handleTouchEnd}
       >
         {/* Rhombus outline */}
-        <path d={rhombusPath} className="rhombus-path" />
+        <path d={rhombusPath} className="rhombus-path" strokeWidth={baseRhombusStrokeWidth * strokeScale} />
         
         {/* Corner angle indicators */}
-        <text x={ne.x + 10} y={ne.y - 10} className="angle-text">120°</text>
-        <text x={sw.x - 25} y={sw.y + 15} className="angle-text">120°</text>
-        <text x={nw.x - 25} y={nw.y - 5} className="angle-text">60°</text>
-        <text x={se.x + 10} y={se.y + 15} className="angle-text">60°</text>
+        <text x={ne.x + 10 * strokeScale} y={ne.y - 10 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={sw.x - 25 * strokeScale} y={sw.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
+        <text x={nw.x - 25 * strokeScale} y={nw.y - 5 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
+        <text x={se.x + 10 * strokeScale} y={se.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
         
         {/* Identification indicators */}
-        <text x={ne.x + 35} y={ne.y - 25} className="identification-text">N≡E</text>
-        <text x={sw.x - 45} y={sw.y + 30} className="identification-text">S≡W</text>
+        <text x={ne.x + 35 * strokeScale} y={ne.y - 25 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>N≡E</text>
+        <text x={sw.x - 45 * strokeScale} y={sw.y + 30 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>S≡W</text>
         
         {/* Side labels */}
         {sideLabels.map(({ key, x, y, label }) => (
-          <text key={key} x={x} y={y} className="side-label" textAnchor="middle" dominantBaseline="middle">
+          <text key={key} x={x} y={y} className="side-label" textAnchor="middle" dominantBaseline="middle" fontSize={baseFontSize * strokeScale}>
             {label}
           </text>
         ))}
@@ -450,6 +464,7 @@ function CombinatorialRhombus({
                 x2={line.x2}
                 y2={line.y2}
                 className="segment-hitarea"
+                strokeWidth={baseSegmentHitareaWidth * strokeScale}
                 onClick={() => handleSegmentClick(segment)}
               />
               {/* Visible segment indicator */}
@@ -459,6 +474,7 @@ function CombinatorialRhombus({
                 x2={line.x2}
                 y2={line.y2}
                 className={`segment-available ${isSelected ? 'segment-selected' : ''}`}
+                strokeWidth={baseSegmentStrokeWidth * strokeScale}
                 onClick={() => handleSegmentClick(segment)}
               />
             </g>
@@ -474,12 +490,14 @@ function CombinatorialRhombus({
               x2={line.x2}
               y2={line.y2}
               className="segment-from"
+              strokeWidth={6 * strokeScale}
             />
             <circle
               cx={line.midX}
               cy={line.midY}
-              r={8}
+              r={baseMidpointRadius * strokeScale}
               className="segment-from-midpoint"
+              strokeWidth={2 * strokeScale}
             />
           </g>
         ))}
@@ -493,12 +511,14 @@ function CombinatorialRhombus({
               x2={line.x2}
               y2={line.y2}
               className="segment-highlight"
+              strokeWidth={6 * strokeScale}
             />
             <circle
               cx={line.midX}
               cy={line.midY}
-              r={8}
+              r={baseMidpointRadius * strokeScale}
               className="segment-midpoint"
+              strokeWidth={2 * strokeScale}
             />
           </g>
         ))}
@@ -521,6 +541,7 @@ function CombinatorialRhombus({
                 x2={coords.to.x}
                 y2={coords.to.y}
                 className={`edge-line ${isHighlighted ? 'edge-line-problem' : ''}`}
+                strokeWidth={(isHighlighted ? 5 : baseEdgeStrokeWidth) * strokeScale}
               />
               <text
                 x={midX}
@@ -528,6 +549,7 @@ function CombinatorialRhombus({
                 className="edge-arrow"
                 textAnchor="middle"
                 dominantBaseline="middle"
+                fontSize={baseFontSize * strokeScale}
                 transform={`rotate(${angle}, ${midX}, ${midY})`}
               >
                 ▶
@@ -543,19 +565,19 @@ function CombinatorialRhombus({
           // Calculate label offset based on side to position label outside the rhombus
           let labelOffsetX = 0;
           let labelOffsetY = 0;
-          const labelDist = 15;
+          const scaledLabelDist = baseLabelDist * strokeScale;
           switch (point.side) {
             case 'north':
-              labelOffsetY = -labelDist;
+              labelOffsetY = -scaledLabelDist;
               break;
             case 'east':
-              labelOffsetX = labelDist;
+              labelOffsetX = scaledLabelDist;
               break;
             case 'south':
-              labelOffsetY = labelDist;
+              labelOffsetY = scaledLabelDist;
               break;
             case 'west':
-              labelOffsetX = -labelDist;
+              labelOffsetX = -scaledLabelDist;
               break;
           }
           // Use different colors for NE vs SW groups
@@ -565,8 +587,9 @@ function CombinatorialRhombus({
               <circle
                 cx={coords.x}
                 cy={coords.y}
-                r={6}
+                r={basePointRadius * strokeScale}
                 className={`boundary-point ${groupClass}`}
+                strokeWidth={strokeScale}
               />
               <text
                 x={coords.x + labelOffsetX}
@@ -574,6 +597,7 @@ function CombinatorialRhombus({
                 className="point-label"
                 textAnchor="middle"
                 dominantBaseline="middle"
+                fontSize={baseFontSize * strokeScale}
               >
                 {/* Display 1-based position (pos is 0-based internally) */}
                 {point.pos + 1}
@@ -587,8 +611,9 @@ function CombinatorialRhombus({
           <circle
             cx={getPointOnBowedSide(nextStartPoint.side, nextStartPoint.t).x}
             cy={getPointOnBowedSide(nextStartPoint.side, nextStartPoint.t).y}
-            r={10}
+            r={baseStartPointRadius * strokeScale}
             className="start-point"
+            strokeWidth={2 * strokeScale}
           />
         )}
       </svg>
