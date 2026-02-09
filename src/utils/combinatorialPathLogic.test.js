@@ -150,7 +150,7 @@ describe('pointsEqual', () => {
 });
 
 describe('edgesCross', () => {
-  it('should detect crossing cross-group chords when positions interleave', () => {
+  it('should detect crossing when edges form an X shape geometrically', () => {
     // Create a state with 2 points on each group
     let state = createInitialState();
     state = insertPoint(state, 'NE', 0, 'north');
@@ -158,40 +158,46 @@ describe('edgesCross', () => {
     state = insertPoint(state, 'SW', 0, 'south');
     state = insertPoint(state, 'SW', 1, 'south');
     
-    // Edge from NE[0] to SW[1]
+    // With 2 points on each side:
+    // NE[0] at t=0.25: north(0.25, 0)
+    // NE[1] at t=0.75: north(0.75, 0)
+    // SW[0] at t=0.25: south(0.75, 1) - note: south t=0 is at SE corner!
+    // SW[1] at t=0.75: south(0.25, 1)
+    
+    // Edge from NE[0] to SW[0]: (0.25, 0) -> (0.75, 1) - diagonal going right-down
     const edge1 = { 
       from: { side: 'north', pos: 0 }, 
-      to: { side: 'south', pos: 1 } 
+      to: { side: 'south', pos: 0 } 
     };
     
-    // Edge from NE[1] to SW[0] - positions INTERLEAVE (0<1 && 1>0)
-    // These edges should CROSS
+    // Edge from NE[1] to SW[1]: (0.75, 0) -> (0.25, 1) - diagonal going left-down
+    // These diagonals form an X and CROSS in the middle
     const edge2 = { 
       from: { side: 'north', pos: 1 }, 
-      to: { side: 'south', pos: 0 } 
+      to: { side: 'south', pos: 1 } 
     };
     
     expect(edgesCross(edge1, edge2, state)).toBe(true);
   });
 
-  it('should not detect crossing for parallel cross-group chords', () => {
+  it('should not detect crossing for parallel vertical edges', () => {
     let state = createInitialState();
     state = insertPoint(state, 'NE', 0, 'north');
     state = insertPoint(state, 'NE', 1, 'north');
     state = insertPoint(state, 'SW', 0, 'south');
     state = insertPoint(state, 'SW', 1, 'south');
     
-    // Edge from NE[0] to SW[0]
+    // Edge from NE[0] to SW[1]: (0.25, 0) -> (0.25, 1) - vertical line at x=0.25
     const edge1 = { 
       from: { side: 'north', pos: 0 }, 
-      to: { side: 'south', pos: 0 } 
+      to: { side: 'south', pos: 1 } 
     };
     
-    // Edge from NE[1] to SW[1] - parallel, positions DON'T interleave
-    // These edges should NOT cross
+    // Edge from NE[1] to SW[0]: (0.75, 0) -> (0.75, 1) - vertical line at x=0.75
+    // These are parallel vertical lines - they DON'T cross
     const edge2 = { 
       from: { side: 'north', pos: 1 }, 
-      to: { side: 'south', pos: 1 } 
+      to: { side: 'south', pos: 0 } 
     };
     
     expect(edgesCross(edge1, edge2, state)).toBe(false);
@@ -294,10 +300,10 @@ describe('addEdgeToSegment', () => {
     const startPoint = getNextStartPoint(state1);
     expect(startPoint.side).toBe('west');
     
-    // Add edge to a new segment on north side
+    // Add edge to a valid segment on north side (before the existing point)
+    // Segment [null, 0] doesn't geometrically cross the existing edge
     const segments = getSegmentsOnSide(state1, 'north');
-    // There should be 2 segments now (before and after the one point)
-    const result = addEdgeToSegment(state1, startPoint, segments[1]);
+    const result = addEdgeToSegment(state1, startPoint, segments[0]); // Use segment [null, 0]
     
     expect(result.newState.edges.length).toBe(2);
     expect(result.newState.points.NE.length).toBe(2);
@@ -350,10 +356,10 @@ describe('removeLastEdge', () => {
     
     const { newState: state1 } = addFirstEdge(state, fromSegment, toSegment);
     
-    // Add a second edge
+    // Add a second edge to a valid segment (before the existing point)
     const startPoint = getNextStartPoint(state1);
     const segments = getSegmentsOnSide(state1, 'north');
-    const { newState: state2 } = addEdgeToSegment(state1, startPoint, segments[1]);
+    const { newState: state2 } = addEdgeToSegment(state1, startPoint, segments[0]); // Use valid segment
     
     expect(state2.edges.length).toBe(2);
     expect(state2.points.NE.length).toBe(2);
