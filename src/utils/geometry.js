@@ -227,14 +227,14 @@ export function getPointOnBowedSide(side, t, bowAmount = DEFAULT_BOW_AMOUNT) {
       // North side: nw -> ne, control point is northMid
       return evaluateQuadraticBezier(cp.nw, cp.northMid, cp.ne, t);
     case 'east':
-      // East side: ne -> se, control point is eastMid
-      return evaluateQuadraticBezier(cp.ne, cp.eastMid, cp.se, t);
+      // East side: se -> ne (south to north), control point is eastMid
+      return evaluateQuadraticBezier(cp.se, cp.eastMid, cp.ne, t);
     case 'south':
       // South side: se -> sw, control point is southMid
       return evaluateQuadraticBezier(cp.se, cp.southMid, cp.sw, t);
     case 'west':
-      // West side: sw -> nw, control point is westMid
-      return evaluateQuadraticBezier(cp.sw, cp.westMid, cp.nw, t);
+      // West side: nw -> sw (north to south), control point is westMid
+      return evaluateQuadraticBezier(cp.nw, cp.westMid, cp.sw, t);
     default:
       throw new Error(`Unknown side: ${side}`);
   }

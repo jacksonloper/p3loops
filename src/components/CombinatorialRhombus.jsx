@@ -289,17 +289,46 @@ function CombinatorialRhombus({
           );
         })}
         
-        {/* All points (equally spaced) - using bowed positions */}
+        {/* All points (equally spaced) - using bowed positions with integer labels */}
         {allPoints.map((point, index) => {
           const coords = getPointOnBowedSide(point.side, point.t);
+          // Calculate label offset based on side to position label outside the rhombus
+          let labelOffsetX = 0;
+          let labelOffsetY = 0;
+          const labelDist = 15;
+          switch (point.side) {
+            case 'north':
+              labelOffsetY = -labelDist;
+              break;
+            case 'east':
+              labelOffsetX = labelDist;
+              break;
+            case 'south':
+              labelOffsetY = labelDist;
+              break;
+            case 'west':
+              labelOffsetX = -labelDist;
+              break;
+          }
           return (
-            <circle
-              key={`point-${index}`}
-              cx={coords.x}
-              cy={coords.y}
-              r={6}
-              className="boundary-point"
-            />
+            <g key={`point-${index}`}>
+              <circle
+                cx={coords.x}
+                cy={coords.y}
+                r={6}
+                className="boundary-point"
+              />
+              <text
+                x={coords.x + labelOffsetX}
+                y={coords.y + labelOffsetY}
+                className="point-label"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {/* Display 1-based position (pos is 0-based internally) */}
+                {point.pos + 1}
+              </text>
+            </g>
           );
         })}
         
