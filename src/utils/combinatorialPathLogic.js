@@ -755,6 +755,10 @@ function simplifyEdges(floatEdges) {
  * Check if a loop can be closed.
  * The loop can be closed if the last point and first point are on the same side group,
  * and the closing edge would not cross any existing edge.
+ * 
+ * The closing edge goes from the continuation point (via side identification) to the first point.
+ * IMPORTANTLY: to stay along the boundary (not cross the rhombus), the closing edge must
+ * have both endpoints on the SAME side. So we use firstPoint.side for the "from" point.
  */
 export function canCloseLoop(state) {
   if (state.edges.length < 2) {
@@ -767,20 +771,21 @@ export function canCloseLoop(state) {
   const firstPoint = firstEdge.from;
   const lastPoint = lastEdge.to;
   
-  // Get the continuation point (identified side of last point)
-  const continuationSide = getIdentifiedSide(lastPoint.side);
-  const continuationPoint = { side: continuationSide, pos: lastPoint.pos };
-  
   // Check if they're on the same side group
-  if (getSideGroup(continuationSide) !== getSideGroup(firstPoint.side)) {
+  if (getSideGroup(lastPoint.side) !== getSideGroup(firstPoint.side)) {
     return { 
       canClose: false, 
-      error: `Cannot close: current position is on ${continuationSide}, but start is on ${firstPoint.side}` 
+      error: `Cannot close: current position is on ${lastPoint.side}, but start is on ${firstPoint.side} (different side groups)` 
     };
   }
   
   // Create the closing edge
-  const closingEdge = { from: continuationPoint, to: firstPoint };
+  // The edge should stay on the SAME side as firstPoint to walk along the boundary.
+  // The "from" point has the same position as lastPoint but on firstPoint's side.
+  const closingEdge = { 
+    from: { side: firstPoint.side, pos: lastPoint.pos }, 
+    to: firstPoint 
+  };
   
   // Check for crossing
   const crossingResult = edgeCrossesPath(closingEdge, state);

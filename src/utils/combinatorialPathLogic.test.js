@@ -338,6 +338,62 @@ describe('canCloseLoop', () => {
     const result = canCloseLoop(state);
     expect(result.canClose).toBe(true);
   });
+
+  it('should create closing edge on the same side as first point', () => {
+    // Path: north(0) -> south(0) -> north(1) (via west->north continuation)
+    // The path ends at north(1), but the continuation would be on east(1)
+    // We want to close back to north(0)
+    // The closing edge should be from north(1) to north(0), NOT from east(1) to north(0)
+    let state = {
+      points: {
+        NE: [
+          { pos: 0, originalSide: 'north' },
+          { pos: 1, originalSide: 'north' }
+        ],
+        SW: [
+          { pos: 0, originalSide: 'south' }
+        ]
+      },
+      edges: [
+        { from: { side: 'north', pos: 0 }, to: { side: 'south', pos: 0 } },
+        { from: { side: 'west', pos: 0 }, to: { side: 'north', pos: 1 } }
+      ]
+    };
+    
+    const result = canCloseLoop(state);
+    expect(result.canClose).toBe(true);
+    
+    // The closing edge should have BOTH endpoints on the same side (north)
+    // This ensures the edge walks along the boundary, not across the rhombus
+    expect(result.closingEdge.from.side).toBe('north');
+    expect(result.closingEdge.to.side).toBe('north');
+  });
+
+  it('should NOT create closing edge that crosses the rhombus (identified sides at different positions)', () => {
+    // Same as above but verify the closing edge doesn't go from east to north
+    let state = {
+      points: {
+        NE: [
+          { pos: 0, originalSide: 'east' },
+          { pos: 1, originalSide: 'north' }
+        ],
+        SW: [
+          { pos: 0, originalSide: 'south' }
+        ]
+      },
+      edges: [
+        { from: { side: 'east', pos: 0 }, to: { side: 'south', pos: 0 } },
+        { from: { side: 'west', pos: 0 }, to: { side: 'north', pos: 1 } }
+      ]
+    };
+    
+    const result = canCloseLoop(state);
+    expect(result.canClose).toBe(true);
+    
+    // The closing edge should be from east(1) to east(0) - same side!
+    // NOT from north(1) to east(0) which would cross the rhombus
+    expect(result.closingEdge.from.side).toBe(result.closingEdge.to.side);
+  });
 });
 
 describe('ordering preservation', () => {
