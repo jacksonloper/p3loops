@@ -364,24 +364,17 @@ export function segmentToString(segment) {
 /**
  * Check if two chords (edges) cross combinatorially.
  * 
- * The key insight is that edges can cross in several scenarios based on
- * which side groups they connect:
+ * Edge types:
+ * 1. Cross-group edge (e.g., north→south): crosses between NE and SW groups
+ * 2. Same-side edge (e.g., north→north): stays on one side of the boundary
+ * 3. Cross-corner edge (e.g., north→east): crosses between identified sides in same group
  * 
- * 1. Both edges go from NE to SW (or SW to NE):
- *    They cross if the positions interleave.
- *    Edge1: NE[a] -> SW[b], Edge2: NE[c] -> SW[d]
- *    Cross if (a < c AND d < b) OR (c < a AND b < d)
+ * For cross-group edges, we use the classic chord crossing check:
+ *   - NE positions interleave with SW positions
  * 
- * 2. One edge goes NE to SW, the other goes within the same group:
- *    A same-side edge (NE to NE or SW to SW) can be crossed by a 
- *    cross-group edge if the cross-group edge's endpoint on that side
- *    is between the same-side edge's endpoints.
+ * For same-side edges, we check if position intervals overlap properly.
  * 
- * 3. Both edges are same-side (NE to NE or SW to SW):
- *    On the same side, they cross if their position intervals overlap
- *    in the middle (but not if one contains the other).
- *    Edge1: [a, b], Edge2: [c, d] (sorted)
- *    Cross if (a < c < b < d) OR (c < a < d < b)
+ * For cross-corner edges, we convert to float positions and do geometric checking.
  * 
  * @param {Object} edge1 - First edge { from: point, to: point }
  * @param {Object} edge2 - Second edge { from: point, to: point }
@@ -397,9 +390,14 @@ export function edgesCross(edge1, edge2, state) {
   const edge1CrossGroup = group1from !== group1to;
   const edge2CrossGroup = group2from !== group2to;
   
+  const edge1SameSide = edge1.from.side === edge1.to.side;
+  const edge2SameSide = edge2.from.side === edge2.to.side;
+  
+  const edge1CrossCorner = !edge1CrossGroup && !edge1SameSide;
+  const edge2CrossCorner = !edge2CrossGroup && !edge2SameSide;
+  
+  // Case 1: Both edges cross between groups
   if (edge1CrossGroup && edge2CrossGroup) {
-    // Both edges cross between groups (NE to SW or SW to NE)
-    // Normalize so both go from NE to SW
     let a, b, c, d;
     
     if (group1from === 'NE') {
@@ -418,50 +416,91 @@ export function edgesCross(edge1, edge2, state) {
       d = edge2.from.pos;
     }
     
-    // Get max positions for normalization
     const maxNE = countPointsInGroup(state, 'NE');
     const maxSW = countPointsInGroup(state, 'SW');
     
-    // Normalize to [0, 1] range for comparison
     const na = a / maxNE;
     const nc = c / maxNE;
     const nb = b / maxSW;
     const nd = d / maxSW;
     
-    // They cross if positions interleave: (a < c AND d < b) OR (c < a AND b < d)
     return (na < nc && nd < nb) || (nc < na && nb < nd);
   }
   
-  if (!edge1CrossGroup && !edge2CrossGroup) {
-    // Both edges are same-side (within one group)
-    if (group1from !== group2from) {
-      // Different groups, can't cross
-      return false;
+  // Case 2: Both edges are same-side
+  if (edge1SameSide && edge2SameSide) {
+    if (edge1.from.side !== edge2.from.side) {
+      return false; // Different sides, can't cross
     }
     
-    // Same group, check if position intervals interleave
-    // Sort endpoints
     let a1 = edge1.from.pos, b1 = edge1.to.pos;
     let a2 = edge2.from.pos, b2 = edge2.to.pos;
     if (a1 > b1) [a1, b1] = [b1, a1];
     if (a2 > b2) [a2, b2] = [b2, a2];
     
-    // Intervals [a1, b1] and [a2, b2] cross if they properly interleave:
-    // (a1 < a2 < b1 < b2) OR (a2 < a1 < b2 < b1)
     return (a1 < a2 && a2 < b1 && b1 < b2) || (a2 < a1 && a1 < b2 && b2 < b1);
   }
   
-  // One edge crosses groups, the other stays within one group
-  // The cross-group edge could cross the same-group edge
-  // This happens when the cross-group edge's endpoint on the same-group side
-  // is between the same-group edge's endpoints
+  // Case 3: Cross-corner edge(s) involved
+  // Convert to float positions and use geometric intersection
+  if (edge1CrossCorner || edge2CrossCorner) {
+    const nNE = countPointsInGroup(state, 'NE');
+    const nSW = countPointsInGroup(state, 'SW');
+    
+    // Convert a point to paper coordinates (eastward, southward)
+    function toFloat(point) {
+      const group = getSideGroup(point.side);
+      const n = group === 'NE' ? nNE : nSW;
+      const t = (point.pos + 0.5) / Math.max(n, 1);
+      
+      // Map to paper coordinates based on side geometry
+      // north: NW (0,0) to NE (1,0)
+      // east: SE (1,1) to NE (1,0)
+      // south: SE (1,1) to SW (0,1)
+      // west: NW (0,0) to SW (0,1)
+      switch (point.side) {
+        case 'north': return { eastward: t, southward: 0 };
+        case 'east': return { eastward: 1, southward: 1 - t };
+        case 'south': return { eastward: 1 - t, southward: 1 };
+        case 'west': return { eastward: 0, southward: t };
+        default: throw new Error(`Unknown side: ${point.side}`);
+      }
+    }
+    
+    // Check segment intersection
+    function segmentsIntersect(p1, p2, p3, p4) {
+      function ccw(A, B, C) {
+        return (C.eastward - A.eastward) * (B.southward - A.southward) > 
+               (B.eastward - A.eastward) * (C.southward - A.southward);
+      }
+      
+      function pointsClose(a, b) {
+        const eps = 0.0001;
+        return Math.abs(a.southward - b.southward) < eps && 
+               Math.abs(a.eastward - b.eastward) < eps;
+      }
+      
+      if (pointsClose(p1, p3) || pointsClose(p1, p4) || pointsClose(p2, p3) || pointsClose(p2, p4)) {
+        return false;
+      }
+      
+      return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
+    }
+    
+    const e1_from = toFloat(edge1.from);
+    const e1_to = toFloat(edge1.to);
+    const e2_from = toFloat(edge2.from);
+    const e2_to = toFloat(edge2.to);
+    
+    return segmentsIntersect(e1_from, e1_to, e2_from, e2_to);
+  }
   
+  // Case 4: One edge crosses groups, the other is same-side
   const crossEdge = edge1CrossGroup ? edge1 : edge2;
   const sameEdge = edge1CrossGroup ? edge2 : edge1;
   
-  const sameGroup = getSideGroup(sameEdge.from.side); // Both endpoints in same group
+  const sameGroup = getSideGroup(sameEdge.from.side);
   
-  // Get the cross-edge's position on the same-group side
   let crossPos;
   if (getSideGroup(crossEdge.from.side) === sameGroup) {
     crossPos = crossEdge.from.pos;
@@ -469,11 +508,9 @@ export function edgesCross(edge1, edge2, state) {
     crossPos = crossEdge.to.pos;
   }
   
-  // Get the same-edge's position range
   let sameMin = Math.min(sameEdge.from.pos, sameEdge.to.pos);
   let sameMax = Math.max(sameEdge.from.pos, sameEdge.to.pos);
   
-  // They cross if crossPos is strictly between sameMin and sameMax
   return crossPos > sameMin && crossPos < sameMax;
 }
 
