@@ -362,10 +362,79 @@ export function segmentToString(segment) {
 }
 
 /**
- * Check if two chords (edges) cross geometrically.
+ * Map a boundary point to a unique integer key in cyclic perimeter order.
  * 
- * This uses actual paper coordinates (unit square before shearing) to determine
- * if two edges would cross when drawn on the rhombus.
+ * The perimeter is walked in order: north → east → south → west (CCW around the unit square).
+ * Each point on a side maps to a slot in this cyclic order.
+ * 
+ * For edge crossing purposes, all four sides are treated as distinct even though
+ * north/east and south/west are identified (share the same point set).
+ * 
+ * @param {Object} point - { side: string, pos: number }
+ * @param {number} nNE - Number of points in NE group
+ * @param {number} nSW - Number of points in SW group
+ * @returns {number} Integer key in range [0, 2*nNE + 2*nSW - 1]
+ */
+function perimeterKey(point, nNE, nSW) {
+  const { side, pos } = point;
+  
+  // Walking CCW from NW corner: north (W→E) → east (N→S) → south (E→W) → west (S→N)
+  // 
+  // North: Walking W→E, positions increase in walk direction
+  //   key = pos
+  // East: Walking N→S, positions decrease in walk direction
+  //   key = nNE + (nNE - 1 - pos)
+  // South: Walking E→W, positions increase in walk direction
+  //   key = 2*nNE + pos
+  // West: Walking S→N, positions decrease in walk direction
+  //   key = 2*nNE + nSW + (nSW - 1 - pos)
+  
+  switch (side) {
+    case 'north':
+      return pos;
+    case 'east':
+      return nNE + (nNE - 1 - pos);
+    case 'south':
+      return 2 * nNE + pos;
+    case 'west':
+      return 2 * nNE + nSW + (nSW - 1 - pos);
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
+}
+
+/**
+ * Modular arithmetic helper.
+ * @param {number} x - Value to compute modulo
+ * @param {number} P - Modulus (perimeter length)
+ * @returns {number} x mod P, always non-negative
+ */
+function mod(x, P) {
+  return ((x % P) + P) % P;
+}
+
+/**
+ * Check if x is strictly between a and b in CCW (increasing) direction on a circle of length P.
+ * 
+ * @param {number} a - Start of arc
+ * @param {number} b - End of arc  
+ * @param {number} x - Point to test
+ * @param {number} P - Perimeter length (circle size)
+ * @returns {boolean} True if x is strictly between a and b going CCW
+ */
+function betweenCCW(a, b, x, P) {
+  const ab = mod(b - a, P);
+  const ax = mod(x - a, P);
+  return ax > 0 && ax < ab;
+}
+
+/**
+ * Check if two chords (edges) cross on the perimeter.
+ * 
+ * Uses purely combinatorial integer arithmetic based on the cyclic perimeter order.
+ * Two chords with endpoints (a,b) and (c,d) cross if and only if:
+ * - They do NOT share an endpoint
+ * - The endpoints alternate: exactly one of c or d is strictly between a and b
  * 
  * @param {Object} edge1 - First edge { from: point, to: point }
  * @param {Object} edge2 - Second edge { from: point, to: point }
@@ -375,109 +444,29 @@ export function segmentToString(segment) {
 export function edgesCross(edge1, edge2, state) {
   const nNE = countPointsInGroup(state, 'NE');
   const nSW = countPointsInGroup(state, 'SW');
+  const P = 2 * nNE + 2 * nSW; // Total perimeter length
   
-  /**
-   * Convert a combinatorial point to paper coordinates (eastward, southward).
-   * Paper coordinates are in the unit square [0,1]^2 before shearing.
-   */
-  function toPaper(point) {
-    const group = getSideGroup(point.side);
-    const n = group === 'NE' ? nNE : nSW;
-    // Convert position to t value: t = (pos + 0.5) / n
-    const t = (point.pos + 0.5) / Math.max(n, 1);
-    
-    // Map to paper coordinates based on side geometry
-    // Each side's direction determines how t maps to (eastward, southward)
-    switch (point.side) {
-      case 'north':
-        // north goes W→E: t=0 at (0,0), t=1 at (1,0)
-        return { eastward: t, southward: 0 };
-      case 'east':
-        // east goes S→N for t (due to identification with north)
-        // t=0 at (1,1), t=1 at (1,0)
-        return { eastward: 1, southward: 1 - t };
-      case 'south':
-        // south goes E→W: t=0 at (1,1), t=1 at (0,1)
-        return { eastward: 1 - t, southward: 1 };
-      case 'west':
-        // west goes N→S for t (due to identification with south)
-        // t=0 at (0,0), t=1 at (0,1)
-        return { eastward: 0, southward: t };
-      default:
-        throw new Error(`Unknown side: ${point.side}`);
-    }
+  // Edge case: if perimeter has fewer than 4 distinct positions, edges can't cross
+  if (P < 4) {
+    return false;
   }
   
-  /**
-   * Check if two line segments intersect.
-   * Uses the counter-clockwise orientation test.
-   */
-  function segmentsIntersect(p1, p2, p3, p4) {
-    function ccw(A, B, C) {
-      return (C.southward - A.southward) * (B.eastward - A.eastward) > 
-             (B.southward - A.southward) * (C.eastward - A.eastward);
-    }
-    
-    function pointsClose(a, b) {
-      const eps = 0.0001;
-      return Math.abs(a.southward - b.southward) < eps && 
-             Math.abs(a.eastward - b.eastward) < eps;
-    }
-    
-    // If segments share an endpoint, they don't "cross" (they meet at a vertex)
-    if (pointsClose(p1, p3) || pointsClose(p1, p4) || pointsClose(p2, p3) || pointsClose(p2, p4)) {
-      return false;
-    }
-    
-    return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
+  // Get integer keys for all four endpoints
+  const a = perimeterKey(edge1.from, nNE, nSW);
+  const b = perimeterKey(edge1.to, nNE, nSW);
+  const c = perimeterKey(edge2.from, nNE, nSW);
+  const d = perimeterKey(edge2.to, nNE, nSW);
+  
+  // Check for shared endpoints - edges that share an endpoint don't cross
+  if (a === c || a === d || b === c || b === d) {
+    return false;
   }
   
-  /**
-   * Check if a same-side arc contains an endpoint of another edge.
-   * A same-side arc from pos A to pos B contains pos C if C is strictly between A and B.
-   * This is a crossing because the arc must go around and cross the other edge.
-   */
-  function arcContainsEndpoint(arcEdge, otherEdge) {
-    // The arc is on a single side (same from.side and to.side)
-    if (arcEdge.from.side !== arcEdge.to.side) {
-      return false; // Not a same-side arc
-    }
-    
-    const arcSide = arcEdge.from.side;
-    const arcGroup = getSideGroup(arcSide);
-    const arcMin = Math.min(arcEdge.from.pos, arcEdge.to.pos);
-    const arcMax = Math.max(arcEdge.from.pos, arcEdge.to.pos);
-    
-    // Check if the other edge has an endpoint strictly inside this arc
-    // The endpoint must be on the SAME SIDE (not just same group) and going to a DIFFERENT side
-    function checkEndpoint(point, otherPoint) {
-      // Point must be on the same side as the arc
-      if (point.side !== arcSide) {
-        return false;
-      }
-      // The other point of this edge must go to a different side (not just along the boundary)
-      if (otherPoint.side === arcSide) {
-        return false; // Both endpoints on same side - this is another arc, handled separately
-      }
-      // Check if position is strictly inside arc
-      return point.pos > arcMin && point.pos < arcMax;
-    }
-    
-    return checkEndpoint(otherEdge.from, otherEdge.to) || 
-           checkEndpoint(otherEdge.to, otherEdge.from);
-  }
+  // Alternation test: edges cross iff exactly one of c,d is between a and b (CCW)
+  const cBetween = betweenCCW(a, b, c, P);
+  const dBetween = betweenCCW(a, b, d, P);
   
-  // Check for same-side arc containing endpoint of the other edge
-  if (arcContainsEndpoint(edge1, edge2) || arcContainsEndpoint(edge2, edge1)) {
-    return true;
-  }
-  
-  const e1_from = toPaper(edge1.from);
-  const e1_to = toPaper(edge1.to);
-  const e2_from = toPaper(edge2.from);
-  const e2_to = toPaper(edge2.to);
-  
-  return segmentsIntersect(e1_from, e1_to, e2_from, e2_to);
+  return cBetween !== dBetween; // XOR: exactly one is between
 }
 
 /**
