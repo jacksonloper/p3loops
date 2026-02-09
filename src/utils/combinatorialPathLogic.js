@@ -289,7 +289,6 @@ export function getValidSegments(state, fromPoint) {
 export function getFirstEdgeToSegments(fromSegment) {
   const fromSide = fromSegment.side;
   const fromGroup = getSideGroup(fromSide);
-  const identifiedSide = getIdentifiedSide(fromSide);
   
   const allSides = ['north', 'east', 'south', 'west'];
   const segments = [];
@@ -605,31 +604,29 @@ export function addFirstEdge(state, fromSegment, toSegment) {
   const fromGroup = getSideGroup(fromSegment.side);
   const toGroup = getSideGroup(toSegment.side);
   
-  // Calculate insert indices
-  let fromInsertIndex = fromSegment.startPos === null ? 0 : fromSegment.startPos + 1;
-  let toInsertIndex = toSegment.startPos === null ? 0 : toSegment.startPos + 1;
+  // For first edge, fromInsertIndex is always 0 (we insert the first point)
+  const fromInsertIndex = 0;
   
-  // If both are in the same group, we need to be careful about ordering
+  // If both are in the same group, we need to handle "before start" vs "after start"
   if (fromGroup === toGroup) {
-    // Insert the first point
-    newState = insertPoint(newState, fromGroup, fromInsertIndex, fromSegment.side);
+    // For same-group first edge, the toSegment's firstEdgeLabel tells us the relative position
+    // "before start" means toPoint should be at position 0, fromPoint at position 1
+    // "after start" means fromPoint should be at position 0, toPoint at position 1
     
-    // Adjust toInsertIndex if it's at or after fromInsertIndex
-    if (toInsertIndex >= fromInsertIndex) {
-      toInsertIndex += 1;
-    }
+    let fromPos, toPos;
     
-    // Insert the second point
-    newState = insertPoint(newState, toGroup, toInsertIndex, toSegment.side);
-    
-    // Create the edge
-    let fromPos = fromInsertIndex;
-    let toPos = toInsertIndex;
-    
-    // Since we inserted fromInsertIndex first, and toInsertIndex might have shifted
-    if (toInsertIndex <= fromInsertIndex) {
-      // toInsert was before fromInsert, so fromPos shifted
-      fromPos = fromInsertIndex + 1;
+    if (toSegment.firstEdgeLabel === 'before start') {
+      // Insert toPoint first (at 0), then fromPoint (at 1)
+      newState = insertPoint(newState, toGroup, 0, toSegment.side);
+      newState = insertPoint(newState, fromGroup, 1, fromSegment.side);
+      fromPos = 1;
+      toPos = 0;
+    } else {
+      // "after start" or default: insert fromPoint first (at 0), then toPoint (at 1)
+      newState = insertPoint(newState, fromGroup, 0, fromSegment.side);
+      newState = insertPoint(newState, toGroup, 1, toSegment.side);
+      fromPos = 0;
+      toPos = 1;
     }
     
     const newEdge = {
@@ -639,13 +636,13 @@ export function addFirstEdge(state, fromSegment, toSegment) {
     
     newState = { ...newState, edges: [newEdge] };
   } else {
-    // Different groups, simpler
+    // Different groups, simpler - each point goes at position 0 in its group
     newState = insertPoint(newState, fromGroup, fromInsertIndex, fromSegment.side);
-    newState = insertPoint(newState, toGroup, toInsertIndex, toSegment.side);
+    newState = insertPoint(newState, toGroup, 0, toSegment.side);
     
     const newEdge = {
       from: { side: fromSegment.side, pos: fromInsertIndex },
-      to: { side: toSegment.side, pos: toInsertIndex }
+      to: { side: toSegment.side, pos: 0 }
     };
     
     newState = { ...newState, edges: [newEdge] };
@@ -690,11 +687,20 @@ export function allEdgesToFloat(state) {
 
 /**
  * Remove the last edge from the state.
- * This also removes the point that was created by that edge.
+ * This removes the point that was created by that edge.
+ * 
+ * IMPORTANT: If this is the first (and only) edge, we remove BOTH points
+ * since neither point exists without any edges. After removal, the state
+ * should contain exactly the points that are referenced by existing edges.
  */
 export function removeLastEdge(state) {
   if (state.edges.length === 0) {
     return state;
+  }
+  
+  // If this is the only edge (first edge), removing it should clear all points
+  if (state.edges.length === 1) {
+    return createInitialState();
   }
   
   // Get the last edge

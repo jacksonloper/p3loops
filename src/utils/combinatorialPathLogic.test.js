@@ -210,6 +210,73 @@ describe('addFirstEdge', () => {
     expect(newState.edges[0].from.side).toBe('north');
     expect(newState.edges[0].to.side).toBe('south');
   });
+
+  it('should produce valid t values when going from north to east "after start"', () => {
+    // This tests the t=1.25 bug: when both points are in the same group
+    // and we go to "after start", the t values must still be in [0, 1]
+    const state = createInitialState();
+    const fromSegment = { startPos: null, endPos: null, side: 'north' };
+    // "after start" segment has startPos: 0, endPos: null
+    const toSegment = { startPos: 0, endPos: null, side: 'east', firstEdgeLabel: 'after start' };
+    
+    const { newState } = addFirstEdge(state, fromSegment, toSegment);
+    
+    // Both points should be in NE group since north and east are identified
+    expect(newState.points.NE.length).toBe(2);
+    expect(newState.edges.length).toBe(1);
+    
+    // Convert to float and verify t values are in valid range [0, 1]
+    const floatEdges = allEdgesToFloat(newState);
+    expect(floatEdges[0].from.t).toBeGreaterThanOrEqual(0);
+    expect(floatEdges[0].from.t).toBeLessThanOrEqual(1);
+    expect(floatEdges[0].to.t).toBeGreaterThanOrEqual(0);
+    expect(floatEdges[0].to.t).toBeLessThanOrEqual(1);
+    
+    // The "after start" point should have a higher t value than the start point
+    expect(floatEdges[0].to.t).toBeGreaterThan(floatEdges[0].from.t);
+  });
+
+  it('should produce valid t values when going from north to east "before start"', () => {
+    const state = createInitialState();
+    const fromSegment = { startPos: null, endPos: null, side: 'north' };
+    // "before start" segment has startPos: null, endPos: 0
+    const toSegment = { startPos: null, endPos: 0, side: 'east', firstEdgeLabel: 'before start' };
+    
+    const { newState } = addFirstEdge(state, fromSegment, toSegment);
+    
+    // Both points should be in NE group
+    expect(newState.points.NE.length).toBe(2);
+    expect(newState.edges.length).toBe(1);
+    
+    // Convert to float and verify t values are in valid range [0, 1]
+    const floatEdges = allEdgesToFloat(newState);
+    expect(floatEdges[0].from.t).toBeGreaterThanOrEqual(0);
+    expect(floatEdges[0].from.t).toBeLessThanOrEqual(1);
+    expect(floatEdges[0].to.t).toBeGreaterThanOrEqual(0);
+    expect(floatEdges[0].to.t).toBeLessThanOrEqual(1);
+    
+    // The "before start" point should have a lower t value than the start point
+    expect(floatEdges[0].to.t).toBeLessThan(floatEdges[0].from.t);
+  });
+
+  it('should produce valid t values when going from north to north "after start"', () => {
+    const state = createInitialState();
+    const fromSegment = { startPos: null, endPos: null, side: 'north' };
+    const toSegment = { startPos: 0, endPos: null, side: 'north', firstEdgeLabel: 'after start' };
+    
+    const { newState } = addFirstEdge(state, fromSegment, toSegment);
+    
+    expect(newState.points.NE.length).toBe(2);
+    
+    const floatEdges = allEdgesToFloat(newState);
+    expect(floatEdges[0].from.t).toBeGreaterThanOrEqual(0);
+    expect(floatEdges[0].from.t).toBeLessThanOrEqual(1);
+    expect(floatEdges[0].to.t).toBeGreaterThanOrEqual(0);
+    expect(floatEdges[0].to.t).toBeLessThanOrEqual(1);
+    
+    // After start should be higher t
+    expect(floatEdges[0].to.t).toBeGreaterThan(floatEdges[0].from.t);
+  });
 });
 
 describe('addEdgeToSegment', () => {
@@ -254,7 +321,7 @@ describe('edgeToFloat', () => {
 });
 
 describe('removeLastEdge', () => {
-  it('should remove the last edge and its endpoint', () => {
+  it('should remove the first edge and reset to initial state', () => {
     const state = createInitialState();
     const fromSegment = { startPos: null, endPos: null, side: 'north' };
     const toSegment = { startPos: null, endPos: null, side: 'south' };
@@ -262,14 +329,39 @@ describe('removeLastEdge', () => {
     const { newState: state1 } = addFirstEdge(state, fromSegment, toSegment);
     
     expect(state1.edges.length).toBe(1);
+    expect(state1.points.NE.length).toBe(1);
     expect(state1.points.SW.length).toBe(1);
     
+    // Removing the only edge should reset to initial state
     const state2 = removeLastEdge(state1);
     
     expect(state2.edges.length).toBe(0);
+    expect(state2.points.NE.length).toBe(0);
     expect(state2.points.SW.length).toBe(0);
-    // Note: The from point remains since it wasn't created by this edge
-    expect(state2.points.NE.length).toBe(1);
+  });
+
+  it('should remove only the endpoint when there are multiple edges', () => {
+    const state = createInitialState();
+    const fromSegment = { startPos: null, endPos: null, side: 'north' };
+    const toSegment = { startPos: null, endPos: null, side: 'south' };
+    
+    const { newState: state1 } = addFirstEdge(state, fromSegment, toSegment);
+    
+    // Add a second edge
+    const startPoint = getNextStartPoint(state1);
+    const segments = getSegmentsOnSide(state1, 'north');
+    const { newState: state2 } = addEdgeToSegment(state1, startPoint, segments[1]);
+    
+    expect(state2.edges.length).toBe(2);
+    expect(state2.points.NE.length).toBe(2);
+    expect(state2.points.SW.length).toBe(1);
+    
+    // Remove the last edge
+    const state3 = removeLastEdge(state2);
+    
+    expect(state3.edges.length).toBe(1);
+    expect(state3.points.NE.length).toBe(1);
+    expect(state3.points.SW.length).toBe(1);
   });
 });
 

@@ -48,6 +48,8 @@ function CombinatorialApp() {
   const [loadingExample, setLoadingExample] = useState(false);
   const [firstEdgeMode, setFirstEdgeMode] = useState(false);
   const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
+  const [showJsonPanel, setShowJsonPanel] = useState(false);
+  const [jsonInputText, setJsonInputText] = useState('');
 
   // Load examples manifest on mount
   useEffect(() => {
@@ -284,6 +286,34 @@ function CombinatorialApp() {
     });
   }, [floatEdges]);
 
+  // Handle importing JSON
+  const handleJsonImport = useCallback(() => {
+    if (!jsonInputText.trim()) {
+      setValidationMessage('Please enter JSON to import');
+      return;
+    }
+    
+    try {
+      const parsedData = JSON.parse(jsonInputText);
+      
+      if (!Array.isArray(parsedData)) {
+        setValidationMessage('Error: Input must be a JSON array of edges');
+        return;
+      }
+      
+      const newState = importFromFloatEdges(parsedData);
+      setState(newState);
+      setIsLoopClosed(false);
+      setFirstEdgeMode(false);
+      setFirstEdgeFromSegment(null);
+      setSelectedSegment(null);
+      setValidationMessage('Path imported successfully!');
+      setJsonInputText('');
+    } catch (parseError) {
+      setValidationMessage(`JSON parse error: ${parseError.message}`);
+    }
+  }, [jsonInputText]);
+
   // Group segments by individual side for display (4 sides instead of 2 groups)
   const northSegments = useMemo(() => 
     availableSegments.filter(s => s.side === 'north'),
@@ -479,7 +509,7 @@ function CombinatorialApp() {
               disabled={state.edges.length === 0}
               className="control-btn danger-btn"
             >
-              {isLoopClosed ? 'Open Loop' : 'Undo'}
+              {isLoopClosed ? 'Open Loop' : 'Remove Last Edge'}
             </button>
             
             <button 
@@ -496,6 +526,13 @@ function CombinatorialApp() {
               className="control-btn secondary-btn"
             >
               Copy JSON
+            </button>
+            
+            <button 
+              onClick={() => setShowJsonPanel(!showJsonPanel)}
+              className="control-btn secondary-btn"
+            >
+              {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
             </button>
             
             <button 
@@ -548,6 +585,28 @@ function CombinatorialApp() {
             <span className="point-counter">Points: NE={state.points.NE.length}, SW={state.points.SW.length}</span>
           </div>
         </section>
+
+        {showJsonPanel && (
+          <section className="json-section">
+            <div className="json-input-area">
+              <h3>Import Path from JSON</h3>
+              <textarea
+                value={jsonInputText}
+                onChange={(e) => setJsonInputText(e.target.value)}
+                placeholder='[{"from": {"side": "north", "t": 0.25}, "to": {"side": "south", "t": 0.75}}]'
+                rows={6}
+              />
+              <button onClick={handleJsonImport} className="control-btn primary-btn">
+                Import Path
+              </button>
+            </div>
+
+            <div className="json-output-area">
+              <h3>Current Path JSON</h3>
+              <pre className="json-display">{JSON.stringify(floatEdges, null, 2)}</pre>
+            </div>
+          </section>
+        )}
 
         <section className="info-section">
           <h3>About Combinatorial Mode</h3>
