@@ -748,6 +748,8 @@ export function removeLastEdge(state) {
 /**
  * Get all points with their positions for display.
  * Returns array of { side, pos, group, t } for each point.
+ * Each point appears on BOTH identified sides (north + east, or south + west)
+ * to make the identification visual.
  */
 export function getAllPointsForDisplay(state) {
   const result = [];
@@ -756,15 +758,21 @@ export function getAllPointsForDisplay(state) {
     const points = getPointsInGroup(state, group);
     const numPoints = points.length;
     
+    // Get both sides in this group
+    const sides = group === 'NE' ? ['north', 'east'] : ['south', 'west'];
+    
     for (const point of points) {
       const t = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
-      const canonicalSide = group === 'NE' ? 'north' : 'south';
-      result.push({
-        side: point.originalSide || canonicalSide,
-        pos: point.pos,
-        group,
-        t
-      });
+      
+      // Add the point to BOTH identified sides with the same position
+      for (const side of sides) {
+        result.push({
+          side,
+          pos: point.pos,
+          group,
+          t
+        });
+      }
     }
   }
   

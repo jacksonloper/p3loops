@@ -50,9 +50,19 @@
 }
 
 .boundary-point {
-  fill: #e94560;
+  fill: #888; /* Default fallback color */
   stroke: #fff;
   stroke-width: 1;
+}
+
+/* NE group (North ≡ East) uses a blue/cyan color */
+.boundary-point-ne {
+  fill: #4a90d9;
+}
+
+/* SW group (South ≡ West) uses a pink/red color */
+.boundary-point-sw {
+  fill: #e94560;
 }
 
 .start-point {

@@ -290,6 +290,7 @@ function CombinatorialRhombus({
         })}
         
         {/* All points (equally spaced) - using bowed positions with integer labels */}
+        {/* Points appear on both identified sides with different colors per group */}
         {allPoints.map((point, index) => {
           const coords = getPointOnBowedSide(point.side, point.t);
           // Calculate label offset based on side to position label outside the rhombus
@@ -310,13 +311,15 @@ function CombinatorialRhombus({
               labelOffsetX = -labelDist;
               break;
           }
+          // Use different colors for NE vs SW groups
+          const groupClass = point.group === 'NE' ? 'boundary-point-ne' : 'boundary-point-sw';
           return (
             <g key={`point-${index}`}>
               <circle
                 cx={coords.x}
                 cy={coords.y}
                 r={6}
-                className="boundary-point"
+                className={`boundary-point ${groupClass}`}
               />
               <text
                 x={coords.x + labelOffsetX}
