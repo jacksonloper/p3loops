@@ -266,28 +266,18 @@ export function getValidSegments(state, fromPoint) {
 }
 
 /**
- * Capitalize first letter of a string.
- */
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-/**
  * Convert a segment to a descriptive string for UI.
- * Now shows the specific side with its identification noted.
+ * Shows the segment position description (identification is shown in the header).
  */
 export function segmentToString(segment) {
-  const sideName = capitalize(segment.side);
-  const identifiedSide = capitalize(getIdentifiedSide(segment.side));
-  
   if (segment.startPos === null && segment.endPos === null) {
-    return `${sideName} (≡${identifiedSide}): entire side`;
+    return 'entire side';
   } else if (segment.startPos === null) {
-    return `${sideName}: before pt ${segment.endPos + 1}`;
+    return `before pt ${segment.endPos + 1}`;
   } else if (segment.endPos === null) {
-    return `${sideName}: after pt ${segment.startPos + 1}`;
+    return `after pt ${segment.startPos + 1}`;
   } else {
-    return `${sideName}: pts ${segment.startPos + 1}–${segment.endPos + 1}`;
+    return `pts ${segment.startPos + 1}–${segment.endPos + 1}`;
   }
 }
 
