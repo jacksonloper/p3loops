@@ -9,6 +9,12 @@ import {
   SE_CORNER,
   SW_CORNER
 } from '../utils/wallpaperGeometry.js';
+import { 
+  createIdentityWallpaperIndex,
+  updateWallpaperIndex,
+  formatWallpaperIndex,
+  indexToFrame
+} from '../utils/moveTree.js';
 import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.js';
 import './WallpaperViewer.css';
 
@@ -31,43 +37,6 @@ function generateAllEdgesPathString(edges, frame) {
   }
   
   return pathParts.join(' ');
-}
-
-// Tolerance for comparing frame positions (to handle floating point errors)
-const FRAME_TOLERANCE = 0.1;
-
-/**
- * Create a unique key for a reference frame based on its transformation values.
- * Two frames are considered the same if their translation and rotation are equal
- * (within floating point tolerance).
- * @param {Object} frame - Reference frame { a, b, c, d, tx, ty }
- * @returns {string} - A string key representing the frame's position
- */
-function getFrameKey(frame) {
-  // Round to reasonable precision to handle floating point errors
-  const round = (v) => Math.round(v / FRAME_TOLERANCE) * FRAME_TOLERANCE;
-  return `${round(frame.a)},${round(frame.b)},${round(frame.c)},${round(frame.d)},${round(frame.tx)},${round(frame.ty)}`;
-}
-
-/**
- * Deduplicate rhombus frames to avoid rendering the same position multiple times.
- * This prevents brightness stacking from overlapping semi-transparent elements.
- * @param {Array} frames - Array of reference frame objects
- * @returns {Array} - Deduplicated array of frames
- */
-function deduplicateFrames(frames) {
-  const seen = new Set();
-  const unique = [];
-  
-  for (const frame of frames) {
-    const key = getFrameKey(frame);
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(frame);
-    }
-  }
-  
-  return unique;
 }
 
 /**
@@ -108,7 +77,7 @@ function isSameSideEdge(edge) {
 }
 
 /**
- * Generate the wallpaper data: path points and rhombus frames visited.
+ * Generate the wallpaper data: path points, rhombus frames visited, and their indices.
  * 
  * Handles identified sides correctly: when the path crosses a boundary,
  * the next edge's start point is at the same geometric position as the
@@ -116,14 +85,16 @@ function isSameSideEdge(edge) {
  * 
  * @param {Array} edges - Array of edge objects with from/to points
  * @param {number} repeats - Number of times to repeat the path (for closed loops)
- * @returns {{ pathPoints: Array, rhombusFrames: Array }}
+ * @returns {{ pathPoints: Array, rhombusFrames: Array, rhombusIndices: Array }}
  */
 function generateWallpaperData(edges, repeats = 1) {
-  if (edges.length === 0) return { pathPoints: [], rhombusFrames: [] };
+  if (edges.length === 0) return { pathPoints: [], rhombusFrames: [], rhombusIndices: [] };
   
   const pathPoints = [];
   const rhombusFrames = []; // Each frame represents one rhombus instance
+  const rhombusIndices = []; // Wallpaper indices for each rhombus
   let currentFrame = createIdentityFrame();
+  let currentIndex = createIdentityWallpaperIndex();
   // Track the "continuation side" - when crossing boundaries, we may need to
   // draw the next edge's start point using the identified side's geometry
   let lastEndSide = null;
@@ -131,6 +102,7 @@ function generateWallpaperData(edges, repeats = 1) {
   
   // Add the first rhombus
   rhombusFrames.push({ ...currentFrame });
+  rhombusIndices.push({ ...currentIndex });
   
   // Repeat the path `repeats` times
   for (let rep = 0; rep < repeats; rep++) {
@@ -218,17 +190,20 @@ function generateWallpaperData(edges, repeats = 1) {
         // If the next edge is same-side, it stays in the current rhombus.
         if (!nextEdgeIsSameSide) {
           currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+          // Use algebraic index update for consistency with the grid
+          currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
           
           // Add this new rhombus frame only if this is not the last edge
           if (!isLastEdgeOfLastRepeat) {
             rhombusFrames.push({ ...currentFrame });
+            rhombusIndices.push({ ...currentIndex });
           }
         }
       }
     }
   }
   
-  return { pathPoints, rhombusFrames };
+  return { pathPoints, rhombusFrames, rhombusIndices };
 }
 
 /**
@@ -240,6 +215,17 @@ function getRhombusCorners(frame) {
     nw: applyReferenceFrame(NW_CORNER.x, NW_CORNER.y, frame),
     se: applyReferenceFrame(SE_CORNER.x, SE_CORNER.y, frame),
     sw: applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame)
+  };
+}
+
+/**
+ * Get the center point of a rhombus in a given reference frame.
+ */
+function getRhombusCenter(frame) {
+  const corners = getRhombusCorners(frame);
+  return {
+    x: (corners.ne.x + corners.nw.x + corners.se.x + corners.sw.x) / 4,
+    y: (corners.ne.y + corners.nw.y + corners.se.y + corners.sw.y) / 4
   };
 }
 
@@ -269,6 +255,64 @@ function getNorthMarkerInfo(frame) {
   return { x, y, angle };
 }
 
+// Constants for rhombus grid generation
+// Translation vectors T1/T2 have magnitude ~520 units (√3 × SIDE)
+// We use half this value to ensure sufficient coverage
+const LATTICE_SPACING_ESTIMATE = 260;
+// Safety margin to ensure we don't miss edge rhombi
+const RANGE_SAFETY_MARGIN = 3;
+
+/**
+ * Generate all rhombi (i, j, k) that intersect a given bounding box.
+ * Uses the indexToFrame function to convert indices to frames.
+ * 
+ * @param {Object} bounds - { minX, minY, maxX, maxY }
+ * @param {number} margin - Extra margin around bounds for safety
+ * @returns {Array} - Array of { index, frame } objects
+ */
+function generateAllRhombiInBounds(bounds, margin = 100) {
+  const rhombi = [];
+  
+  // Expand bounds
+  const expandedBounds = {
+    minX: bounds.minX - margin,
+    minY: bounds.minY - margin,
+    maxX: bounds.maxX + margin,
+    maxY: bounds.maxY + margin
+  };
+  
+  // Calculate the maximum dimension of the bounding box
+  // Used to estimate how many lattice cells we need to check
+  const boundingBoxMaxExtent = Math.max(
+    (expandedBounds.maxX - expandedBounds.minX),
+    (expandedBounds.maxY - expandedBounds.minY)
+  );
+  
+  // Estimate range of i, j values needed based on lattice spacing
+  const iRange = Math.ceil(boundingBoxMaxExtent / LATTICE_SPACING_ESTIMATE) + RANGE_SAFETY_MARGIN;
+  const jRange = Math.ceil(boundingBoxMaxExtent / LATTICE_SPACING_ESTIMATE) + RANGE_SAFETY_MARGIN;
+  
+  // Generate all combinations of (i, j, k)
+  for (let i = -iRange; i <= iRange; i++) {
+    for (let j = -jRange; j <= jRange; j++) {
+      for (let k = 0; k < 3; k++) {
+        const index = { tx: i, ty: j, r: k };
+        const frame = indexToFrame(index);
+        const center = getRhombusCenter(frame);
+        
+        // Check if the rhombus center is within the expanded bounds
+        // (we use center as a quick filter; some edge rhombi might be missed)
+        if (center.x >= expandedBounds.minX && center.x <= expandedBounds.maxX &&
+            center.y >= expandedBounds.minY && center.y <= expandedBounds.maxY) {
+          rhombi.push({ index, frame });
+        }
+      }
+    }
+  }
+  
+  return rhombi;
+}
+
 // Default number of repeats for closed loops
 const DEFAULT_CLOSED_LOOP_REPEATS = 2;
 
@@ -287,25 +331,24 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   // Effective repeats: must be 1 if loop is open
   const effectiveRepeats = isLoopClosed ? repeats : 1;
   
-  // Generate wallpaper data
-  const { pathPoints, rhombusFrames } = useMemo(() => 
+  // Generate wallpaper data (path points and visited rhombi)
+  const { pathPoints, rhombusFrames, rhombusIndices } = useMemo(() => 
     generateWallpaperData(edges, effectiveRepeats), 
     [edges, effectiveRepeats]
   );
   
-  // Deduplicate rhombus frames to avoid brightness stacking from overlapping elements
-  const uniqueRhombusFrames = useMemo(() => 
-    deduplicateFrames(rhombusFrames),
-    [rhombusFrames]
-  );
-  
-  // Calculate bounding box with padding
-  const viewBox = useMemo(() => {
-    if (pathPoints.length === 0 && uniqueRhombusFrames.length === 0) {
-      return '-400 -400 800 800';
+  // Get set of visited rhombus keys for highlighting
+  const visitedRhombusKeys = useMemo(() => {
+    const keys = new Set();
+    for (const index of rhombusIndices) {
+      keys.add(`${index.tx},${index.ty},${index.r}`);
     }
-    
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    return keys;
+  }, [rhombusIndices]);
+  
+  // Calculate bounding box from path points first
+  const bounds = useMemo(() => {
+    let minX = -300, minY = -300, maxX = 300, maxY = 300;
     
     // Include all path points
     for (const pt of pathPoints) {
@@ -315,8 +358,8 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
       maxY = Math.max(maxY, pt.y);
     }
     
-    // Include all rhombus corners
-    for (const frame of uniqueRhombusFrames) {
+    // Include visited rhombus corners
+    for (const frame of rhombusFrames) {
       const corners = getRhombusCorners(frame);
       for (const corner of [corners.ne, corners.nw, corners.se, corners.sw]) {
         minX = Math.min(minX, corner.x);
@@ -326,18 +369,23 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
       }
     }
     
-    // Add padding
+    return { minX, minY, maxX, maxY };
+  }, [pathPoints, rhombusFrames]);
+  
+  // Generate ALL rhombi that appear within the viewable area
+  const allRhombi = useMemo(() => {
+    return generateAllRhombiInBounds(bounds);
+  }, [bounds]);
+  
+  // Calculate view box with padding
+  const viewBox = useMemo(() => {
     const padding = 60;
-    minX -= padding;
-    minY -= padding;
-    maxX += padding;
-    maxY += padding;
-    
-    const width = maxX - minX;
-    const height = maxY - minY;
-    
+    const minX = bounds.minX - padding;
+    const minY = bounds.minY - padding;
+    const width = bounds.maxX - bounds.minX + 2 * padding;
+    const height = bounds.maxY - bounds.minY + 2 * padding;
     return `${minX} ${minY} ${width} ${height}`;
-  }, [pathPoints, uniqueRhombusFrames]);
+  }, [bounds]);
   
   // Create path string for the trajectory
   const pathString = useMemo(() => {
@@ -348,8 +396,8 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   }, [pathPoints]);
   
   return (
-    <div className="wallpaper-viewer-overlay">
-      <div className="wallpaper-viewer-container">
+    <div className="wallpaper-viewer-overlay" onClick={onClose}>
+      <div className="wallpaper-viewer-container" onClick={(e) => e.stopPropagation()}>
         <div className="wallpaper-viewer-header">
           <h2>P3 Wallpaper View</h2>
           <button onClick={onClose} className="wallpaper-close-btn">×</button>
@@ -357,20 +405,24 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
         
         <div className="wallpaper-canvas-container">
           <svg viewBox={viewBox} className="wallpaper-svg">
-            {/* Draw rhombi first (subtle background) - deduplicated to avoid brightness stacking */}
-            {uniqueRhombusFrames.map((frame, index) => {
+            {/* Draw ALL rhombi in the viewable area */}
+            {allRhombi.map(({ frame, index: rhombusIndex }) => {
               const markerInfo = getNorthMarkerInfo(frame);
+              const center = getRhombusCenter(frame);
               const ghostPathString = generateAllEdgesPathString(edges, frame);
+              const indexLabel = formatWallpaperIndex(rhombusIndex);
+              const isVisited = visitedRhombusKeys.has(`${rhombusIndex.tx},${rhombusIndex.ty},${rhombusIndex.r}`);
+              
               return (
-                <g key={index} className="rhombus-instance">
+                <g key={`${rhombusIndex.tx},${rhombusIndex.ty},${rhombusIndex.r}`} className={`rhombus-instance ${isVisited ? 'visited' : ''}`}>
                   {/* Rhombus outline */}
                   <path 
                     d={getRhombusPathString(frame)} 
-                    className="rhombus-outline"
+                    className={`rhombus-outline ${isVisited ? 'visited' : ''}`}
                   />
                   
-                  {/* Ghost paths - all edges shown in subtle gray */}
-                  {ghostPathString && (
+                  {/* Ghost paths - all edges shown in subtle gray (only for visited rhombi) */}
+                  {isVisited && ghostPathString && (
                     <path 
                       d={ghostPathString}
                       className="ghost-path"
@@ -388,6 +440,17 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
                     dominantBaseline="central"
                   >
                     N
+                  </text>
+                  
+                  {/* Rhombus index label at center */}
+                  <text
+                    x={center.x}
+                    y={center.y}
+                    className={`rhombus-index-label ${isVisited ? 'visited' : ''}`}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    {indexLabel}
                   </text>
                 </g>
               );
@@ -447,7 +510,7 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
         
         <div className="wallpaper-info">
           <p>
-            Path unfolded onto R² • {pathPoints.length} points • {uniqueRhombusFrames.length} unique {uniqueRhombusFrames.length === 1 ? 'rhombus' : 'rhombi'}
+            Path unfolded onto R² • {pathPoints.length} points • {visitedRhombusKeys.size} visited rhombi • {allRhombi.length} total displayed
             {isLoopClosed && ` • ${effectiveRepeats} repeat${effectiveRepeats === 1 ? '' : 's'}`}
           </p>
           

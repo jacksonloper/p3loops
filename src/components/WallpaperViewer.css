@@ -64,17 +64,6 @@
   color: white;
 }
 
-.wallpaper-canvas-container {
-  flex: 1;
-  position: relative;
-  background: #0d0d1a;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
 .wallpaper-svg {
   width: 100%;
   height: 100%;
@@ -82,19 +71,27 @@
   max-height: 100%;
 }
 
-/* Rhombus styling - subtle and understated */
+/* Rhombus styling - non-visited are subtle but still visible for accessibility */
 .rhombus-instance .rhombus-outline {
   fill: rgba(102, 126, 234, 0.05);
-  stroke: rgba(102, 126, 234, 0.25);
+  stroke: rgba(102, 126, 234, 0.2);
+  stroke-width: 1;
+  stroke-dasharray: 6, 3;
+}
+
+/* Visited rhombi are more prominent */
+.rhombus-instance .rhombus-outline.visited {
+  fill: rgba(102, 126, 234, 0.12);
+  stroke: rgba(102, 126, 234, 0.5);
   stroke-width: 1.5;
   stroke-dasharray: 8, 4;
 }
 
 /* North marker */
 .north-marker {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
-  fill: rgba(102, 126, 234, 0.4);
+  fill: rgba(102, 126, 234, 0.3);
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
@@ -104,6 +101,22 @@
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* Rhombus index label - smaller for non-visited */
+.rhombus-index-label {
+  font-size: 9px;
+  font-weight: 500;
+  fill: rgba(102, 126, 234, 0.4);
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  pointer-events: none;
+}
+
+/* Visited rhombus index labels are more prominent */
+.rhombus-index-label.visited {
+  font-size: 11px;
+  font-weight: 600;
+  fill: rgba(102, 126, 234, 0.8);
 }
 
 /* Trajectory styling */
@@ -175,4 +188,15 @@
   font-weight: 600;
   min-width: 20px;
   text-align: center;
+}
+
+.wallpaper-canvas-container {
+  flex: 1;
+  position: relative;
+  background: #0d0d1a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
 }

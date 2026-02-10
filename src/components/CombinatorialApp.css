@@ -288,12 +288,30 @@
   display: flex;
   gap: 1rem;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .edge-counter,
 .point-counter {
   font-size: 0.85rem;
   opacity: 0.8;
+}
+
+.rhombus-index {
+  font-size: 0.85rem;
+  padding: 0.15rem 0.5rem;
+  background: rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+  border-radius: 4px;
+  color: #a0b0ff;
+}
+
+.side-index-preview {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: normal;
+  color: #888;
+  margin-top: 0.2rem;
 }
 
 /* Quick action bar - appears below rhombus when segment is selected */

@@ -903,15 +903,24 @@ export function importFromFloatEdges(floatEdges) {
     edges: []
   };
   
-  // Convert edges
+  // Convert edges, preserving crossedInterior flag
   for (const edge of simplifiedEdges) {
     const fromPos = getPos(edge.from.side, edge.from.t);
     const toPos = getPos(edge.to.side, edge.to.t);
     
-    state.edges.push({
+    const combinatorialEdge = {
       from: { side: edge.from.side, pos: fromPos },
       to: { side: edge.to.side, pos: toPos }
-    });
+    };
+    
+    // Preserve the crossedInterior flag if present
+    // This indicates the edge originally went through interior and should 
+    // trigger a boundary crossing even if from.side === to.side
+    if (edge.crossedInterior) {
+      combinatorialEdge.crossedInterior = true;
+    }
+    
+    state.edges.push(combinatorialEdge);
   }
   
   return state;
@@ -921,6 +930,10 @@ export function importFromFloatEdges(floatEdges) {
  * Simplify edges by removing interior waypoints.
  * E.g., if we have edge1: A -> interior, edge2: interior -> B,
  * we simplify to just A -> B.
+ * 
+ * When edges are simplified, we mark them with `crossedInterior: true` 
+ * so that the wallpaper index tracking knows this edge triggers a 
+ * boundary crossing (exiting through the destination side).
  */
 function simplifyEdges(floatEdges) {
   const simplified = [];
@@ -939,8 +952,10 @@ function simplifyEdges(floatEdges) {
     } else if (fromIsInterior && !toIsInterior) {
       // Coming from interior to boundary
       if (pendingFrom) {
-        // Complete the simplified edge
-        simplified.push({ from: pendingFrom, to: edge.to });
+        // Complete the simplified edge, marking that it crossed through interior
+        // This is important for wallpaper index tracking: even if from.side === to.side,
+        // the edge still triggers a crossing because we exited through the destination side
+        simplified.push({ from: pendingFrom, to: edge.to, crossedInterior: true });
         pendingFrom = null;
       }
     }
