@@ -255,9 +255,9 @@ function getNorthMarkerInfo(frame) {
 }
 
 // Constants for rhombus grid generation
-// Translation vectors T1/T2 have magnitude ~300 units (half the SIDE)
-// We divide by half this value to ensure sufficient coverage
-const LATTICE_SPACING_ESTIMATE = 150;
+// Translation vectors T1/T2 have magnitude ~520 units (√3 × SIDE)
+// We use half this value to ensure sufficient coverage
+const LATTICE_SPACING_ESTIMATE = 260;
 // Safety margin to ensure we don't miss edge rhombi
 const RANGE_SAFETY_MARGIN = 3;
 

@@ -43,11 +43,13 @@ const EAST_ANGLE = -60 * Math.PI / 180;
 const SE_CORNER = { x: SIDE * Math.cos(EAST_ANGLE), y: SIDE * Math.sin(EAST_ANGLE) };
 const SW_CORNER = { x: NW_CORNER.x + SE_CORNER.x, y: NW_CORNER.y + SE_CORNER.y };
 
-// Translation generators for P3 lattice
-// T1 connects hexagon centers (NE corner to SW corner of original rhombus)
-// T2 = R(T1) - T1 rotated by 120°
-const T1 = { x: SW_CORNER.x, y: SW_CORNER.y };
-const T2 = { x: COS_120 * T1.x - SIN_120 * T1.y, y: SIN_120 * T1.x + COS_120 * T1.y };
+// Translation generators for P3 hexagonal lattice (from reference Python code)
+// These are the offsets between adjacent hexagon centers in axial coordinates
+// T1 = q-step: moves to adjacent hex in "q" direction
+// T2 = r-step: moves to adjacent hex in "r" direction
+const SQRT3 = Math.sqrt(3);
+const T1 = { x: 1.5 * SIDE, y: (SQRT3 / 2) * SIDE };   // [1.5*s, sqrt(3)/2*s]
+const T2 = { x: 0, y: SQRT3 * SIDE };                   // [0, sqrt(3)*s]
 
 // Determinant of [T1 T2] matrix for solving linear system
 const T_DET = T1.x * T2.y - T2.x * T1.y;
