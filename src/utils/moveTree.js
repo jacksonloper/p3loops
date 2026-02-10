@@ -370,21 +370,23 @@ export function indexToFrame(index) {
 
 
 /**
- * Determine if crossing from one point to another changes the rhombus.
+ * Determine if an edge changes the rhombus.
  * An edge stays in the same rhombus if:
  * 1. TO point is interior (edge enters rhombus interior, no boundary crossing)
- * 2. Both points are on the same side
+ * 2. Both points are on the same side (and not marked as crossedInterior)
  * 3. Both points are on identified sides with the same position
  * 
  * NOTE: If FROM is interior but TO is a boundary, we DO cross (exit through that side).
+ * NOTE: If the edge has crossedInterior: true, it always triggers a crossing through to.side.
  * 
  * Works with both combinatorial edges { side, pos } and float edges { side, t }.
  * 
- * @param {Object} fromPoint - Starting point { side, pos } or { side, t } or { interior: true }
- * @param {Object} toPoint - Ending point { side, pos } or { side, t } or { interior: true }
+ * @param {Object} edge - Edge { from, to, crossedInterior? }
  * @returns {boolean} - True if this edge crosses to a new rhombus
  */
-function edgeCrossesRhombus(fromPoint, toPoint) {
+function edgeCrossesRhombus(edge) {
+  const { from: fromPoint, to: toPoint } = edge;
+  
   // If TO is interior, we're entering the interior (no boundary crossing)
   if (toPoint.interior) {
     return false;
@@ -392,6 +394,12 @@ function edgeCrossesRhombus(fromPoint, toPoint) {
   
   // If FROM is interior but TO is boundary, we DO cross (exit through TO side)
   if (fromPoint.interior) {
+    return true;
+  }
+  
+  // If edge was simplified from an interior detour, it always triggers a crossing
+  // through the destination side (even if same side)
+  if (edge.crossedInterior) {
     return true;
   }
   
@@ -424,13 +432,13 @@ function edgeCrossesRhombus(fromPoint, toPoint) {
 /**
  * Compute the wallpaper index for the destination of an edge.
  * 
- * @param {Object} edge - Edge { from, to }
+ * @param {Object} edge - Edge { from, to, crossedInterior? }
  * @param {WallpaperIndex} currentIndex - Current wallpaper index
  * @returns {WallpaperIndex} - Wallpaper index at destination
  */
 export function computeEdgeDestinationIndex(edge, currentIndex) {
   // If the edge doesn't cross the rhombus boundary, index stays same
-  if (!edgeCrossesRhombus(edge.from, edge.to)) {
+  if (!edgeCrossesRhombus(edge)) {
     return currentIndex;
   }
   

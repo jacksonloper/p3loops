@@ -18,7 +18,8 @@ import {
   addFirstEdge,
   addEdgeToSegment,
   getNextStartPoint,
-  getSegmentsOnSide
+  getSegmentsOnSide,
+  importFromFloatEdges
 } from './combinatorialPathLogic.js';
 
 describe('createIdentityWallpaperIndex', () => {
@@ -445,5 +446,56 @@ describe('Complex Loop rhombus indices', () => {
       expect(idx.r).toBeGreaterThanOrEqual(0);
       expect(idx.r).toBeLessThanOrEqual(2);
     }
+  });
+});
+
+/**
+ * Test that combinatorial edges (after import) produce the same wallpaper index
+ * as the original float edges. This verifies the crossedInterior flag works correctly.
+ */
+describe('Combinatorial vs Float edge consistency', () => {
+  // Float edges with interior points (from exampleedge2.json)
+  const floatEdgesWithInterior = [
+    { from: { side: 'north', t: 0.456 }, to: { side: 'west', t: 0.611 } },
+    { from: { side: 'south', t: 0.611 }, to: { side: 'north', t: 0.72 } },
+    { from: { side: 'east', t: 0.72 }, to: { side: 'south', t: 0.375 } },
+    { from: { side: 'west', t: 0.375 }, to: { side: 'north', t: 0.207 } },
+    { from: { side: 'east', t: 0.207 }, to: { interior: true, southward: 0.744 } },
+    { from: { interior: true, southward: 0.744 }, to: { side: 'east', t: 0.573 } },
+    { from: { side: 'north', t: 0.573 }, to: { side: 'south', t: 0.8 } }
+  ];
+  
+  it('should produce the same index for float edges and imported combinatorial edges', () => {
+    // Compute index using original float edges
+    const floatIndex = computePathWallpaperIndex(floatEdgesWithInterior);
+    
+    // Import to combinatorial (simplifies interior edges and adds crossedInterior flag)
+    const state = importFromFloatEdges(floatEdgesWithInterior);
+    
+    // Compute index using combinatorial edges
+    const combinatorialIndex = computePathWallpaperIndex(state.edges);
+    
+    // Both should match!
+    expect(combinatorialIndex).toEqual(floatIndex);
+  });
+  
+  it('should correctly handle crossedInterior flag for same-side edges', () => {
+    // Edge that goes east → interior → east (same side via interior)
+    const edgesWithSameSideInterior = [
+      { from: { side: 'east', t: 0.2 }, to: { interior: true } },
+      { from: { interior: true }, to: { side: 'east', t: 0.8 } }
+    ];
+    
+    // This should trigger a crossing through east
+    const floatIndex = computePathWallpaperIndex(edgesWithSameSideInterior);
+    
+    // After import, the simplified edge east → east should have crossedInterior: true
+    const state = importFromFloatEdges(edgesWithSameSideInterior);
+    expect(state.edges.length).toBe(1);
+    expect(state.edges[0].crossedInterior).toBe(true);
+    
+    // And produce the same index
+    const combinatorialIndex = computePathWallpaperIndex(state.edges);
+    expect(combinatorialIndex).toEqual(floatIndex);
   });
 });

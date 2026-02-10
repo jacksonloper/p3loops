@@ -9,26 +9,62 @@ import './EdgeListViewer.css';
 
 /**
  * Check if an edge is a same-side edge (stays within the same rhombus).
+ * Works with both float edges { side, t } and combinatorial edges { side, pos }.
+ * Edges with crossedInterior: true are NOT same-side (they trigger a crossing).
  */
 function isSameSideEdge(edge) {
+  // Interior points are not same-side
   if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
+    return false;
+  }
+  
+  // crossedInterior means this edge went through interior and triggers a crossing
+  if (edge.crossedInterior) {
     return false;
   }
   
   const fromSide = edge.from.side;
   const toSide = edge.to.side;
-  const fromT = edge.from.t;
-  const toT = edge.to.t;
   
+  // Same side = stays in same rhombus
   if (fromSide === toSide) {
     return true;
   }
   
-  if (getIdentifiedSide(fromSide) === toSide && Math.abs(fromT - toT) < EPSILON) {
-    return true;
+  // Check for identified sides at same position
+  if (getIdentifiedSide(fromSide) === toSide) {
+    // Float format
+    if (edge.from.t !== undefined && edge.to.t !== undefined) {
+      if (Math.abs(edge.from.t - edge.to.t) < EPSILON) {
+        return true;
+      }
+    }
+    // Combinatorial format  
+    if (edge.from.pos !== undefined && edge.to.pos !== undefined) {
+      if (edge.from.pos === edge.to.pos) {
+        return true;
+      }
+    }
   }
   
   return false;
+}
+
+/**
+ * Format a point for display in the edge list.
+ * Works with both float edges { side, t } and combinatorial edges { side, pos }.
+ */
+function formatPoint(point) {
+  if (point.interior) {
+    return 'interior';
+  }
+  if (point.t !== undefined) {
+    return `${point.side} (${point.t.toFixed(2)})`;
+  }
+  if (point.pos !== undefined) {
+    return `${point.side} [${point.pos}]`;
+  }
+  return point.side || 'unknown';
 }
 
 /**
@@ -150,8 +186,8 @@ function EdgeListViewer({ edges, onClose }) {
                   {edgeListData.map(({ edge, edgeIndex, rhombusIndex, isSameSide, conceptualIndex }) => (
                     <tr key={edgeIndex} className={isSameSide ? 'same-side-edge' : ''}>
                       <td>{edgeIndex + 1}</td>
-                      <td>{edge.from.side} ({edge.from.t.toFixed(2)})</td>
-                      <td>{edge.to.side} ({edge.to.t.toFixed(2)})</td>
+                      <td>{formatPoint(edge.from)}</td>
+                      <td>{formatPoint(edge.to)}</td>
                       <td>
                         {isSameSide ? (
                           <span className="same-side-info">
