@@ -269,56 +269,6 @@ function getNorthMarkerInfo(frame) {
   return { x, y, angle };
 }
 
-/**
- * Compute edge list data with rhombus indices for each edge.
- * For same-side edges, we compute the "conceptual" rhombus it would have entered.
- * 
- * @param {Array} edges - Array of edge objects with from/to points
- * @returns {Array} - Array of { edge, edgeIndex, rhombusIndex, isSameSide, conceptualSide }
- */
-function computeEdgeListData(edges) {
-  if (edges.length === 0) return [];
-  
-  const result = [];
-  let currentIndex = createIdentityWallpaperIndex();
-  
-  for (let i = 0; i < edges.length; i++) {
-    const edge = edges[i];
-    const sameSide = isSameSideEdge(edge);
-    
-    if (sameSide) {
-      // For same-side edges, compute the conceptual rhombus it would have entered
-      // This is the rhombus it would have entered if the edge had gone to any other side
-      // We use the edge's to side (since same-side means from.side ≈ to.side)
-      const conceptualIndex = updateWallpaperIndex(edge.to.side, currentIndex);
-      
-      result.push({
-        edge,
-        edgeIndex: i,
-        rhombusIndex: { ...currentIndex }, // Stay in current rhombus
-        isSameSide: true,
-        conceptualIndex
-      });
-      // Index does NOT change for same-side edges
-    } else {
-      // Edge crosses to a new rhombus
-      const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
-      
-      result.push({
-        edge,
-        edgeIndex: i,
-        rhombusIndex: { ...nextIndex }, // The destination rhombus
-        isSameSide: false,
-        conceptualIndex: null
-      });
-      
-      currentIndex = nextIndex;
-    }
-  }
-  
-  return result;
-}
-
 // Default number of repeats for closed loops
 const DEFAULT_CLOSED_LOOP_REPEATS = 2;
 
@@ -333,7 +283,6 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   // Note: The viewer is mounted fresh each time it's opened, so initial state
   // correctly reflects the isLoopClosed prop at mount time.
   const [repeats, setRepeats] = useState(isLoopClosed ? DEFAULT_CLOSED_LOOP_REPEATS : 1);
-  const [showEdgeList, setShowEdgeList] = useState(false);
   
   // Effective repeats: must be 1 if loop is open
   const effectiveRepeats = isLoopClosed ? repeats : 1;
@@ -342,12 +291,6 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   const { pathPoints, rhombusFrames, rhombusIndices } = useMemo(() => 
     generateWallpaperData(edges, effectiveRepeats), 
     [edges, effectiveRepeats]
-  );
-  
-  // Compute edge list data with rhombus indices
-  const edgeListData = useMemo(() => 
-    computeEdgeListData(edges),
-    [edges]
   );
   
   // Deduplicate rhombus frames (with indices) to avoid brightness stacking
@@ -417,64 +360,55 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   }, [pathPoints]);
   
   return (
-    <div className="wallpaper-viewer-overlay">
-      <div className="wallpaper-viewer-container">
+    <div className="wallpaper-viewer-overlay" onClick={onClose}>
+      <div className="wallpaper-viewer-container" onClick={(e) => e.stopPropagation()}>
         <div className="wallpaper-viewer-header">
           <h2>P3 Wallpaper View</h2>
-          <div className="wallpaper-header-buttons">
-            <button 
-              onClick={() => setShowEdgeList(!showEdgeList)} 
-              className="edge-list-btn"
-            >
-              {showEdgeList ? 'Hide' : 'Show'} Edge List
-            </button>
-            <button onClick={onClose} className="wallpaper-close-btn">×</button>
-          </div>
+          <button onClick={onClose} className="wallpaper-close-btn">×</button>
         </div>
         
-        <div className="wallpaper-main-content">
-          <div className="wallpaper-canvas-container">
-            <svg viewBox={viewBox} className="wallpaper-svg">
-              {/* Draw rhombi first (subtle background) - deduplicated to avoid brightness stacking */}
-              {uniqueRhombi.map(({ frame, index: rhombusIndex }, i) => {
-                const markerInfo = getNorthMarkerInfo(frame);
-                const center = getRhombusCenter(frame);
-                const ghostPathString = generateAllEdgesPathString(edges, frame);
-                const indexLabel = formatWallpaperIndex(rhombusIndex);
-                return (
-                  <g key={i} className="rhombus-instance">
-                    {/* Rhombus outline */}
+        <div className="wallpaper-canvas-container">
+          <svg viewBox={viewBox} className="wallpaper-svg">
+            {/* Draw rhombi first (subtle background) - deduplicated to avoid brightness stacking */}
+            {uniqueRhombi.map(({ frame, index: rhombusIndex }, i) => {
+              const markerInfo = getNorthMarkerInfo(frame);
+              const center = getRhombusCenter(frame);
+              const ghostPathString = generateAllEdgesPathString(edges, frame);
+              const indexLabel = formatWallpaperIndex(rhombusIndex);
+              return (
+                <g key={i} className="rhombus-instance">
+                  {/* Rhombus outline */}
+                  <path 
+                    d={getRhombusPathString(frame)} 
+                    className="rhombus-outline"
+                  />
+                  
+                  {/* Ghost paths - all edges shown in subtle gray */}
+                  {ghostPathString && (
                     <path 
-                      d={getRhombusPathString(frame)} 
-                      className="rhombus-outline"
+                      d={ghostPathString}
+                      className="ghost-path"
+                      fill="none"
                     />
-                    
-                    {/* Ghost paths - all edges shown in subtle gray */}
-                    {ghostPathString && (
-                      <path 
-                        d={ghostPathString}
-                        className="ghost-path"
-                        fill="none"
-                      />
-                    )}
-                    
-                    {/* North marker "N" */}
-                    <text
-                      x={markerInfo.x}
-                      y={markerInfo.y}
-                      transform={`rotate(${markerInfo.angle}, ${markerInfo.x}, ${markerInfo.y})`}
-                      className="north-marker"
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                    >
-                      N
-                    </text>
-                    
-                    {/* Rhombus index label at center */}
-                    <text
-                      x={center.x}
-                      y={center.y}
-                      className="rhombus-index-label"
+                  )}
+                  
+                  {/* North marker "N" */}
+                  <text
+                    x={markerInfo.x}
+                    y={markerInfo.y}
+                    transform={`rotate(${markerInfo.angle}, ${markerInfo.x}, ${markerInfo.y})`}
+                    className="north-marker"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    N
+                  </text>
+                  
+                  {/* Rhombus index label at center */}
+                  <text
+                    x={center.x}
+                    y={center.y}
+                    className="rhombus-index-label"
                       textAnchor="middle"
                       dominantBaseline="central"
                     >
@@ -554,52 +488,6 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
                 onChange={(e) => setRepeats(parseInt(e.target.value, 10))}
               />
               <span className="repeats-value">{repeats}</span>
-            </div>
-          )}
-        </div>
-          
-          {/* Edge List Panel */}
-          {showEdgeList && (
-            <div className="edge-list-panel">
-              <h3>Edge List</h3>
-              <div className="edge-list-content">
-                <table className="edge-list-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>From</th>
-                      <th>To</th>
-                      <th>Rhombus Index</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {edgeListData.map(({ edge, edgeIndex, rhombusIndex, isSameSide, conceptualIndex }) => (
-                      <tr key={edgeIndex} className={isSameSide ? 'same-side-edge' : ''}>
-                        <td>{edgeIndex + 1}</td>
-                        <td>{edge.from.side} ({edge.from.t.toFixed(2)})</td>
-                        <td>{edge.to.side} ({edge.to.t.toFixed(2)})</td>
-                        <td>
-                          {isSameSide ? (
-                            <span className="same-side-info">
-                              {formatWallpaperIndex(rhombusIndex)}
-                              <span className="conceptual-index" title="Conceptual rhombus (would enter if not same-side)">
-                                → {formatWallpaperIndex(conceptualIndex)}*
-                              </span>
-                            </span>
-                          ) : (
-                            formatWallpaperIndex(rhombusIndex)
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {edgeListData.some(e => e.isSameSide) && (
-                  <p className="edge-list-footnote">
-                    * Same-side edges stay in current rhombus. Index shown is conceptual (what it would enter).
-                  </p>
-                )}
-              </div>
             </div>
           )}
         </div>

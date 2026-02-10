@@ -3,6 +3,7 @@ import CombinatorialRhombus from './CombinatorialRhombus.jsx';
 import ThreeDViewer from './ThreeDViewer.jsx';
 import WallpaperViewer from './WallpaperViewer.jsx';
 import MoveTreeViewer from './MoveTreeViewer.jsx';
+import EdgeListViewer from './EdgeListViewer.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -48,6 +49,7 @@ function CombinatorialApp() {
   const [validationMessage, setValidationMessage] = useState('');
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
+  const [showEdgeList, setShowEdgeList] = useState(false);
   const [showMoveTree, setShowMoveTree] = useState(false);
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null);
   const [isLoopClosed, setIsLoopClosed] = useState(false);
@@ -614,6 +616,14 @@ function CombinatorialApp() {
             >
               View as P3 Wallpaper
             </button>
+            
+            <button 
+              onClick={() => setShowEdgeList(true)}
+              disabled={state.edges.length === 0}
+              className="control-btn"
+            >
+              Show Edge List
+            </button>
           </div>
 
           {examplesList.length > 0 && (
@@ -707,6 +717,13 @@ function CombinatorialApp() {
           edges={floatEdges}
           isLoopClosed={isLoopClosed}
           onClose={() => setShowWallpaperViewer(false)}
+        />
+      )}
+
+      {showEdgeList && (
+        <EdgeListViewer 
+          edges={floatEdges}
+          onClose={() => setShowEdgeList(false)}
         />
       )}
 
