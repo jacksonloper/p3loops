@@ -230,18 +230,6 @@ function rotateByK(x, y, k) {
 }
 
 /**
- * Apply inverse rotation by k*120° around the origin.
- * Since R is a 120° rotation, R³ = identity, so R^(-k) = R^(3-k) for k in {0,1,2}.
- * @param {number} x
- * @param {number} y
- * @param {number} k - Rotation index (0, 1, or 2)
- * @returns {{ x: number, y: number }}
- */
-function rotateByKInverse(x, y, k) {
-  return rotateByK(x, y, (3 - k) % 3);
-}
-
-/**
  * Extract the wallpaper index (i, j, k) from an affine frame.
  * 
  * The frame represents a transformation that maps the base rhombus to its position.
@@ -292,21 +280,61 @@ export function createIdentityWallpaperIndex() {
 
 /**
  * Update the wallpaper index when crossing through a side.
- * This computes the new index by applying the frame transformation.
+ * Uses pure algebraic rules derived from the P3 group geometry.
+ * 
+ * The rules depend on:
+ * - Which side is crossed (north, east, south, west)
+ * - The current rotation state k (0, 1, or 2)
+ * 
+ * For north/east (rotate around NE corner at origin), only k changes.
+ * For south/west (rotate around SW corner), both (i,j) and k change
+ * because SW's position depends on k.
  * 
  * @param {'north' | 'east' | 'south' | 'west'} side - Side being crossed
  * @param {WallpaperIndex} current - Current wallpaper index
  * @returns {WallpaperIndex} - New wallpaper index
  */
 export function updateWallpaperIndex(side, current) {
-  // Convert index to frame
-  const frame = indexToFrame(current);
+  const { tx: i, ty: j, r: k } = current;
   
-  // Update frame for crossing
-  const newFrame = updateFrameForSide(side, frame);
-  
-  // Extract new index
-  return extractIndexFromFrame(newFrame);
+  switch (side) {
+    case 'north':
+      // CW rotation around NE (at origin for all k)
+      // k: 0→2, 1→0, 2→1 (subtract 1 mod 3)
+      return { tx: i, ty: j, r: (k + 2) % 3 };
+    
+    case 'east':
+      // CCW rotation around NE (at origin for all k)
+      // k: 0→1, 1→2, 2→0 (add 1 mod 3)
+      return { tx: i, ty: j, r: (k + 1) % 3 };
+    
+    case 'south':
+      // CW rotation around SW (position depends on k)
+      // k=0: (i,j,0) → (i, j-1, 2)
+      // k=1: (i,j,1) → (i+1, j, 0)
+      // k=2: (i,j,2) → (i-1, j+1, 1)
+      switch (k) {
+        case 0: return { tx: i, ty: j - 1, r: 2 };
+        case 1: return { tx: i + 1, ty: j, r: 0 };
+        case 2: return { tx: i - 1, ty: j + 1, r: 1 };
+        default: throw new Error(`Invalid rotation k: ${k}`);
+      }
+    
+    case 'west':
+      // CCW rotation around SW (position depends on k)
+      // k=0: (i,j,0) → (i-1, j, 1)
+      // k=1: (i,j,1) → (i+1, j-1, 2)
+      // k=2: (i,j,2) → (i, j+1, 0)
+      switch (k) {
+        case 0: return { tx: i - 1, ty: j, r: 1 };
+        case 1: return { tx: i + 1, ty: j - 1, r: 2 };
+        case 2: return { tx: i, ty: j + 1, r: 0 };
+        default: throw new Error(`Invalid rotation k: ${k}`);
+      }
+    
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
 }
 
 /**

@@ -11,7 +11,7 @@ import {
 } from '../utils/wallpaperGeometry.js';
 import { 
   createIdentityWallpaperIndex,
-  extractIndexFromFrame,
+  updateWallpaperIndex,
   formatWallpaperIndex,
   indexToFrame
 } from '../utils/moveTree.js';
@@ -190,8 +190,8 @@ function generateWallpaperData(edges, repeats = 1) {
         // If the next edge is same-side, it stays in the current rhombus.
         if (!nextEdgeIsSameSide) {
           currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
-          // Extract index from the ACTUAL accumulated frame for consistency
-          currentIndex = extractIndexFromFrame(currentFrame);
+          // Use algebraic index update for consistency with the grid
+          currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
           
           // Add this new rhombus frame only if this is not the last edge
           if (!isLastEdgeOfLastRepeat) {

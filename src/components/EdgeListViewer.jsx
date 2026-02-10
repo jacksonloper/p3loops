@@ -1,11 +1,7 @@
 import { useMemo } from 'react';
 import { 
-  createIdentityFrame,
-  updateReferenceFrameForSide
-} from '../utils/wallpaperGeometry.js';
-import { 
   createIdentityWallpaperIndex,
-  extractIndexFromFrame,
+  updateWallpaperIndex,
   formatWallpaperIndex
 } from '../utils/moveTree.js';
 import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.js';
@@ -37,7 +33,7 @@ function isSameSideEdge(edge) {
 
 /**
  * Compute edge list data with rhombus indices for each edge.
- * Uses the same accumulated frame approach as WallpaperViewer for consistency.
+ * Uses algebraic index tracking for consistency with wallpaper grid.
  * @param {Array} edges - Array of edge objects with from/to points
  * @returns {Array} - Array of { edge, edgeIndex, rhombusIndex, isSameSide, conceptualIndex }
  */
@@ -45,7 +41,6 @@ function computeEdgeListData(edges) {
   if (edges.length === 0) return [];
   
   const result = [];
-  let currentFrame = createIdentityFrame();
   let currentIndex = createIdentityWallpaperIndex();
   
   for (let i = 0; i < edges.length; i++) {
@@ -54,8 +49,7 @@ function computeEdgeListData(edges) {
     
     if (sameSide) {
       // For same-side edges, compute conceptual index (what it would enter)
-      const conceptualFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
-      const conceptualIndex = extractIndexFromFrame(conceptualFrame);
+      const conceptualIndex = updateWallpaperIndex(edge.to.side, currentIndex);
       
       result.push({
         edge,
@@ -65,9 +59,8 @@ function computeEdgeListData(edges) {
         conceptualIndex
       });
     } else {
-      // Edge crosses to new rhombus
-      const nextFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
-      const nextIndex = extractIndexFromFrame(nextFrame);
+      // Edge crosses to new rhombus - use algebraic update
+      const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
       
       result.push({
         edge,
@@ -77,7 +70,6 @@ function computeEdgeListData(edges) {
         conceptualIndex: null
       });
       
-      currentFrame = nextFrame;
       currentIndex = nextIndex;
     }
   }
