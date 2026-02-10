@@ -291,6 +291,441 @@ export function getBowedRhombusPath(bowAmount = DEFAULT_BOW_AMOUNT) {
 }
 
 /**
+ * Get SVG path for the rhombus outline with straight sides (true rhombus).
+ * @returns {string} SVG path string
+ */
+export function getStraightRhombusPath() {
+  const nw = unitSquareToRhombus(0, 0);
+  const ne = unitSquareToRhombus(0, 1);
+  const se = unitSquareToRhombus(1, 1);
+  const sw = unitSquareToRhombus(1, 0);
+  
+  return `M ${nw.x} ${nw.y} L ${ne.x} ${ne.y} L ${se.x} ${se.y} L ${sw.x} ${sw.y} Z`;
+}
+
+/**
+ * Get an SVG path string for a portion of a straight side.
+ * @param {string} side - The side ('north', 'east', 'south', 'west')
+ * @param {number} t1 - Start parameter (0 to 1)
+ * @param {number} t2 - End parameter (0 to 1)
+ * @returns {string} SVG path string (M ... L ...)
+ */
+export function getStraightSideSegmentPath(side, t1, t2) {
+  const start = getPointOnSide(side, t1);
+  const end = getPointOnSide(side, t2);
+  return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+}
+
+// ============================================================================
+// DIFFEOMORPHISM-BASED EDGE RENDERING
+// ============================================================================
+// This approach guarantees non-intersecting edges by construction:
+// 1. Map boundary points to points on a unit circle
+// 2. Draw straight chords in the disk (chords with non-overlapping endpoints don't intersect)
+// 3. Map the chord back to the rhombus using a diffeomorphism
+// ============================================================================
+
+const SQRT3 = Math.sqrt(3);
+
+// Rhombus vertices in normalized coordinates (will be scaled to screen coords)
+// This is a left-slanted 60/120 degree rhombus
+const RHOMBUS_VERTICES = [
+  [-3/4,  SQRT3/4],  // vertex 0 (NW-ish)
+  [-1/4, -SQRT3/4],  // vertex 1 (SW-ish)
+  [ 3/4, -SQRT3/4],  // vertex 2 (SE-ish)
+  [ 1/4,  SQRT3/4],  // vertex 3 (NE-ish)
+];
+
+// Configuration for edge path generation
+const EDGE_PATH_SAMPLES = 80;     // Number of points to sample along the chord
+const EDGE_PATH_KNOT_STEP = 8;    // Keep every Nth point as a spline knot
+const ENDPOINT_EPSILON = 1e-6;    // Small offset to avoid exact endpoints for numerical stability
+
+/**
+ * Linear interpolation helper.
+ */
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+/**
+ * Get a point on the rhombus boundary in normalized coordinates.
+ * Side 0: vertex 0 → vertex 1 (west side, maps to 'west')
+ * Side 1: vertex 1 → vertex 2 (south side, maps to 'south')
+ * Side 2: vertex 2 → vertex 3 (east side, maps to 'east')
+ * Side 3: vertex 3 → vertex 0 (north side, maps to 'north')
+ * @param {number} sideIndex - Side index (0-3)
+ * @param {number} s - Parameter from 0 to 1 along the side
+ * @returns {number[]} [x, y] in normalized coordinates
+ */
+function pointOnRhombusSide(sideIndex, s) {
+  const i = ((sideIndex % 4) + 4) % 4;
+  const a = RHOMBUS_VERTICES[i];
+  const b = RHOMBUS_VERTICES[(i + 1) % 4];
+  return [lerp(a[0], b[0], s), lerp(a[1], b[1], s)];
+}
+
+/**
+ * Convert side name to side index for the diffeomorphism.
+ * The mapping accounts for direction differences:
+ * - north: goes west→east (t=0 at NW, t=1 at NE) → side 3 reversed
+ * - east: goes south→north (t=0 at SE, t=1 at NE) → side 2 reversed
+ * - south: goes east→west (t=0 at SE, t=1 at SW) → side 1 reversed
+ * - west: goes north→south (t=0 at NW, t=1 at SW) → side 0
+ */
+function sideNameToIndexAndT(side, t) {
+  switch (side) {
+    case 'north':
+      // North: NW (vertex 0) to NE (vertex 3) = side 3 reversed
+      return { sideIndex: 3, s: 1 - t };
+    case 'east':
+      // East: SE (vertex 2) to NE (vertex 3) = side 2
+      return { sideIndex: 2, s: t };
+    case 'south':
+      // South: SE (vertex 2) to SW (vertex 1) = side 1 reversed  
+      return { sideIndex: 1, s: 1 - t };
+    case 'west':
+      // West: NW (vertex 0) to SW (vertex 1) = side 0
+      return { sideIndex: 0, s: t };
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
+}
+
+// ---------- Square ↔ Disk (Elliptical Grid) Transformations ----------
+
+/**
+ * Map a point in the square [-1,1]² to the unit disk.
+ * Uses the elliptical grid mapping (Shirley-Chiu style).
+ * @param {number} x - x coordinate in [-1, 1]
+ * @param {number} y - y coordinate in [-1, 1]
+ * @returns {number[]} [u, v] in unit disk
+ */
+function squareToDisk(x, y) {
+  const u = x * Math.sqrt(Math.max(1 - (y * y) / 2, 0));
+  const v = y * Math.sqrt(Math.max(1 - (x * x) / 2, 0));
+  return [u, v];
+}
+
+/**
+ * Map a point in the unit disk to the square [-1,1]².
+ * Inverse of squareToDisk using nested radicals.
+ * @param {number} u - u coordinate in unit disk
+ * @param {number} v - v coordinate in unit disk
+ * @returns {number[]} [x, y] in [-1, 1]²
+ */
+function diskToSquare(u, v) {
+  const A = 2 - v * v + u * u;
+  const B = 2 - u * u + v * v;
+
+  const discA = Math.max(A * A - 8 * u * u, 0);
+  const discB = Math.max(B * B - 8 * v * v, 0);
+
+  const x2 = Math.max((A - Math.sqrt(discA)) / 2, 0);
+  const y2 = Math.max((B - Math.sqrt(discB)) / 2, 0);
+
+  const x = Math.sign(u) * Math.sqrt(x2);
+  const y = Math.sign(v) * Math.sqrt(y2);
+  return [x, y];
+}
+
+// ---------- Linear Square ↔ Rhombus Transformations ----------
+
+/**
+ * Map a point from the square (-1,1)² to the rhombus interior.
+ * Uses the left-slanted rhombus geometry.
+ * @param {number} x - x coordinate in (-1, 1)
+ * @param {number} y - y coordinate in (-1, 1)
+ * @returns {number[]} [X, Y] in normalized rhombus coordinates
+ */
+function squareToRhombus(x, y) {
+  // Left-slanted rhombus transformation
+  const X = -(0.5 * x + 0.25 * y);
+  const Y = (SQRT3 / 4) * y;
+  return [X, Y];
+}
+
+/**
+ * Map a point from the rhombus to the square (-1,1)².
+ * Inverse of squareToRhombus.
+ * @param {number} X - X coordinate in rhombus
+ * @param {number} Y - Y coordinate in rhombus
+ * @returns {number[]} [x, y] in (-1, 1)²
+ */
+function rhombusToSquare(X, Y) {
+  const y = (4 / SQRT3) * Y;
+  const x = -2 * X - 0.5 * y;
+  return [x, y];
+}
+
+// ---------- Boundary ↔ Disk Mapping ----------
+
+/**
+ * Map a point on the rhombus boundary to a point on the unit circle.
+ * @param {number} sideIndex - Side index (0-3)
+ * @param {number} s - Parameter from 0 to 1 along the side
+ * @returns {number[]} [u, v] on unit circle
+ */
+function boundaryToDisk(sideIndex, s) {
+  const [X, Y] = pointOnRhombusSide(sideIndex, s);
+  const [x, y] = rhombusToSquare(X, Y);
+  let [u, v] = squareToDisk(x, y);
+
+  // Normalize to unit circle to reduce numeric drift
+  const r = Math.hypot(u, v) || 1;
+  u /= r;
+  v /= r;
+  return [u, v];
+}
+
+// ---------- Disk → Rhombus Diffeomorphism ----------
+
+/**
+ * Map a point from the unit disk to the rhombus interior.
+ * This is the key diffeomorphism that preserves non-intersection of chords.
+ * @param {number} u - u coordinate in unit disk
+ * @param {number} v - v coordinate in unit disk
+ * @returns {number[]} [X, Y] in normalized rhombus coordinates
+ */
+function diskToRhombus(u, v) {
+  const [x, y] = diskToSquare(u, v);
+  return squareToRhombus(x, y);
+}
+
+// ---------- Chord Sampling ----------
+
+/**
+ * Sample points along a chord in the disk and map them to the rhombus.
+ * @param {Object} start - Start point { sideIndex, s }
+ * @param {Object} end - End point { sideIndex, s }
+ * @param {number} nSamples - Number of samples along the chord
+ * @returns {number[][]} Array of [X, Y] points in normalized rhombus coords
+ */
+function chordImagePoints(start, end, nSamples) {
+  const [u1, v1] = boundaryToDisk(start.sideIndex, start.s);
+  const [u2, v2] = boundaryToDisk(end.sideIndex, end.s);
+
+  const pts = [];
+  for (let i = 0; i < nSamples; i++) {
+    let t = i / (nSamples - 1);
+
+    // Avoid exact endpoints (on unit circle) for stability in nested radicals
+    if (i === 0) t = ENDPOINT_EPSILON;
+    if (i === nSamples - 1) t = 1 - ENDPOINT_EPSILON;
+
+    const u = (1 - t) * u1 + t * u2;
+    const v = (1 - t) * v1 + t * v2;
+
+    pts.push(diskToRhombus(u, v));
+  }
+  return pts;
+}
+
+// ---------- Catmull-Rom → Cubic Bézier Conversion ----------
+
+/**
+ * Convert a sequence of points to cubic Bézier segments using Catmull-Rom interpolation.
+ * @param {number[][]} P - Array of [x, y] points
+ * @returns {Object[]} Array of { p1, c1, c2, p2 } Bézier segment control points
+ */
+function catmullRomToBeziers(P) {
+  if (P.length < 2) return [];
+
+  // Pad endpoints for tangent estimation
+  const Pm1 = [2 * P[0][0] - P[1][0], 2 * P[0][1] - P[1][1]];
+  const Pp1 = [2 * P[P.length - 1][0] - P[P.length - 2][0], 2 * P[P.length - 1][1] - P[P.length - 2][1]];
+  const Q = [Pm1, ...P, Pp1];
+
+  const segs = [];
+  for (let i = 1; i < P.length; i++) {
+    const p0 = Q[i - 1], p1 = Q[i], p2 = Q[i + 1], p3 = Q[i + 2];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    segs.push({ p1, c1, c2, p2 });
+  }
+  return segs;
+}
+
+// ---------- Coordinate Transformation ----------
+
+// Transformation constants to convert normalized rhombus coords to screen coords
+// These were computed analytically to match the existing unitSquareToRhombus mapping
+const NORM_TO_SCREEN_A = SIZE;  // X coefficient for normalized X
+const NORM_TO_SCREEN_B = (-HALF_SHEAR + SIZE / 4) * 4 / SQRT3;  // X coefficient for normalized Y
+const NORM_TO_SCREEN_C = SIZE / 2;  // X offset
+const NORM_TO_SCREEN_E = -SIZE / 2 * 4 / SQRT3;  // Y coefficient for normalized Y
+const NORM_TO_SCREEN_F = SIZE / 2;  // Y offset
+
+/**
+ * Convert normalized rhombus coordinates to screen coordinates.
+ * The transformation is computed to exactly match the existing coordinate system.
+ * @param {number} X - X in normalized coords
+ * @param {number} Y - Y in normalized coords
+ * @returns {Object} { x, y } screen coordinates
+ */
+function normalizedToScreen(X, Y) {
+  return {
+    x: NORM_TO_SCREEN_A * X + NORM_TO_SCREEN_B * Y + NORM_TO_SCREEN_C,
+    y: NORM_TO_SCREEN_E * Y + NORM_TO_SCREEN_F
+  };
+}
+
+/**
+ * Create a curved edge path using the diffeomorphism approach.
+ * This guarantees non-intersection by construction: chords in the disk
+ * that share no interior points won't intersect, and the diffeomorphism
+ * preserves this property.
+ * 
+ * @param {string} fromSide - Starting side ('north', 'east', 'south', 'west')
+ * @param {number} fromT - Parameter (0 to 1) along the starting side
+ * @param {string} toSide - Ending side ('north', 'east', 'south', 'west')
+ * @param {number} toT - Parameter (0 to 1) along the ending side
+ * @returns {Object} { pathD: string, midPoint: { x, y }, angle: number }
+ */
+export function getCurvedEdgePath(fromSide, fromT, toSide, toT) {
+  // Convert side names to side indices
+  const start = sideNameToIndexAndT(fromSide, fromT);
+  const end = sideNameToIndexAndT(toSide, toT);
+  
+  // Sample points along the chord in the disk, mapped to the rhombus
+  const pts = chordImagePoints(start, end, EDGE_PATH_SAMPLES);
+  
+  // Select knots for the spline (reduce to manageable number of Bézier segments)
+  // We take every EDGE_PATH_KNOT_STEP-th point, plus always include the last point
+  // to ensure the curve reaches the endpoint. Having slightly uneven spacing
+  // near the end is acceptable as Catmull-Rom handles it smoothly.
+  const knots = [];
+  for (let i = 0; i < pts.length; i += EDGE_PATH_KNOT_STEP) {
+    knots.push(pts[i]);
+  }
+  // Always include the last point to ensure we reach the endpoint
+  const lastPt = pts[pts.length - 1];
+  const lastKnot = knots[knots.length - 1];
+  if (!lastKnot || lastKnot[0] !== lastPt[0] || lastKnot[1] !== lastPt[1]) {
+    knots.push(lastPt);
+  }
+  
+  // Convert to Bézier segments
+  const segs = catmullRomToBeziers(knots);
+  
+  if (segs.length === 0) {
+    // Degenerate case: just return a straight line
+    const from = getPointOnSide(fromSide, fromT);
+    const to = getPointOnSide(toSide, toT);
+    const midX = (from.x + to.x) / 2;
+    const midY = (from.y + to.y) / 2;
+    const angle = Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI);
+    return {
+      pathD: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+      midPoint: { x: midX, y: midY },
+      angle
+    };
+  }
+  
+  // Build SVG path string with cubic Bézier curves
+  const firstScreen = normalizedToScreen(segs[0].p1[0], segs[0].p1[1]);
+  let d = `M ${firstScreen.x} ${firstScreen.y}`;
+  
+  for (const seg of segs) {
+    const c1 = normalizedToScreen(seg.c1[0], seg.c1[1]);
+    const c2 = normalizedToScreen(seg.c2[0], seg.c2[1]);
+    const p2 = normalizedToScreen(seg.p2[0], seg.p2[1]);
+    d += ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${p2.x} ${p2.y}`;
+  }
+  
+  // Calculate midpoint (approximately at the middle of the path)
+  const midIdx = Math.floor(pts.length / 2);
+  const midNorm = pts[midIdx];
+  const midScreen = normalizedToScreen(midNorm[0], midNorm[1]);
+  
+  // Calculate angle at midpoint (using neighboring points for tangent)
+  const prevIdx = Math.max(0, midIdx - 1);
+  const nextIdx = Math.min(pts.length - 1, midIdx + 1);
+  const prev = normalizedToScreen(pts[prevIdx][0], pts[prevIdx][1]);
+  const next = normalizedToScreen(pts[nextIdx][0], pts[nextIdx][1]);
+  const angle = Math.atan2(next.y - prev.y, next.x - prev.x) * (180 / Math.PI);
+  
+  return {
+    pathD: d,
+    midPoint: { x: midScreen.x, y: midScreen.y },
+    angle
+  };
+}
+
+/**
+ * Convert normalized rhombus coordinates to paper coordinates (southward, eastward).
+ * Paper coordinates are in [0,1]² where:
+ * - (0, 0) = NW corner
+ * - (0, 1) = NE corner
+ * - (1, 0) = SW corner
+ * - (1, 1) = SE corner
+ * 
+ * @param {number} X - X in normalized rhombus coords
+ * @param {number} Y - Y in normalized rhombus coords
+ * @returns {Object} { southward, eastward } in [0,1]²
+ */
+function normalizedToPaper(X, Y) {
+  // First convert to square [-1,1]² coords
+  const [x, y] = rhombusToSquare(X, Y);
+  
+  // Then convert to paper coords [0,1]²
+  // The square mapping is:
+  // square (1, 1) => V0 (NW) => paper (0, 0)
+  // square (-1, 1) => V3 (NE) => paper (0, 1)
+  // square (1, -1) => V1 (SW) => paper (1, 0)
+  // square (-1, -1) => V2 (SE) => paper (1, 1)
+  // So: eastward = (1 - x) / 2, southward = (1 - y) / 2
+  const eastward = (1 - x) / 2;
+  const southward = (1 - y) / 2;
+  
+  return { southward, eastward };
+}
+
+/**
+ * Get sampled points along an edge using the diffeomorphism approach.
+ * Returns points in paper coordinates (southward, eastward) for use in
+ * wallpaper and 3D visualization.
+ * 
+ * @param {string} fromSide - Starting side ('north', 'east', 'south', 'west')
+ * @param {number} fromT - Parameter (0 to 1) along the starting side
+ * @param {string} toSide - Ending side ('north', 'east', 'south', 'west')
+ * @param {number} toT - Parameter (0 to 1) along the ending side
+ * @param {number} numSamples - Number of sample points (default: 20)
+ * @returns {Array<{southward: number, eastward: number}>} Array of paper coordinate points
+ */
+export function getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, numSamples = 20) {
+  // Convert side names to side indices
+  const start = sideNameToIndexAndT(fromSide, fromT);
+  const end = sideNameToIndexAndT(toSide, toT);
+  
+  // Get points on the unit circle for start and end
+  const [u1, v1] = boundaryToDisk(start.sideIndex, start.s);
+  const [u2, v2] = boundaryToDisk(end.sideIndex, end.s);
+  
+  const points = [];
+  for (let i = 0; i < numSamples; i++) {
+    let t = i / (numSamples - 1);
+    
+    // Avoid exact endpoints for numerical stability
+    if (i === 0) t = ENDPOINT_EPSILON;
+    if (i === numSamples - 1) t = 1 - ENDPOINT_EPSILON;
+    
+    // Interpolate along chord in disk
+    const u = (1 - t) * u1 + t * u2;
+    const v = (1 - t) * v1 + t * v2;
+    
+    // Map back to rhombus (normalized coords)
+    const [X, Y] = diskToRhombus(u, v);
+    
+    // Convert to paper coords
+    const paperCoords = normalizedToPaper(X, Y);
+    points.push(paperCoords);
+  }
+  
+  return points;
+}
+
+/**
  * Get the SIZE constant for external use.
  */
 export function getSize() {

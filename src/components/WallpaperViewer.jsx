@@ -4,6 +4,7 @@ import {
   applyReferenceFrame,
   updateReferenceFrameForSide,
   pointToScreenSpace,
+  paperToTrueRhombus,
   NE_CORNER,
   NW_CORNER,
   SE_CORNER,
@@ -15,12 +16,55 @@ import {
   formatWallpaperIndex,
   indexToFrame
 } from '../utils/moveTree.js';
-import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.js';
+import { isInteriorPoint, getIdentifiedSide, EPSILON, getEdgeSamplePointsPaper } from '../utils/geometry.js';
 import './WallpaperViewer.css';
+
+// Number of sample points per edge for diffeomorphism-based curved rendering
+const EDGE_SAMPLES = 20;
+
+/**
+ * Generate SVG path string for a single edge using diffeomorphism-based curved path.
+ * @param {Object} edge - Edge object with from/to points
+ * @param {Object} frame - Reference frame to transform points into
+ * @returns {string} - SVG path string (M followed by L commands for sampled points)
+ */
+function generateCurvedEdgePath(edge, frame) {
+  // For boundary-to-boundary edges, use the diffeomorphism
+  if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
+    const samplePoints = getEdgeSamplePointsPaper(
+      edge.from.side,
+      edge.from.t,
+      edge.to.side,
+      edge.to.t,
+      EDGE_SAMPLES
+    );
+    
+    // Convert paper coords to screen space using the frame
+    const screenPoints = samplePoints.map(pt => {
+      const localScreen = paperToTrueRhombus(pt.southward, pt.eastward);
+      return applyReferenceFrame(localScreen.x, localScreen.y, frame);
+    });
+    
+    if (screenPoints.length < 2) return '';
+    
+    // Build path: M for first point, L for subsequent points
+    let path = `M ${screenPoints[0].x} ${screenPoints[0].y}`;
+    for (let i = 1; i < screenPoints.length; i++) {
+      path += ` L ${screenPoints[i].x} ${screenPoints[i].y}`;
+    }
+    return path;
+  } else {
+    // For edges involving interior points, use straight line
+    const fromPt = pointToScreenSpace(edge.from, frame);
+    const toPt = pointToScreenSpace(edge.to, frame);
+    return `M ${fromPt.x} ${fromPt.y} L ${toPt.x} ${toPt.y}`;
+  }
+}
 
 /**
  * Generate SVG path string for all edges rendered in a given reference frame.
  * This shows the full original path as it would appear in each rhombus copy.
+ * Uses diffeomorphism-based curved paths for non-intersecting visualization.
  * @param {Array} edges - Array of edge objects with from/to points
  * @param {Object} frame - Reference frame to transform points into
  * @returns {string} - SVG path string
@@ -31,9 +75,7 @@ function generateAllEdgesPathString(edges, frame) {
   const pathParts = [];
   
   for (const edge of edges) {
-    const fromPt = pointToScreenSpace(edge.from, frame);
-    const toPt = pointToScreenSpace(edge.to, frame);
-    pathParts.push(`M ${fromPt.x} ${fromPt.y} L ${toPt.x} ${toPt.y}`);
+    pathParts.push(generateCurvedEdgePath(edge, frame));
   }
   
   return pathParts.join(' ');
@@ -85,12 +127,13 @@ function isSameSideEdge(edge) {
  * 
  * @param {Array} edges - Array of edge objects with from/to points
  * @param {number} repeats - Number of times to repeat the path (for closed loops)
- * @returns {{ pathPoints: Array, rhombusFrames: Array, rhombusIndices: Array }}
+ * @returns {{ pathPoints: Array, rhombusFrames: Array, rhombusIndices: Array, vertexIndices: Array }}
  */
 function generateWallpaperData(edges, repeats = 1) {
-  if (edges.length === 0) return { pathPoints: [], rhombusFrames: [], rhombusIndices: [] };
+  if (edges.length === 0) return { pathPoints: [], rhombusFrames: [], rhombusIndices: [], vertexIndices: [] };
   
   const pathPoints = [];
+  const vertexIndices = []; // Indices in pathPoints that are actual edge vertices (not intermediate samples)
   const rhombusFrames = []; // Each frame represents one rhombus instance
   const rhombusIndices = []; // Wallpaper indices for each rhombus
   let currentFrame = createIdentityFrame();
@@ -109,9 +152,10 @@ function generateWallpaperData(edges, repeats = 1) {
     for (let i = 0; i < edges.length; i++) {
       const edge = edges[i];
       
-      // Add the starting point
+      // Add the starting point (and track as vertex)
       if (rep === 0 && i === 0) {
         // First edge of first repeat - use the from point directly
+        vertexIndices.push(pathPoints.length);
         pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
       } else {
         // For subsequent edges, we already added the end point of the previous edge.
@@ -122,6 +166,7 @@ function generateWallpaperData(edges, repeats = 1) {
         // Skip this logic for interior points or when we don't have previous side info
         if (isInteriorPoint(edge.from) || lastEndSide === null) {
           // Interior point or no previous side - add the from point
+          vertexIndices.push(pathPoints.length);
           pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
         } else {
           const fromSide = edge.from.side;
@@ -135,6 +180,7 @@ function generateWallpaperData(edges, repeats = 1) {
           // If they're not at the same position (even considering identification), 
           // we have a discontinuous path - add the from point
           if (!((sameSide || identifiedSide) && sameT)) {
+            vertexIndices.push(pathPoints.length);
             pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
           }
           // Otherwise, skip adding the from point since it's the same as the last end point
@@ -149,6 +195,7 @@ function generateWallpaperData(edges, repeats = 1) {
       // Check if this edge is same-side but the sides are identified
       // (e.g., edge.from.side is 'east' but we entered from 'north')
       // In this case, we should draw using the north geometry to stay consistent
+      let fromSideForCurve = edge.from.side;
       if (isSameSideEdge(edge) && lastEndSide !== null) {
         const edgeFromSide = edge.from.side;
         const expectedContinuationSide = getIdentifiedSide(lastEndSide);
@@ -160,10 +207,31 @@ function generateWallpaperData(edges, repeats = 1) {
           // Since this is a same-side edge, to.side === from.side
           // We should draw it using lastEndSide instead
           toPointForDrawing = { side: lastEndSide, t: edge.to.t };
+          fromSideForCurve = lastEndSide;
         }
       }
       
-      // Add the end point
+      // Add intermediate sample points along the edge using diffeomorphism
+      // (only for boundary-to-boundary edges)
+      if (!isInteriorPoint(edge.from) && !isInteriorPoint(toPointForDrawing)) {
+        const samplePoints = getEdgeSamplePointsPaper(
+          fromSideForCurve,
+          edge.from.t,
+          toPointForDrawing.side,
+          toPointForDrawing.t,
+          EDGE_SAMPLES
+        );
+        
+        // Add intermediate points (skip first and last - they're the endpoints)
+        for (let j = 1; j < samplePoints.length - 1; j++) {
+          const pt = samplePoints[j];
+          const localScreen = paperToTrueRhombus(pt.southward, pt.eastward);
+          pathPoints.push(applyReferenceFrame(localScreen.x, localScreen.y, currentFrame));
+        }
+      }
+      
+      // Add the end point (and track as vertex)
+      vertexIndices.push(pathPoints.length);
       pathPoints.push(pointToScreenSpace(toPointForDrawing, currentFrame));
       
       // Track the last endpoint (only for boundary points)
@@ -203,7 +271,7 @@ function generateWallpaperData(edges, repeats = 1) {
     }
   }
   
-  return { pathPoints, rhombusFrames, rhombusIndices };
+  return { pathPoints, rhombusFrames, rhombusIndices, vertexIndices };
 }
 
 /**
@@ -332,7 +400,7 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   const effectiveRepeats = isLoopClosed ? repeats : 1;
   
   // Generate wallpaper data (path points and visited rhombi)
-  const { pathPoints, rhombusFrames, rhombusIndices } = useMemo(() => 
+  const { pathPoints, rhombusFrames, rhombusIndices, vertexIndices } = useMemo(() => 
     generateWallpaperData(edges, effectiveRepeats), 
     [edges, effectiveRepeats]
   );
@@ -465,17 +533,19 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
               />
             )}
             
-            {/* Draw path vertices */}
-            {pathPoints.map((pt, index) => {
-              const isStart = index === 0;
-              const isEnd = index === pathPoints.length - 1;
+            {/* Draw path vertices (only at actual edge endpoints, not intermediate samples) */}
+            {vertexIndices.map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              if (!pt) return null;
+              const isStart = i === 0;
+              const isEnd = i === vertexIndices.length - 1;
               const radius = (isStart || isEnd) ? 8 : 5;
               const className = isStart ? 'trajectory-start' : 
                                isEnd ? 'trajectory-end' : 
                                'trajectory-point';
               return (
                 <circle
-                  key={index}
+                  key={`vertex-${i}`}
                   cx={pt.x}
                   cy={pt.y}
                   r={radius}
@@ -484,23 +554,32 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
               );
             })}
             
-            {/* Draw direction arrows along the path */}
-            {pathPoints.length >= 2 && pathPoints.slice(0, -1).map((pt, index) => {
-              const nextPt = pathPoints[index + 1];
-              const midX = (pt.x + nextPt.x) / 2;
-              const midY = (pt.y + nextPt.y) / 2;
-              const dx = nextPt.x - pt.x;
-              const dy = nextPt.y - pt.y;
+            {/* Draw direction arrows along the path (one per edge, at vertex midpoints) */}
+            {vertexIndices.length >= 2 && vertexIndices.slice(0, -1).map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              const nextVertexIdx = vertexIndices[i + 1];
+              const nextPt = pathPoints[nextVertexIdx];
+              if (!pt || !nextPt) return null;
+              
+              // Find the midpoint of the curve (use middle sample point between vertices)
+              const midIdx = Math.floor((vertexIdx + nextVertexIdx) / 2);
+              const midPt = pathPoints[midIdx];
+              
+              // Calculate direction at midpoint
+              const prevIdx = Math.max(0, midIdx - 1);
+              const nextIdx = Math.min(pathPoints.length - 1, midIdx + 1);
+              const dx = pathPoints[nextIdx].x - pathPoints[prevIdx].x;
+              const dy = pathPoints[nextIdx].y - pathPoints[prevIdx].y;
               const angle = Math.atan2(dy, dx) * 180 / Math.PI;
               
-              // Only draw arrows for every other segment to avoid clutter
-              if (index % 2 !== 0) return null;
+              // Only draw arrows for every other edge to further reduce clutter
+              if (i % 2 !== 0) return null;
               
               return (
                 <polygon
-                  key={`arrow-${index}`}
+                  key={`arrow-${i}`}
                   points="0,-4 8,0 0,4"
-                  transform={`translate(${midX}, ${midY}) rotate(${angle})`}
+                  transform={`translate(${midPt.x}, ${midPt.y}) rotate(${angle})`}
                   className="trajectory-arrow"
                 />
               );

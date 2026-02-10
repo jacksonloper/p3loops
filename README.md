@@ -4,7 +4,7 @@ A React/Vite web application for creating and managing non-crossing paths on a 1
 
 ## Features
 
-- **Rhombus Visualization**: An SVG-based 120°/60° rhombus with bowed sides for clear visualization
+- **Rhombus Visualization**: An SVG-based 120°/60° rhombus with straight sides and curved edges rendered using a diffeomorphism. This mathematically guarantees that edges are non-intersecting by construction - straight chords in a disk are mapped to curved paths in the rhombus while preserving non-intersection.
 - **Edge Identifications**: 
   - North ≡ East (a point at t% along North is the same as t% along East)
   - South ≡ West (a point at t% along South is the same as t% along West)

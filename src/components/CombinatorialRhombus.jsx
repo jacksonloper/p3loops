@@ -1,8 +1,8 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import {
-  getPointOnBowedSide,
-  getBowedRhombusPath,
-  getBowedSideSegmentPath,
+  getStraightRhombusPath,
+  getStraightSideSegmentPath,
+  getCurvedEdgePath,
   getSize,
   getShear,
   getPointOnSide
@@ -20,10 +20,10 @@ const TAP_MAX_DURATION_MS = 300;  // Maximum duration for a tap (vs pan)
 const TAP_MAX_DISTANCE = 10;      // Maximum movement for a tap (in screen pixels)
 
 /**
- * Calculate segment coordinates for display/interaction using bowed positions.
+ * Calculate segment coordinates for display/interaction using straight sides.
  * Now segment has a specific `side` (not just group).
  * Returns coordinates only for that specific side, including an SVG path
- * that follows the curved boundary.
+ * that follows the straight boundary.
  */
 function getSegmentCoords(segment, allPoints) {
   const side = segment.side;
@@ -58,11 +58,11 @@ function getSegmentCoords(segment, allPoints) {
   // Calculate the midpoint (where the new point would go)
   const midT = (startT + endT) / 2;
   
-  // Get the SVG path for this curved segment
-  const pathD = getBowedSideSegmentPath(side, startT, endT);
+  // Get the SVG path for this straight segment on the boundary
+  const pathD = getStraightSideSegmentPath(side, startT, endT);
   
-  // Get the midpoint coordinates for the marker
-  const midPt = getPointOnBowedSide(side, midT);
+  // Get the midpoint coordinates for the marker (on the straight side)
+  const midPt = getPointOnSide(side, midT);
   
   return [{
     side,
@@ -76,14 +76,17 @@ function getSegmentCoords(segment, allPoints) {
 }
 
 /**
- * Get bowed coordinates for a float edge (from combinatorial edge).
+ * Get curved edge path data for a float edge (from combinatorial edge).
+ * Uses diffeomorphism-based rendering for guaranteed non-intersection.
  * @param {Object} edge - Float edge with { from: { side, t }, to: { side, t } }
  */
-function getBowedEdgeCoordinates(edge) {
-  return {
-    from: getPointOnBowedSide(edge.from.side, edge.from.t),
-    to: getPointOnBowedSide(edge.to.side, edge.to.t)
-  };
+function getCurvedEdgeData(edge) {
+  return getCurvedEdgePath(
+    edge.from.side, 
+    edge.from.t, 
+    edge.to.side, 
+    edge.to.t
+  );
 }
 
 /**
@@ -359,8 +362,9 @@ function CombinatorialRhombus({
   const baseRhombusStrokeWidth = 2;
   const baseLabelDist = 15;
   
-  // Use the bowed rhombus path (curved sides) for better visualization of same-side edges
-  const rhombusPath = getBowedRhombusPath();
+  // Use the straight rhombus path (true rhombus with straight sides)
+  // Edges are curved inward to remain individually discernible
+  const rhombusPath = getStraightRhombusPath();
   
   // Get corner positions for labels
   const nw = getPointOnSide('north', 0);
@@ -517,34 +521,27 @@ function CombinatorialRhombus({
           </g>
         ))}
         
-        {/* Edges */}
+        {/* Edges - rendered using diffeomorphism for guaranteed non-intersection */}
         {floatEdges.map((edge, index) => {
-          const coords = getBowedEdgeCoordinates(edge);
+          const edgeData = getCurvedEdgeData(edge);
           const isHighlighted = highlightedEdgeIndex === index;
-          const midX = (coords.from.x + coords.to.x) / 2;
-          const midY = (coords.from.y + coords.to.y) / 2;
-          const dx = coords.to.x - coords.from.x;
-          const dy = coords.to.y - coords.from.y;
-          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
           
           return (
             <g key={index}>
-              <line
-                x1={coords.from.x}
-                y1={coords.from.y}
-                x2={coords.to.x}
-                y2={coords.to.y}
+              <path
+                d={edgeData.pathD}
                 className={`edge-line ${isHighlighted ? 'edge-line-problem' : ''}`}
                 strokeWidth={(isHighlighted ? 5 : baseEdgeStrokeWidth) * strokeScale}
+                fill="none"
               />
               <text
-                x={midX}
-                y={midY}
+                x={edgeData.midPoint.x}
+                y={edgeData.midPoint.y}
                 className="edge-arrow"
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fontSize={baseFontSize * strokeScale}
-                transform={`rotate(${angle}, ${midX}, ${midY})`}
+                transform={`rotate(${edgeData.angle}, ${edgeData.midPoint.x}, ${edgeData.midPoint.y})`}
               >
                 ▶
               </text>
@@ -552,10 +549,10 @@ function CombinatorialRhombus({
           );
         })}
         
-        {/* All points (equally spaced) - using bowed positions with integer labels */}
+        {/* All points (equally spaced) - using straight side positions with integer labels */}
         {/* Points appear on both identified sides with different colors per group */}
         {allPoints.map((point, index) => {
-          const coords = getPointOnBowedSide(point.side, point.t);
+          const coords = getPointOnSide(point.side, point.t);
           // Calculate label offset based on side to position label outside the rhombus
           let labelOffsetX = 0;
           let labelOffsetY = 0;
@@ -600,11 +597,11 @@ function CombinatorialRhombus({
           );
         })}
         
-        {/* Next start point indicator - using bowed position */}
+        {/* Next start point indicator - using straight side position */}
         {nextStartPoint && (
           <circle
-            cx={getPointOnBowedSide(nextStartPoint.side, nextStartPoint.t).x}
-            cy={getPointOnBowedSide(nextStartPoint.side, nextStartPoint.t).y}
+            cx={getPointOnSide(nextStartPoint.side, nextStartPoint.t).x}
+            cy={getPointOnSide(nextStartPoint.side, nextStartPoint.t).y}
             r={baseStartPointRadius * strokeScale}
             className="start-point"
             strokeWidth={2 * strokeScale}

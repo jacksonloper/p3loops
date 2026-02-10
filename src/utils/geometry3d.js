@@ -11,6 +11,8 @@
  * 3. Z = (a*b*c)^(1/3) for NW region, -(a*b*c)^(1/3) for SE region
  */
 
+import { getEdgeSamplePointsPaper, isInteriorPoint } from './geometry.js';
+
 // Vertices of the unit square in (southward, eastward) coordinates
 // NW = (0, 0), NE = (0, 1), SW = (1, 0), SE = (1, 1)
 const NW = { southward: 0, eastward: 0 };
@@ -138,6 +140,45 @@ export function interpolateEdge3D(from, to, subdivisions = 10) {
     const point3D = unitSquareTo3D(southward, eastward);
     points.push(point3D);
   }
+  
+  return points;
+}
+
+/**
+ * Interpolate edge using diffeomorphism-based sampling for guaranteed non-intersection.
+ * This uses the same diffeomorphism as the 2D rhombus view to sample points along
+ * the edge, then converts them to 3D coordinates.
+ * 
+ * @param {Object} edge - Edge object with from/to points (boundary points with side and t)
+ * @param {number} numSamples - Number of sample points (default: 15)
+ * @returns {Array} Array of points with x, y, z coordinates
+ */
+export function interpolateEdgeDiffeomorphism3D(edge, numSamples = 15) {
+  // For edges involving interior points, fall back to linear interpolation
+  if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
+    // Get paper coordinates and do linear interpolation
+    const from = {
+      southward: edge.from.southward ?? 0.5,
+      eastward: edge.from.eastward ?? 0.5
+    };
+    const to = {
+      southward: edge.to.southward ?? 0.5,
+      eastward: edge.to.eastward ?? 0.5
+    };
+    return interpolateEdge3D(from, to, numSamples - 1);
+  }
+  
+  // Use diffeomorphism-based sampling for boundary-to-boundary edges
+  const paperPoints = getEdgeSamplePointsPaper(
+    edge.from.side,
+    edge.from.t,
+    edge.to.side,
+    edge.to.t,
+    numSamples
+  );
+  
+  // Convert each paper coordinate point to 3D
+  const points = paperPoints.map(pt => unitSquareTo3D(pt.southward, pt.eastward));
   
   return points;
 }
