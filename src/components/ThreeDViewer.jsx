@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { getPointPaperCoordinates } from '../utils/geometry.js';
-import { interpolateEdge3D, getFlatTriangleVertices, getDirectionAtPoint } from '../utils/geometry3d.js';
+import { interpolateEdgeDiffeomorphism3D, getFlatTriangleVertices, getDirectionAtPoint } from '../utils/geometry3d.js';
 import './ThreeDViewer.css';
 
 // Scale factor for the black triangle (80% of original size)
 const TRIANGLE_SCALE = 0.8;
+
+// Number of samples per edge for diffeomorphism-based interpolation
+const EDGE_SAMPLES_3D = 15;
 
 /**
  * ThreeDViewer component - renders the path on puffed 3D triangles.
@@ -103,11 +105,9 @@ function ThreeDViewer({ edges, onClose }) {
       
       for (let edgeIndex = 0; edgeIndex < edges.length; edgeIndex++) {
         const edge = edges[edgeIndex];
-        const from = getPointPaperCoordinates(edge.from);
-        const to = getPointPaperCoordinates(edge.to);
         
-        // Interpolate edge into 10 points
-        const interpolatedPoints = interpolateEdge3D(from, to, 10);
+        // Use diffeomorphism-based interpolation for non-intersecting curves
+        const interpolatedPoints = interpolateEdgeDiffeomorphism3D(edge, EDGE_SAMPLES_3D);
         
         // Add points (avoiding duplicates at edge junctions)
         const startIdx = (edgeIndex === 0) ? 0 : 1;

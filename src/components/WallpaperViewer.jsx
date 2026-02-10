@@ -4,6 +4,7 @@ import {
   applyReferenceFrame,
   updateReferenceFrameForSide,
   pointToScreenSpace,
+  paperToTrueRhombus,
   NE_CORNER,
   NW_CORNER,
   SE_CORNER,
@@ -15,12 +16,55 @@ import {
   formatWallpaperIndex,
   indexToFrame
 } from '../utils/moveTree.js';
-import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.js';
+import { isInteriorPoint, getIdentifiedSide, EPSILON, getEdgeSamplePointsPaper } from '../utils/geometry.js';
 import './WallpaperViewer.css';
+
+// Number of sample points per edge for diffeomorphism-based curved rendering
+const EDGE_SAMPLES = 20;
+
+/**
+ * Generate SVG path string for a single edge using diffeomorphism-based curved path.
+ * @param {Object} edge - Edge object with from/to points
+ * @param {Object} frame - Reference frame to transform points into
+ * @returns {string} - SVG path string (M followed by L commands for sampled points)
+ */
+function generateCurvedEdgePath(edge, frame) {
+  // For boundary-to-boundary edges, use the diffeomorphism
+  if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
+    const samplePoints = getEdgeSamplePointsPaper(
+      edge.from.side,
+      edge.from.t,
+      edge.to.side,
+      edge.to.t,
+      EDGE_SAMPLES
+    );
+    
+    // Convert paper coords to screen space using the frame
+    const screenPoints = samplePoints.map(pt => {
+      const localScreen = paperToTrueRhombus(pt.southward, pt.eastward);
+      return applyReferenceFrame(localScreen.x, localScreen.y, frame);
+    });
+    
+    if (screenPoints.length < 2) return '';
+    
+    // Build path: M for first point, L for subsequent points
+    let path = `M ${screenPoints[0].x} ${screenPoints[0].y}`;
+    for (let i = 1; i < screenPoints.length; i++) {
+      path += ` L ${screenPoints[i].x} ${screenPoints[i].y}`;
+    }
+    return path;
+  } else {
+    // For edges involving interior points, use straight line
+    const fromPt = pointToScreenSpace(edge.from, frame);
+    const toPt = pointToScreenSpace(edge.to, frame);
+    return `M ${fromPt.x} ${fromPt.y} L ${toPt.x} ${toPt.y}`;
+  }
+}
 
 /**
  * Generate SVG path string for all edges rendered in a given reference frame.
  * This shows the full original path as it would appear in each rhombus copy.
+ * Uses diffeomorphism-based curved paths for non-intersecting visualization.
  * @param {Array} edges - Array of edge objects with from/to points
  * @param {Object} frame - Reference frame to transform points into
  * @returns {string} - SVG path string
@@ -31,9 +75,7 @@ function generateAllEdgesPathString(edges, frame) {
   const pathParts = [];
   
   for (const edge of edges) {
-    const fromPt = pointToScreenSpace(edge.from, frame);
-    const toPt = pointToScreenSpace(edge.to, frame);
-    pathParts.push(`M ${fromPt.x} ${fromPt.y} L ${toPt.x} ${toPt.y}`);
+    pathParts.push(generateCurvedEdgePath(edge, frame));
   }
   
   return pathParts.join(' ');
@@ -149,6 +191,7 @@ function generateWallpaperData(edges, repeats = 1) {
       // Check if this edge is same-side but the sides are identified
       // (e.g., edge.from.side is 'east' but we entered from 'north')
       // In this case, we should draw using the north geometry to stay consistent
+      let fromSideForCurve = edge.from.side;
       if (isSameSideEdge(edge) && lastEndSide !== null) {
         const edgeFromSide = edge.from.side;
         const expectedContinuationSide = getIdentifiedSide(lastEndSide);
@@ -160,6 +203,26 @@ function generateWallpaperData(edges, repeats = 1) {
           // Since this is a same-side edge, to.side === from.side
           // We should draw it using lastEndSide instead
           toPointForDrawing = { side: lastEndSide, t: edge.to.t };
+          fromSideForCurve = lastEndSide;
+        }
+      }
+      
+      // Add intermediate sample points along the edge using diffeomorphism
+      // (only for boundary-to-boundary edges)
+      if (!isInteriorPoint(edge.from) && !isInteriorPoint(toPointForDrawing)) {
+        const samplePoints = getEdgeSamplePointsPaper(
+          fromSideForCurve,
+          edge.from.t,
+          toPointForDrawing.side,
+          toPointForDrawing.t,
+          EDGE_SAMPLES
+        );
+        
+        // Add intermediate points (skip first and last - they're the endpoints)
+        for (let j = 1; j < samplePoints.length - 1; j++) {
+          const pt = samplePoints[j];
+          const localScreen = paperToTrueRhombus(pt.southward, pt.eastward);
+          pathPoints.push(applyReferenceFrame(localScreen.x, localScreen.y, currentFrame));
         }
       }
       

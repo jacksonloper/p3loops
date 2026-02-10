@@ -653,6 +653,75 @@ export function getCurvedEdgePath(fromSide, fromT, toSide, toT) {
 }
 
 /**
+ * Convert normalized rhombus coordinates to paper coordinates (southward, eastward).
+ * Paper coordinates are in [0,1]² where:
+ * - (0, 0) = NW corner
+ * - (0, 1) = NE corner
+ * - (1, 0) = SW corner
+ * - (1, 1) = SE corner
+ * 
+ * @param {number} X - X in normalized rhombus coords
+ * @param {number} Y - Y in normalized rhombus coords
+ * @returns {Object} { southward, eastward } in [0,1]²
+ */
+function normalizedToPaper(X, Y) {
+  // First convert to square [-1,1]² coords
+  const [x, y] = rhombusToSquare(X, Y);
+  
+  // Then convert to paper coords [0,1]²
+  // x = 2*eastward - 1  =>  eastward = (x + 1) / 2
+  // y = 1 - 2*southward  =>  southward = (1 - y) / 2
+  const eastward = (x + 1) / 2;
+  const southward = (1 - y) / 2;
+  
+  return { southward, eastward };
+}
+
+/**
+ * Get sampled points along an edge using the diffeomorphism approach.
+ * Returns points in paper coordinates (southward, eastward) for use in
+ * wallpaper and 3D visualization.
+ * 
+ * @param {string} fromSide - Starting side ('north', 'east', 'south', 'west')
+ * @param {number} fromT - Parameter (0 to 1) along the starting side
+ * @param {string} toSide - Ending side ('north', 'east', 'south', 'west')
+ * @param {number} toT - Parameter (0 to 1) along the ending side
+ * @param {number} numSamples - Number of sample points (default: 20)
+ * @returns {Array<{southward: number, eastward: number}>} Array of paper coordinate points
+ */
+export function getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, numSamples = 20) {
+  // Convert side names to side indices
+  const start = sideNameToIndexAndT(fromSide, fromT);
+  const end = sideNameToIndexAndT(toSide, toT);
+  
+  // Get points on the unit circle for start and end
+  const [u1, v1] = boundaryToDisk(start.sideIndex, start.s);
+  const [u2, v2] = boundaryToDisk(end.sideIndex, end.s);
+  
+  const points = [];
+  for (let i = 0; i < numSamples; i++) {
+    let t = i / (numSamples - 1);
+    
+    // Avoid exact endpoints for numerical stability
+    if (i === 0) t = ENDPOINT_EPSILON;
+    if (i === numSamples - 1) t = 1 - ENDPOINT_EPSILON;
+    
+    // Interpolate along chord in disk
+    const u = (1 - t) * u1 + t * u2;
+    const v = (1 - t) * v1 + t * v2;
+    
+    // Map back to rhombus (normalized coords)
+    const [X, Y] = diskToRhombus(u, v);
+    
+    // Convert to paper coords
+    const paperCoords = normalizedToPaper(X, Y);
+    points.push(paperCoords);
+  }
+  
+  return points;
+}
+
+/**
  * Get the SIZE constant for external use.
  */
 export function getSize() {
