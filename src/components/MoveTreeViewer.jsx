@@ -2,6 +2,19 @@ import { useState, useMemo } from 'react';
 import { computeMoveTree, flattenMoveTree, formatWallpaperIndex } from '../utils/moveTree.js';
 import './MoveTreeViewer.css';
 
+// Depth configuration
+const MIN_DEPTH = 1;
+const MAX_DEPTH = 10;
+
+/**
+ * Clamp a depth value to valid range.
+ * @param {number} value - The value to clamp
+ * @returns {number} - Value clamped to [MIN_DEPTH, MAX_DEPTH]
+ */
+function clampDepth(value) {
+  return Math.max(MIN_DEPTH, Math.min(MAX_DEPTH, value || MIN_DEPTH));
+}
+
 /**
  * MoveTreeViewer - Component to display the tree of possible move sequences.
  * 
@@ -127,10 +140,10 @@ function MoveTreeViewer({ state, onClose }) {
             <input
               id="depth-input"
               type="number"
-              min="1"
-              max="10"
+              min={MIN_DEPTH}
+              max={MAX_DEPTH}
               value={depth}
-              onChange={(e) => setDepth(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+              onChange={(e) => setDepth(clampDepth(parseInt(e.target.value)))}
             />
           </div>
           

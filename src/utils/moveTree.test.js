@@ -160,7 +160,7 @@ describe('computeMoveTree', () => {
     }
   });
 
-  it('should include loop close option when available', () => {
+  it('should include loop close option in tree when loop closure is possible', () => {
     // Create a state where loop can be closed
     let state = createInitialState();
     const fromSegment = { startPos: null, endPos: null, side: 'north' };
