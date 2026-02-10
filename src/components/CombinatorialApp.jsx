@@ -109,7 +109,8 @@ function CombinatorialApp() {
     return computePathWallpaperIndex(state.edges);
   }, [state]);
 
-  // Compute preview wallpaper indices for each side with legal moves
+  // Compute preview wallpaper indices for each side
+  // (previewSideChange is a cheap O(1) operation so we compute all 4 upfront)
   const sideIndexPreviews = useMemo(() => {
     const sides = ['north', 'east', 'south', 'west'];
     const previews = {};
