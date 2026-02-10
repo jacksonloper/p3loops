@@ -77,18 +77,15 @@ function getSegmentCoords(segment, allPoints) {
 
 /**
  * Get curved edge path data for a float edge (from combinatorial edge).
+ * Uses diffeomorphism-based rendering for guaranteed non-intersection.
  * @param {Object} edge - Float edge with { from: { side, t }, to: { side, t } }
- * @param {number} edgeIndex - Index of this edge in the path
- * @param {number} totalEdges - Total number of edges
  */
-function getCurvedEdgeData(edge, edgeIndex, totalEdges) {
+function getCurvedEdgeData(edge) {
   return getCurvedEdgePath(
     edge.from.side, 
     edge.from.t, 
     edge.to.side, 
-    edge.to.t,
-    edgeIndex,
-    totalEdges
+    edge.to.t
   );
 }
 
@@ -524,9 +521,9 @@ function CombinatorialRhombus({
           </g>
         ))}
         
-        {/* Edges - rendered as curved paths bowing toward the center */}
+        {/* Edges - rendered using diffeomorphism for guaranteed non-intersection */}
         {floatEdges.map((edge, index) => {
-          const edgeData = getCurvedEdgeData(edge, index, floatEdges.length);
+          const edgeData = getCurvedEdgeData(edge);
           const isHighlighted = highlightedEdgeIndex === index;
           
           return (
