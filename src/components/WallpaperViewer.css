@@ -64,17 +64,6 @@
   color: white;
 }
 
-.wallpaper-canvas-container {
-  flex: 1;
-  position: relative;
-  background: #0d0d1a;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
 .wallpaper-svg {
   width: 100%;
   height: 100%;
@@ -175,4 +164,148 @@
   font-weight: 600;
   min-width: 20px;
   text-align: center;
+}
+
+/* Header buttons container */
+.wallpaper-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Edge list button */
+.edge-list-btn {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid rgba(102, 126, 234, 0.5);
+  border-radius: 6px;
+  background: rgba(102, 126, 234, 0.15);
+  color: #a0b0ff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edge-list-btn:hover {
+  background: rgba(102, 126, 234, 0.3);
+  border-color: #667eea;
+}
+
+/* Main content layout for side panel */
+.wallpaper-main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.wallpaper-canvas-container {
+  flex: 1;
+  position: relative;
+  background: #0d0d1a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* Rhombus index label at center */
+.rhombus-index-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: rgba(102, 126, 234, 0.7);
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  pointer-events: none;
+}
+
+/* Edge list panel */
+.edge-list-panel {
+  width: 280px;
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.edge-list-panel h3 {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  color: #b0b0b0;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.edge-list-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.edge-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.edge-list-table th,
+.edge-list-table td {
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.edge-list-table th {
+  color: #888;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.edge-list-table td {
+  color: #c0c0c0;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.75rem;
+}
+
+.edge-list-table tr.same-side-edge td {
+  color: #888;
+  font-style: italic;
+}
+
+.same-side-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.conceptual-index {
+  font-size: 0.7rem;
+  color: #667eea;
+  opacity: 0.8;
+}
+
+.edge-list-footnote {
+  margin: 0.75rem 0.25rem 0;
+  font-size: 0.7rem;
+  color: #666;
+  font-style: italic;
+}
+
+/* Scrollbar styling for edge list */
+.edge-list-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.edge-list-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.edge-list-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.edge-list-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
