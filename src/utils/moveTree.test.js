@@ -264,3 +264,57 @@ describe('flattenMoveTree', () => {
     expect(result[1].depth).toBe(1);
   });
 });
+
+describe('computePathWallpaperIndex', () => {
+  it('should return identity for empty path', () => {
+    const { computePathWallpaperIndex } = require('./moveTree.js');
+    const result = computePathWallpaperIndex([]);
+    expect(result).toEqual({ tx: 0, ty: 0, r: 0 });
+  });
+
+  it('should compute index correctly for single edge to south', () => {
+    const { computePathWallpaperIndex } = require('./moveTree.js');
+    const edges = [
+      { from: { side: 'north', pos: 0 }, to: { side: 'south', pos: 0 } }
+    ];
+    const result = computePathWallpaperIndex(edges);
+    // Crossing to south should change rotation
+    expect(result.r).toBe(2);
+  });
+
+  it('should not change index for same-side edge', () => {
+    const { computePathWallpaperIndex } = require('./moveTree.js');
+    const edges = [
+      { from: { side: 'north', pos: 0 }, to: { side: 'north', pos: 1 } }
+    ];
+    const result = computePathWallpaperIndex(edges);
+    expect(result).toEqual({ tx: 0, ty: 0, r: 0 });
+  });
+  
+  it('should accumulate changes through multiple edges', () => {
+    const { computePathWallpaperIndex } = require('./moveTree.js');
+    const edges = [
+      { from: { side: 'north', pos: 0 }, to: { side: 'south', pos: 0 } },
+      { from: { side: 'south', pos: 0 }, to: { side: 'north', pos: 1 } }
+    ];
+    const result = computePathWallpaperIndex(edges);
+    // Two crossings should accumulate
+    expect(result.r).not.toBe(0);
+  });
+});
+
+describe('previewSideChange', () => {
+  it('should correctly preview north crossing', () => {
+    const { previewSideChange, createIdentityWallpaperIndex } = require('./moveTree.js');
+    const current = createIdentityWallpaperIndex();
+    const preview = previewSideChange(current, 'north');
+    expect(preview.r).toBe(2);
+  });
+
+  it('should correctly preview east crossing', () => {
+    const { previewSideChange, createIdentityWallpaperIndex } = require('./moveTree.js');
+    const current = createIdentityWallpaperIndex();
+    const preview = previewSideChange(current, 'east');
+    expect(preview.r).toBe(1);
+  });
+});

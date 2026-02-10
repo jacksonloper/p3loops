@@ -201,6 +201,36 @@ export function formatWallpaperIndex(index) {
 }
 
 /**
+ * Compute the wallpaper index for a path by accumulating all edge crossings.
+ * This uses the same logic as the move tree computation to ensure consistency.
+ * 
+ * @param {Object[]} edges - Array of edges in the path (combinatorial format)
+ * @returns {WallpaperIndex} - Wallpaper index at the end of the path
+ */
+export function computePathWallpaperIndex(edges) {
+  let index = createIdentityWallpaperIndex();
+  
+  for (const edge of edges) {
+    index = computeEdgeDestinationIndex(edge, index);
+  }
+  
+  return index;
+}
+
+/**
+ * Compute what the wallpaper index would be if an edge to a given side was added.
+ * This helps show users how their choice will affect the position.
+ * 
+ * @param {WallpaperIndex} currentIndex - Current wallpaper index
+ * @param {'north' | 'east' | 'south' | 'west'} toSide - Side the edge would go to
+ * @returns {WallpaperIndex} - Resulting wallpaper index
+ */
+export function previewSideChange(currentIndex, toSide) {
+  // An edge to a different side will always cross the rhombus
+  return updateWallpaperIndex(toSide, currentIndex);
+}
+
+/**
  * Compute the move tree from the current state.
  * 
  * The tree collapses consecutive moves with no decision point into single segments.

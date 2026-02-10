@@ -7,12 +7,29 @@ const MIN_DEPTH = 1;
 const MAX_DEPTH = 10;
 
 /**
- * Clamp a depth value to valid range.
- * @param {number} value - The value to clamp
- * @returns {number} - Value clamped to [MIN_DEPTH, MAX_DEPTH]
+ * Check if a depth value is valid.
+ * @param {string} value - The input value
+ * @returns {boolean} - True if the value is a valid depth
  */
-function clampDepth(value) {
-  return Math.max(MIN_DEPTH, Math.min(MAX_DEPTH, value || MIN_DEPTH));
+function isValidDepth(value) {
+  const num = parseInt(value, 10);
+  return !isNaN(num) && num >= MIN_DEPTH && num <= MAX_DEPTH;
+}
+
+/**
+ * Format a summary for a long sequence of forced moves.
+ * @param {Object[]} segments - Array of segments in the sequence
+ * @returns {string} - Summary description
+ */
+function formatSequenceSummary(segments) {
+  if (segments.length <= 1) {
+    return null; // No need for summary
+  }
+  const first = segments[0];
+  const last = segments[segments.length - 1];
+  const firstSide = first.side.charAt(0).toUpperCase() + first.side.slice(1);
+  const lastSide = last.side.charAt(0).toUpperCase() + last.side.slice(1);
+  return `${segments.length} forced moves (${firstSide} → ... → ${lastSide})`;
 }
 
 /**
@@ -23,19 +40,51 @@ function clampDepth(value) {
  * Each leaf displays the wallpaper group coordinates of the final position.
  * 
  * @param {Object} state - Current combinatorial state
+ * @param {Object} currentWallpaperIndex - Current wallpaper index from parent
  * @param {Function} onClose - Callback to close the viewer
  */
-function MoveTreeViewer({ state, onClose }) {
+function MoveTreeViewer({ state, currentWallpaperIndex, onClose }) {
+  // Separate state for input text (allows temporary invalid values)
+  const [depthInput, setDepthInput] = useState('3');
+  // The actual valid depth used for computation
   const [depth, setDepth] = useState(3);
   const [expandedNodes, setExpandedNodes] = useState(new Set());
+  const [expandedSequences, setExpandedSequences] = useState(new Set());
+  
+  // Check if the current input is valid
+  const isInputValid = isValidDepth(depthInput);
+  
+  // Handle depth input change - allow any input but only update tree for valid values
+  const handleDepthChange = (e) => {
+    const value = e.target.value;
+    setDepthInput(value);
+    
+    // Only update the actual depth if the value is valid
+    if (isValidDepth(value)) {
+      setDepth(parseInt(value, 10));
+    }
+  };
+
+  // Toggle expansion of a forced move sequence
+  const toggleSequence = (sequenceKey) => {
+    setExpandedSequences(prev => {
+      const next = new Set(prev);
+      if (next.has(sequenceKey)) {
+        next.delete(sequenceKey);
+      } else {
+        next.add(sequenceKey);
+      }
+      return next;
+    });
+  };
 
   // Compute the move tree
   const tree = useMemo(() => {
     if (state.edges.length === 0) {
       return [];
     }
-    return computeMoveTree(state, depth);
-  }, [state, depth]);
+    return computeMoveTree(state, depth, currentWallpaperIndex);
+  }, [state, depth, currentWallpaperIndex]);
 
   // Toggle expansion of a node
   const toggleNode = (nodeKey) => {
@@ -69,6 +118,7 @@ function MoveTreeViewer({ state, onClose }) {
   // Collapse all nodes
   const collapseAll = () => {
     setExpandedNodes(new Set());
+    setExpandedSequences(new Set());
   };
 
   // Render a node and its children recursively
@@ -76,6 +126,18 @@ function MoveTreeViewer({ state, onClose }) {
     const hasChildren = node.children && node.children.length > 0;
     const isExpanded = expandedNodes.has(nodeKey);
     const indent = indentLevel * 20;
+    
+    // Check if this node has a long forced sequence
+    const hasLongSequence = node.segments && node.segments.length > 1;
+    const sequenceKey = `seq-${nodeKey}`;
+    const isSequenceExpanded = expandedSequences.has(sequenceKey);
+    const sequenceSummary = hasLongSequence ? formatSequenceSummary(node.segments) : null;
+    
+    // Decide what description to show
+    let displayDescription = node.description;
+    if (hasLongSequence && !isSequenceExpanded) {
+      displayDescription = sequenceSummary;
+    }
 
     return (
       <div key={nodeKey} className="tree-node">
@@ -89,7 +151,21 @@ function MoveTreeViewer({ state, onClose }) {
           )}
           {!hasChildren && <span className="expand-icon-placeholder">•</span>}
           
-          <span className="node-description">{node.description}</span>
+          <span className="node-description">
+            {displayDescription}
+            {hasLongSequence && (
+              <button 
+                className="sequence-toggle-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSequence(sequenceKey);
+                }}
+                title={isSequenceExpanded ? 'Collapse sequence details' : 'Expand sequence details'}
+              >
+                {isSequenceExpanded ? '(collapse)' : '(expand)'}
+              </button>
+            )}
+          </span>
           
           {node.isLeaf && (
             <span className="wallpaper-index" title="Wallpaper group coordinates (tx, ty, rotation)">
@@ -139,12 +215,17 @@ function MoveTreeViewer({ state, onClose }) {
             <label htmlFor="depth-input">Depth:</label>
             <input
               id="depth-input"
-              type="number"
-              min={MIN_DEPTH}
-              max={MAX_DEPTH}
-              value={depth}
-              onChange={(e) => setDepth(clampDepth(parseInt(e.target.value)))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={depthInput}
+              onChange={handleDepthChange}
+              className={!isInputValid ? 'invalid' : ''}
+              aria-invalid={!isInputValid}
             />
+            {!isInputValid && (
+              <span className="depth-error">Enter {MIN_DEPTH}-{MAX_DEPTH}</span>
+            )}
           </div>
           
           <div className="expand-controls">
@@ -178,7 +259,7 @@ function MoveTreeViewer({ state, onClose }) {
             <strong>Wallpaper coordinates:</strong> (tx, ty, rotation) where tx, ty are lattice translations and rotation is 0°, 120°, or 240°.
           </p>
           <p className="help-text">
-            <strong>Note:</strong> Sequences with only one valid move are collapsed into a single node.
+            <strong>Note:</strong> Sequences with only one valid move are collapsed. Click (expand) to see details.
           </p>
         </div>
       </div>

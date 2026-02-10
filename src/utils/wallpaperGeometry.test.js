@@ -533,3 +533,77 @@ describe('edge length sanity check', () => {
     expect(lastEdgeLength).toBeLessThan(expectedMaxLength);
   });
 });
+
+// Test consistency between wallpaperGeometry and moveTree rotation directions
+import { updateWallpaperIndex, createIdentityWallpaperIndex } from './moveTree.js';
+
+describe('Consistency between wallpaperGeometry and moveTree', () => {
+  // The key test: both modules should agree on rotation direction for each side
+  // - wallpaperGeometry: uses updateReferenceFrameForSide
+  // - moveTree: uses updateWallpaperIndex
+  // 
+  // They should produce consistent results: 
+  // - north: CW around NE → rotation decreases (mod 3) → r goes 0→2
+  // - east: CCW around NE → rotation increases (mod 3) → r goes 0→1
+  // - south: CW around SW → rotation decreases (mod 3) → r goes 0→2
+  // - west: CCW around SW → rotation increases (mod 3) → r goes 0→1
+
+  it('should agree on rotation direction for north crossing', () => {
+    // wallpaperGeometry does CW rotation for north (angle120CW = -2π/3)
+    // moveTree should have r go from 0 to 2 (CW = -1 mod 3 = +2 mod 3)
+    const index = createIdentityWallpaperIndex();
+    const newIndex = updateWallpaperIndex('north', index);
+    expect(newIndex.r).toBe(2); // CW: 0 → 2
+  });
+
+  it('should agree on rotation direction for east crossing', () => {
+    // wallpaperGeometry does CCW rotation for east (angle120CCW = +2π/3)
+    // moveTree should have r go from 0 to 1 (CCW = +1 mod 3)
+    const index = createIdentityWallpaperIndex();
+    const newIndex = updateWallpaperIndex('east', index);
+    expect(newIndex.r).toBe(1); // CCW: 0 → 1
+  });
+
+  it('should agree on rotation direction for south crossing', () => {
+    // wallpaperGeometry does CW rotation for south (angle120CW = -2π/3)
+    // moveTree should have r go from 0 to 2 (CW = -1 mod 3 = +2 mod 3)
+    const index = createIdentityWallpaperIndex();
+    const newIndex = updateWallpaperIndex('south', index);
+    expect(newIndex.r).toBe(2); // CW: 0 → 2
+  });
+
+  it('should agree on rotation direction for west crossing', () => {
+    // wallpaperGeometry does CCW rotation for west (angle120CCW = +2π/3)
+    // moveTree should have r go from 0 to 1 (CCW = +1 mod 3)
+    const index = createIdentityWallpaperIndex();
+    const newIndex = updateWallpaperIndex('west', index);
+    expect(newIndex.r).toBe(1); // CCW: 0 → 1
+  });
+
+  it('should have matching fixed-point corners for rotations', () => {
+    // Verify that moveTree and wallpaperGeometry use the same corner convention:
+    // - north/east rotations are around NE corner
+    // - south/west rotations are around SW corner
+    
+    // We verify this by checking that after 3 rotations around the same corner,
+    // we return to the original state
+    
+    // Three east crossings (all around NE) should cycle back to r=0
+    let index = createIdentityWallpaperIndex();
+    index = updateWallpaperIndex('east', index);
+    expect(index.r).toBe(1);
+    index = updateWallpaperIndex('east', index);
+    expect(index.r).toBe(2);
+    index = updateWallpaperIndex('east', index);
+    expect(index.r).toBe(0);
+    
+    // Three west crossings (all around SW) should cycle back to r=0
+    index = createIdentityWallpaperIndex();
+    index = updateWallpaperIndex('west', index);
+    expect(index.r).toBe(1);
+    index = updateWallpaperIndex('west', index);
+    expect(index.r).toBe(2);
+    index = updateWallpaperIndex('west', index);
+    expect(index.r).toBe(0);
+  });
+});

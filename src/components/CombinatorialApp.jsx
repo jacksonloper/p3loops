@@ -20,6 +20,12 @@ import {
   closeLoop,
   pointToFloat
 } from '../utils/combinatorialPathLogic.js';
+import {
+  computePathWallpaperIndex,
+  previewSideChange,
+  formatWallpaperIndex,
+  createIdentityWallpaperIndex
+} from '../utils/moveTree.js';
 import './CombinatorialApp.css';
 
 /**
@@ -94,6 +100,24 @@ function CombinatorialApp() {
     if (isLoopClosed) return null;
     return getNextStartPoint(state);
   }, [state, isLoopClosed]);
+
+  // Compute current wallpaper index for the entire path
+  const currentWallpaperIndex = useMemo(() => {
+    if (state.edges.length === 0) {
+      return createIdentityWallpaperIndex();
+    }
+    return computePathWallpaperIndex(state.edges);
+  }, [state]);
+
+  // Compute preview wallpaper indices for each side with legal moves
+  const sideIndexPreviews = useMemo(() => {
+    const sides = ['north', 'east', 'south', 'west'];
+    const previews = {};
+    for (const side of sides) {
+      previews[side] = previewSideChange(currentWallpaperIndex, side);
+    }
+    return previews;
+  }, [currentWallpaperIndex]);
 
   // Get available segments - filter to only show valid (non-crossing) options
   const availableSegments = useMemo(() => {
@@ -422,7 +446,14 @@ function CombinatorialApp() {
             <div className="sides-grid">
               {northSegments.length > 0 && (
                 <div className="segment-group side-north">
-                  <h4>North <span className="side-id">(≡East)</span></h4>
+                  <h4>
+                    North <span className="side-id">(≡East)</span>
+                    {state.edges.length > 0 && (
+                      <span className="side-index-preview" title="Rhombus index after this move">
+                        → {formatWallpaperIndex(sideIndexPreviews.north)}
+                      </span>
+                    )}
+                  </h4>
                   {northSegments.map((segment, idx) => (
                     <label key={`north-${idx}`} className={`segment-radio ${selectedSegment === segment ? 'selected' : ''}`}>
                       <input
@@ -440,7 +471,14 @@ function CombinatorialApp() {
 
               {eastSegments.length > 0 && (
                 <div className="segment-group side-east">
-                  <h4>East <span className="side-id">(≡North)</span></h4>
+                  <h4>
+                    East <span className="side-id">(≡North)</span>
+                    {state.edges.length > 0 && (
+                      <span className="side-index-preview" title="Rhombus index after this move">
+                        → {formatWallpaperIndex(sideIndexPreviews.east)}
+                      </span>
+                    )}
+                  </h4>
                   {eastSegments.map((segment, idx) => (
                     <label key={`east-${idx}`} className={`segment-radio ${selectedSegment === segment ? 'selected' : ''}`}>
                       <input
@@ -458,7 +496,14 @@ function CombinatorialApp() {
 
               {southSegments.length > 0 && (
                 <div className="segment-group side-south">
-                  <h4>South <span className="side-id">(≡West)</span></h4>
+                  <h4>
+                    South <span className="side-id">(≡West)</span>
+                    {state.edges.length > 0 && (
+                      <span className="side-index-preview" title="Rhombus index after this move">
+                        → {formatWallpaperIndex(sideIndexPreviews.south)}
+                      </span>
+                    )}
+                  </h4>
                   {southSegments.map((segment, idx) => (
                     <label key={`south-${idx}`} className={`segment-radio ${selectedSegment === segment ? 'selected' : ''}`}>
                       <input
@@ -476,7 +521,14 @@ function CombinatorialApp() {
 
               {westSegments.length > 0 && (
                 <div className="segment-group side-west">
-                  <h4>West <span className="side-id">(≡South)</span></h4>
+                  <h4>
+                    West <span className="side-id">(≡South)</span>
+                    {state.edges.length > 0 && (
+                      <span className="side-index-preview" title="Rhombus index after this move">
+                        → {formatWallpaperIndex(sideIndexPreviews.west)}
+                      </span>
+                    )}
+                  </h4>
                   {westSegments.map((segment, idx) => (
                     <label key={`west-${idx}`} className={`segment-radio ${selectedSegment === segment ? 'selected' : ''}`}>
                       <input
@@ -594,6 +646,11 @@ function CombinatorialApp() {
           <div className="path-info">
             <span className="edge-counter">Edges in path: {state.edges.length}</span>
             <span className="point-counter">Points: NE={state.points.NE.length}, SW={state.points.SW.length}</span>
+            {state.edges.length > 0 && (
+              <span className="rhombus-index" title="Current position in the wallpaper pattern (tx, ty, rotation)">
+                Rhombus: {formatWallpaperIndex(currentWallpaperIndex)}
+              </span>
+            )}
           </div>
         </section>
 
@@ -655,6 +712,7 @@ function CombinatorialApp() {
       {showMoveTree && (
         <MoveTreeViewer 
           state={state}
+          currentWallpaperIndex={currentWallpaperIndex}
           onClose={() => setShowMoveTree(false)}
         />
       )}
