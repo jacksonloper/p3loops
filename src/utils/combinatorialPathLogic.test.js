@@ -705,8 +705,9 @@ describe('getValidSegments - same-side arc crossing detection', () => {
 
 describe('getValidSegments - same-side touching segment rule', () => {
   it('should NOT allow segment on same side that touches the from point', () => {
-    // Create a state where we're at west(1) and want to check available segments
-    // We should NOT be able to go to west segments that touch position 1
+    // Create a state where last edge ends at west(1)
+    // getNextStartPoint returns south(1) since west and south are identified
+    // We should NOT be able to go to south segments that touch position 1
     let state = {
       points: {
         NE: [
@@ -723,7 +724,7 @@ describe('getValidSegments - same-side touching segment rule', () => {
       ]
     };
     
-    // Current position is west(1), which continues from south(1)
+    // After edge to west(1), getNextStartPoint returns south(1) (identified side)
     const fromPoint = { side: 'south', pos: 1 };
     
     const validSegments = getValidSegments(state, fromPoint);
@@ -743,8 +744,8 @@ describe('getValidSegments - same-side touching segment rule', () => {
   });
 
   it('should ALLOW segment on identified side that touches the from point position', () => {
-    // When going from south(1), we CAN go to west segments that touch position 1
-    // because south and west are identified sides
+    // When the fromPoint is south(1), we CAN go to west segments that touch position 1
+    // because south and west are identified sides (same group but different side)
     let state = {
       points: {
         NE: [
@@ -761,7 +762,7 @@ describe('getValidSegments - same-side touching segment rule', () => {
       ]
     };
     
-    // Current position is south(1) - south and west are identified
+    // After edge to west(1), getNextStartPoint returns south(1) (identified side)
     const fromPoint = { side: 'south', pos: 1 };
     
     const validSegments = getValidSegments(state, fromPoint);
