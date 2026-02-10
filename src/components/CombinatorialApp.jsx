@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import CombinatorialRhombus from './CombinatorialRhombus.jsx';
 import ThreeDViewer from './ThreeDViewer.jsx';
 import WallpaperViewer from './WallpaperViewer.jsx';
+import MoveTreeViewer from './MoveTreeViewer.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -41,6 +42,7 @@ function CombinatorialApp() {
   const [validationMessage, setValidationMessage] = useState('');
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
+  const [showMoveTree, setShowMoveTree] = useState(false);
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null);
   const [isLoopClosed, setIsLoopClosed] = useState(false);
   const [examplesList, setExamplesList] = useState([]);
@@ -536,6 +538,15 @@ function CombinatorialApp() {
             </button>
             
             <button 
+              onClick={() => setShowMoveTree(true)}
+              disabled={state.edges.length === 0 || isLoopClosed}
+              className="control-btn secondary-btn"
+              title="Show tree of possible move sequences"
+            >
+              Show Move Tree
+            </button>
+            
+            <button 
               onClick={() => setShow3DViewer(true)}
               disabled={state.edges.length === 0}
               className="control-btn primary-btn"
@@ -638,6 +649,13 @@ function CombinatorialApp() {
           edges={floatEdges}
           isLoopClosed={isLoopClosed}
           onClose={() => setShowWallpaperViewer(false)}
+        />
+      )}
+
+      {showMoveTree && (
+        <MoveTreeViewer 
+          state={state}
+          onClose={() => setShowMoveTree(false)}
         />
       )}
     </div>
