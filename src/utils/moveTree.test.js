@@ -273,13 +273,13 @@ describe('computePathWallpaperIndex', () => {
     expect(result).toEqual({ tx: 0, ty: 0, r: 0 });
   });
 
-  it('should compute index correctly for single edge to south', () => {
+  it('should return identity for single edge (edge is drawn in starting rhombus)', () => {
     const edges = [
       { from: { side: 'north', pos: 0 }, to: { side: 'south', pos: 0 } }
     ];
     const result = computePathWallpaperIndex(edges);
-    // Crossing to south should change rotation
-    expect(result.r).toBe(2);
+    // Single edge is drawn in the starting rhombus (before any crossing)
+    expect(result).toEqual({ tx: 0, ty: 0, r: 0 });
   });
 
   it('should not change index for same-side edge', () => {
@@ -290,14 +290,15 @@ describe('computePathWallpaperIndex', () => {
     expect(result).toEqual({ tx: 0, ty: 0, r: 0 });
   });
   
-  it('should accumulate changes through multiple edges', () => {
+  it('should return index where last edge is drawn (after earlier crossings)', () => {
     const edges = [
       { from: { side: 'north', pos: 0 }, to: { side: 'south', pos: 0 } },
       { from: { side: 'south', pos: 0 }, to: { side: 'north', pos: 1 } }
     ];
     const result = computePathWallpaperIndex(edges);
-    // Two crossings should accumulate
-    expect(result.r).not.toBe(0);
+    // First edge crosses south at k=0 → (0, -1, 2)
+    // Second edge is drawn in that rhombus, so result is (0, -1, 2)
+    expect(result).toEqual({ tx: 0, ty: -1, r: 2 });
   });
 });
 

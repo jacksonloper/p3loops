@@ -369,23 +369,50 @@ export function indexToFrame(index) {
 /**
  * Determine if crossing from one point to another changes the rhombus.
  * An edge stays in the same rhombus if:
- * 1. Both points are on the same side
- * 2. Both points are on identified sides with the same position
+ * 1. TO point is interior (edge enters rhombus interior, no boundary crossing)
+ * 2. Both points are on the same side
+ * 3. Both points are on identified sides with the same position
  * 
- * @param {Object} fromPoint - Starting point { side, pos }
- * @param {Object} toPoint - Ending point { side, pos }
+ * NOTE: If FROM is interior but TO is a boundary, we DO cross (exit through that side).
+ * 
+ * Works with both combinatorial edges { side, pos } and float edges { side, t }.
+ * 
+ * @param {Object} fromPoint - Starting point { side, pos } or { side, t } or { interior: true }
+ * @param {Object} toPoint - Ending point { side, pos } or { side, t } or { interior: true }
  * @returns {boolean} - True if this edge crosses to a new rhombus
  */
 function edgeCrossesRhombus(fromPoint, toPoint) {
+  // If TO is interior, we're entering the interior (no boundary crossing)
+  if (toPoint.interior) {
+    return false;
+  }
+  
+  // If FROM is interior but TO is boundary, we DO cross (exit through TO side)
+  if (fromPoint.interior) {
+    return true;
+  }
+  
   // Same side = stays in same rhombus
   if (fromPoint.side === toPoint.side) {
     return false;
   }
   
-  // Identified sides at same position = stays in same rhombus
-  if (getIdentifiedSide(fromPoint.side) === toPoint.side && 
-      fromPoint.pos === toPoint.pos) {
-    return false;
+  // Check for identified sides at same position
+  // Handle both combinatorial (pos) and float (t) edge formats
+  if (getIdentifiedSide(fromPoint.side) === toPoint.side) {
+    // Float edges use 't', combinatorial edges use 'pos'
+    if (fromPoint.t !== undefined && toPoint.t !== undefined) {
+      // Float format: compare t values with tolerance
+      if (Math.abs(fromPoint.t - toPoint.t) < 0.001) {
+        return false;
+      }
+    } else if (fromPoint.pos !== undefined && toPoint.pos !== undefined) {
+      // Combinatorial format: compare pos values exactly
+      if (fromPoint.pos === toPoint.pos) {
+        return false;
+      }
+    }
+    // If one has t and other has pos, they're incompatible - assume crossing
   }
   
   return true;
@@ -420,18 +447,27 @@ export function formatWallpaperIndex(index) {
 
 /**
  * Compute the wallpaper index for a path by accumulating all edge crossings.
- * This uses the same logic as the move tree computation to ensure consistency.
+ * Returns the rhombus where the LAST edge is DRAWN (not where we end up after crossing).
+ * This matches the visual representation in the wallpaper view.
  * 
- * @param {Object[]} edges - Array of edges in the path (combinatorial format)
- * @returns {WallpaperIndex} - Wallpaper index at the end of the path
+ * @param {Object[]} edges - Array of edges in the path (float or combinatorial format)
+ * @returns {WallpaperIndex} - Wallpaper index of the rhombus containing the last edge
  */
 export function computePathWallpaperIndex(edges) {
+  if (edges.length === 0) {
+    return createIdentityWallpaperIndex();
+  }
+  
   let index = createIdentityWallpaperIndex();
   
-  for (const edge of edges) {
+  // Process all edges EXCEPT the last one
+  // After processing edges 0..(n-2), the index is where edge (n-1) is drawn
+  for (let i = 0; i < edges.length - 1; i++) {
+    const edge = edges[i];
     index = computeEdgeDestinationIndex(edge, index);
   }
   
+  // Return the index where the last edge is drawn (before any crossing it causes)
   return index;
 }
 

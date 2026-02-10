@@ -60,6 +60,8 @@ function CombinatorialApp() {
   const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
   const [showJsonPanel, setShowJsonPanel] = useState(false);
   const [jsonInputText, setJsonInputText] = useState('');
+  // Store original float edges when importing (may include interior points for accurate wallpaper index)
+  const [importedFloatEdges, setImportedFloatEdges] = useState(null);
 
   // Load examples manifest on mount
   useEffect(() => {
@@ -104,12 +106,20 @@ function CombinatorialApp() {
   }, [state, isLoopClosed]);
 
   // Compute current wallpaper index for the entire path
+  // Use importedFloatEdges when available (may have interior points for accurate tracking)
+  // Otherwise fall back to combinatorial edges converted to float
   const currentWallpaperIndex = useMemo(() => {
     if (state.edges.length === 0) {
       return createIdentityWallpaperIndex();
     }
-    return computePathWallpaperIndex(state.edges);
-  }, [state]);
+    // If we have imported float edges with the same number of points, use them
+    // for more accurate tracking (they may include interior waypoints)
+    if (importedFloatEdges && importedFloatEdges.length > 0) {
+      return computePathWallpaperIndex(importedFloatEdges);
+    }
+    // Otherwise use the float edges derived from combinatorial state
+    return computePathWallpaperIndex(floatEdges);
+  }, [state, importedFloatEdges, floatEdges]);
 
   // Compute preview wallpaper indices for each side
   // (previewSideChange is a cheap O(1) operation so we compute all 4 upfront)
@@ -176,6 +186,7 @@ function CombinatorialApp() {
     }
     
     setState(result.newState);
+    setImportedFloatEdges(null); // Clear imported edges since path is now modified
     setSelectedSegment(null);
     setValidationMessage('Edge added!');
   }, [selectedSegment, state, nextStartPointCombinatorial]);
@@ -212,6 +223,7 @@ function CombinatorialApp() {
     }
     
     setState(result.newState);
+    setImportedFloatEdges(null); // Clear imported edges since path is now modified
     setFirstEdgeMode(false);
     setFirstEdgeFromSegment(null);
     setSelectedSegment(null);
@@ -228,6 +240,7 @@ function CombinatorialApp() {
 
   // Handle removing last edge
   const handleRemoveLastEdge = useCallback(() => {
+    setImportedFloatEdges(null); // Clear imported edges since path is now modified
     if (isLoopClosed) {
       setIsLoopClosed(false);
       setState(prev => removeLastEdge(prev));
@@ -242,6 +255,7 @@ function CombinatorialApp() {
   // Handle clearing all
   const handleClearAll = useCallback(() => {
     setState(createInitialState());
+    setImportedFloatEdges(null); // Clear imported edges
     setSelectedSegment(null);
     setFirstEdgeMode(false);
     setFirstEdgeFromSegment(null);
@@ -267,6 +281,7 @@ function CombinatorialApp() {
     }
     
     setState(closeResult.newState);
+    setImportedFloatEdges(null); // Clear imported edges since path is now modified
     setIsLoopClosed(true);
     setValidationMessage('Loop closed!');
   }, [state]);
@@ -290,6 +305,8 @@ function CombinatorialApp() {
       const newState = importFromFloatEdges(data);
       
       setState(newState);
+      // Store original float edges for accurate wallpaper index (may include interior points)
+      setImportedFloatEdges(data);
       setIsLoopClosed(false);
       setFirstEdgeMode(false);
       setFirstEdgeFromSegment(null);
@@ -332,6 +349,8 @@ function CombinatorialApp() {
       
       const newState = importFromFloatEdges(parsedData);
       setState(newState);
+      // Store original float edges for accurate wallpaper index (may include interior points)
+      setImportedFloatEdges(parsedData);
       setIsLoopClosed(false);
       setFirstEdgeMode(false);
       setFirstEdgeFromSegment(null);
@@ -722,7 +741,7 @@ function CombinatorialApp() {
 
       {showEdgeList && (
         <EdgeListViewer 
-          edges={floatEdges}
+          edges={importedFloatEdges || floatEdges}
           onClose={() => setShowEdgeList(false)}
         />
       )}

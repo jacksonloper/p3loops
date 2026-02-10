@@ -45,6 +45,41 @@ function computeEdgeListData(edges) {
   
   for (let i = 0; i < edges.length; i++) {
     const edge = edges[i];
+    
+    // Check for interior points
+    const toInterior = isInteriorPoint(edge.to);
+    const fromInterior = isInteriorPoint(edge.from);
+    
+    if (toInterior) {
+      // Edge going to interior - stays in current rhombus, no crossing
+      result.push({
+        edge,
+        edgeIndex: i,
+        rhombusIndex: { ...currentIndex },
+        isSameSide: true,
+        conceptualIndex: null,
+        isInterior: true
+      });
+      continue;
+    }
+    
+    if (fromInterior) {
+      // Edge coming from interior to boundary - this DOES cross
+      const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+      
+      result.push({
+        edge,
+        edgeIndex: i,
+        rhombusIndex: { ...currentIndex }, // Edge is drawn in current rhombus before crossing
+        isSameSide: false,
+        conceptualIndex: null,
+        isInterior: true
+      });
+      
+      currentIndex = nextIndex;
+      continue;
+    }
+    
     const sameSide = isSameSideEdge(edge);
     
     if (sameSide) {
@@ -59,13 +94,13 @@ function computeEdgeListData(edges) {
         conceptualIndex
       });
     } else {
-      // Edge crosses to new rhombus - use algebraic update
+      // Edge crosses to new rhombus
       const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
       
       result.push({
         edge,
         edgeIndex: i,
-        rhombusIndex: { ...nextIndex },
+        rhombusIndex: { ...currentIndex }, // Edge is drawn in current rhombus before crossing
         isSameSide: false,
         conceptualIndex: null
       });
