@@ -669,9 +669,13 @@ function normalizedToPaper(X, Y) {
   const [x, y] = rhombusToSquare(X, Y);
   
   // Then convert to paper coords [0,1]²
-  // x = 2*eastward - 1  =>  eastward = (x + 1) / 2
-  // y = 1 - 2*southward  =>  southward = (1 - y) / 2
-  const eastward = (x + 1) / 2;
+  // The square mapping is:
+  // square (1, 1) => V0 (NW) => paper (0, 0)
+  // square (-1, 1) => V3 (NE) => paper (0, 1)
+  // square (1, -1) => V1 (SW) => paper (1, 0)
+  // square (-1, -1) => V2 (SE) => paper (1, 1)
+  // So: eastward = (1 - x) / 2, southward = (1 - y) / 2
+  const eastward = (1 - x) / 2;
   const southward = (1 - y) / 2;
   
   return { southward, eastward };
