@@ -434,9 +434,6 @@ describe('Complex Loop rhombus indices', () => {
   it('should trace through all 24 edges with consistent indices', () => {
     const indices = computeEdgeIndices(complexLoopEdges);
     
-    // Log all indices for debugging
-    const formatted = indices.map((idx, i) => `Edge ${i+1}: (${idx.tx}, ${idx.ty}, ${idx.r * 120}°)`);
-    
     // Verify we have 24 indices
     expect(indices.length).toBe(24);
     
