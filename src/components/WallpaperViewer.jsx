@@ -289,16 +289,14 @@ function computeEdgeListData(edges) {
     if (sameSide) {
       // For same-side edges, compute the conceptual rhombus it would have entered
       // This is the rhombus it would have entered if the edge had gone to any other side
-      // We use the edge's from side (since same-side means from.side ≈ to.side)
-      const conceptualSide = edge.to.side;
-      const conceptualIndex = updateWallpaperIndex(conceptualSide, currentIndex);
+      // We use the edge's to side (since same-side means from.side ≈ to.side)
+      const conceptualIndex = updateWallpaperIndex(edge.to.side, currentIndex);
       
       result.push({
         edge,
         edgeIndex: i,
         rhombusIndex: { ...currentIndex }, // Stay in current rhombus
         isSameSide: true,
-        conceptualSide,
         conceptualIndex
       });
       // Index does NOT change for same-side edges
@@ -311,7 +309,6 @@ function computeEdgeListData(edges) {
         edgeIndex: i,
         rhombusIndex: { ...nextIndex }, // The destination rhombus
         isSameSide: false,
-        conceptualSide: null,
         conceptualIndex: null
       });
       
