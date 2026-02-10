@@ -339,6 +339,7 @@ const RHOMBUS_VERTICES = [
 // Configuration for edge path generation
 const EDGE_PATH_SAMPLES = 80;     // Number of points to sample along the chord
 const EDGE_PATH_KNOT_STEP = 8;    // Keep every Nth point as a spline knot
+const ENDPOINT_EPSILON = 1e-6;    // Small offset to avoid exact endpoints for numerical stability
 
 /**
  * Linear interpolation helper.
@@ -509,8 +510,8 @@ function chordImagePoints(start, end, nSamples) {
     let t = i / (nSamples - 1);
 
     // Avoid exact endpoints (on unit circle) for stability in nested radicals
-    if (i === 0) t = 1e-6;
-    if (i === nSamples - 1) t = 1 - 1e-6;
+    if (i === 0) t = ENDPOINT_EPSILON;
+    if (i === nSamples - 1) t = 1 - ENDPOINT_EPSILON;
 
     const u = (1 - t) * u1 + t * u2;
     const v = (1 - t) * v1 + t * v2;
@@ -589,12 +590,15 @@ export function getCurvedEdgePath(fromSide, fromT, toSide, toT) {
   // Sample points along the chord in the disk, mapped to the rhombus
   const pts = chordImagePoints(start, end, EDGE_PATH_SAMPLES);
   
-  // Select knots (reduce to manageable number of Bézier segments)
+  // Select knots for the spline (reduce to manageable number of Bézier segments)
+  // We take every EDGE_PATH_KNOT_STEP-th point, plus always include the last point
+  // to ensure the curve reaches the endpoint. Having slightly uneven spacing
+  // near the end is acceptable as Catmull-Rom handles it smoothly.
   const knots = [];
   for (let i = 0; i < pts.length; i += EDGE_PATH_KNOT_STEP) {
     knots.push(pts[i]);
   }
-  // Ensure we include the last point
+  // Always include the last point to ensure we reach the endpoint
   const lastPt = pts[pts.length - 1];
   const lastKnot = knots[knots.length - 1];
   if (!lastKnot || lastKnot[0] !== lastPt[0] || lastKnot[1] !== lastPt[1]) {
