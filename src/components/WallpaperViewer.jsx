@@ -127,12 +127,13 @@ function isSameSideEdge(edge) {
  * 
  * @param {Array} edges - Array of edge objects with from/to points
  * @param {number} repeats - Number of times to repeat the path (for closed loops)
- * @returns {{ pathPoints: Array, rhombusFrames: Array, rhombusIndices: Array }}
+ * @returns {{ pathPoints: Array, rhombusFrames: Array, rhombusIndices: Array, vertexIndices: Array }}
  */
 function generateWallpaperData(edges, repeats = 1) {
-  if (edges.length === 0) return { pathPoints: [], rhombusFrames: [], rhombusIndices: [] };
+  if (edges.length === 0) return { pathPoints: [], rhombusFrames: [], rhombusIndices: [], vertexIndices: [] };
   
   const pathPoints = [];
+  const vertexIndices = []; // Indices in pathPoints that are actual edge vertices (not intermediate samples)
   const rhombusFrames = []; // Each frame represents one rhombus instance
   const rhombusIndices = []; // Wallpaper indices for each rhombus
   let currentFrame = createIdentityFrame();
@@ -151,9 +152,10 @@ function generateWallpaperData(edges, repeats = 1) {
     for (let i = 0; i < edges.length; i++) {
       const edge = edges[i];
       
-      // Add the starting point
+      // Add the starting point (and track as vertex)
       if (rep === 0 && i === 0) {
         // First edge of first repeat - use the from point directly
+        vertexIndices.push(pathPoints.length);
         pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
       } else {
         // For subsequent edges, we already added the end point of the previous edge.
@@ -164,6 +166,7 @@ function generateWallpaperData(edges, repeats = 1) {
         // Skip this logic for interior points or when we don't have previous side info
         if (isInteriorPoint(edge.from) || lastEndSide === null) {
           // Interior point or no previous side - add the from point
+          vertexIndices.push(pathPoints.length);
           pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
         } else {
           const fromSide = edge.from.side;
@@ -177,6 +180,7 @@ function generateWallpaperData(edges, repeats = 1) {
           // If they're not at the same position (even considering identification), 
           // we have a discontinuous path - add the from point
           if (!((sameSide || identifiedSide) && sameT)) {
+            vertexIndices.push(pathPoints.length);
             pathPoints.push(pointToScreenSpace(edge.from, currentFrame));
           }
           // Otherwise, skip adding the from point since it's the same as the last end point
@@ -226,7 +230,8 @@ function generateWallpaperData(edges, repeats = 1) {
         }
       }
       
-      // Add the end point
+      // Add the end point (and track as vertex)
+      vertexIndices.push(pathPoints.length);
       pathPoints.push(pointToScreenSpace(toPointForDrawing, currentFrame));
       
       // Track the last endpoint (only for boundary points)
@@ -266,7 +271,7 @@ function generateWallpaperData(edges, repeats = 1) {
     }
   }
   
-  return { pathPoints, rhombusFrames, rhombusIndices };
+  return { pathPoints, rhombusFrames, rhombusIndices, vertexIndices };
 }
 
 /**
@@ -395,7 +400,7 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   const effectiveRepeats = isLoopClosed ? repeats : 1;
   
   // Generate wallpaper data (path points and visited rhombi)
-  const { pathPoints, rhombusFrames, rhombusIndices } = useMemo(() => 
+  const { pathPoints, rhombusFrames, rhombusIndices, vertexIndices } = useMemo(() => 
     generateWallpaperData(edges, effectiveRepeats), 
     [edges, effectiveRepeats]
   );
@@ -528,17 +533,19 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
               />
             )}
             
-            {/* Draw path vertices */}
-            {pathPoints.map((pt, index) => {
-              const isStart = index === 0;
-              const isEnd = index === pathPoints.length - 1;
+            {/* Draw path vertices (only at actual edge endpoints, not intermediate samples) */}
+            {vertexIndices.map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              if (!pt) return null;
+              const isStart = i === 0;
+              const isEnd = i === vertexIndices.length - 1;
               const radius = (isStart || isEnd) ? 8 : 5;
               const className = isStart ? 'trajectory-start' : 
                                isEnd ? 'trajectory-end' : 
                                'trajectory-point';
               return (
                 <circle
-                  key={index}
+                  key={`vertex-${i}`}
                   cx={pt.x}
                   cy={pt.y}
                   r={radius}
@@ -547,23 +554,32 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
               );
             })}
             
-            {/* Draw direction arrows along the path */}
-            {pathPoints.length >= 2 && pathPoints.slice(0, -1).map((pt, index) => {
-              const nextPt = pathPoints[index + 1];
-              const midX = (pt.x + nextPt.x) / 2;
-              const midY = (pt.y + nextPt.y) / 2;
-              const dx = nextPt.x - pt.x;
-              const dy = nextPt.y - pt.y;
+            {/* Draw direction arrows along the path (one per edge, at vertex midpoints) */}
+            {vertexIndices.length >= 2 && vertexIndices.slice(0, -1).map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              const nextVertexIdx = vertexIndices[i + 1];
+              const nextPt = pathPoints[nextVertexIdx];
+              if (!pt || !nextPt) return null;
+              
+              // Find the midpoint of the curve (use middle sample point between vertices)
+              const midIdx = Math.floor((vertexIdx + nextVertexIdx) / 2);
+              const midPt = pathPoints[midIdx];
+              
+              // Calculate direction at midpoint
+              const prevIdx = Math.max(0, midIdx - 1);
+              const nextIdx = Math.min(pathPoints.length - 1, midIdx + 1);
+              const dx = pathPoints[nextIdx].x - pathPoints[prevIdx].x;
+              const dy = pathPoints[nextIdx].y - pathPoints[prevIdx].y;
               const angle = Math.atan2(dy, dx) * 180 / Math.PI;
               
-              // Only draw arrows for every other segment to avoid clutter
-              if (index % 2 !== 0) return null;
+              // Only draw arrows for every other edge to further reduce clutter
+              if (i % 2 !== 0) return null;
               
               return (
                 <polygon
-                  key={`arrow-${index}`}
+                  key={`arrow-${i}`}
                   points="0,-4 8,0 0,4"
-                  transform={`translate(${midX}, ${midY}) rotate(${angle})`}
+                  transform={`translate(${midPt.x}, ${midPt.y}) rotate(${angle})`}
                   className="trajectory-arrow"
                 />
               );
