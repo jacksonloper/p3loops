@@ -247,7 +247,30 @@ export function wouldSegmentCauseCrossing(state, fromPoint, segment) {
 }
 
 /**
+ * Check if a segment on the same side as fromPoint touches the fromPoint's position.
+ * This is forbidden: you cannot create an edge from a point to a segment on the SAME side
+ * that touches that point. However, going to the IDENTIFIED side (e.g., east from north)
+ * that touches the identified position IS allowed.
+ * 
+ * @param {Object} fromPoint - Starting point { side, pos }
+ * @param {Object} segment - Target segment { startPos, endPos, side }
+ * @returns {boolean} True if this is a forbidden same-side touching segment
+ */
+function isForbiddenSameSideTouchingSegment(fromPoint, segment) {
+  // Only applies if segment is on the EXACT same side (not just same group)
+  if (segment.side !== fromPoint.side) {
+    return false;
+  }
+  
+  // Check if the segment touches the fromPoint's position
+  // A segment touches a position if startPos === pos or endPos === pos
+  return segment.startPos === fromPoint.pos || segment.endPos === fromPoint.pos;
+}
+
+/**
  * Get all valid segments that can be targeted without causing crossings.
+ * Also filters out segments on the same side that touch the fromPoint's position
+ * (but allows segments on the identified side that touch the identified position).
  * 
  * @param {Object} state - Current state
  * @param {Object} fromPoint - Starting point for the next edge (or null for first edge)
@@ -261,8 +284,18 @@ export function getValidSegments(state, fromPoint) {
     return allSegments;
   }
   
-  // Filter out segments that would cause crossings
-  return allSegments.filter(segment => !wouldSegmentCauseCrossing(state, fromPoint, segment));
+  // Filter out:
+  // 1. Segments that would cause crossings
+  // 2. Segments on the same side that touch the fromPoint's position
+  return allSegments.filter(segment => {
+    // Check for forbidden same-side touching segment
+    if (isForbiddenSameSideTouchingSegment(fromPoint, segment)) {
+      return false;
+    }
+    
+    // Check for crossings
+    return !wouldSegmentCauseCrossing(state, fromPoint, segment);
+  });
 }
 
 /**
@@ -919,8 +952,10 @@ function simplifyEdges(floatEdges) {
 
 /**
  * Check if a loop can be closed.
- * The loop can be closed if the last point and first point are on the same side group,
- * and the closing edge would not cross any existing edge.
+ * The loop can be closed if:
+ * 1. The last point and first point are on the same side group
+ * 2. The last point is ADJACENT to the first point (positions differ by exactly 1)
+ * 3. The closing edge would not cross any existing edge
  * 
  * The closing edge goes from the continuation point (via side identification) to the first point.
  * IMPORTANTLY: to stay along the boundary (not cross the rhombus), the closing edge must
@@ -942,6 +977,15 @@ export function canCloseLoop(state) {
     return { 
       canClose: false, 
       error: `Cannot close: current position is on ${lastPoint.side}, but start is on ${firstPoint.side} (different side groups)` 
+    };
+  }
+  
+  // Check if the last point is adjacent to the first point (positions differ by exactly 1)
+  const posDiff = Math.abs(lastPoint.pos - firstPoint.pos);
+  if (posDiff !== 1) {
+    return {
+      canClose: false,
+      error: `Cannot close: must be adjacent to start point (current position is ${lastPoint.pos}, start is ${firstPoint.pos})`
     };
   }
   

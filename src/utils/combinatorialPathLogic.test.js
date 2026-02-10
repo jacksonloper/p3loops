@@ -522,7 +522,7 @@ describe('importFromFloatEdges', () => {
 });
 
 describe('canCloseLoop', () => {
-  it('should allow closing when endpoints are on same side group', () => {
+  it('should allow closing when endpoints are on same side group and adjacent', () => {
     let state = createInitialState();
     
     // Create a simple path: NE -> SW -> NE -> SW
@@ -544,6 +544,33 @@ describe('canCloseLoop', () => {
     
     const result = canCloseLoop(state);
     expect(result.canClose).toBe(true);
+  });
+
+  it('should NOT allow closing when endpoints are not adjacent', () => {
+    // Create a state where last point is at pos 2 and first point is at pos 0
+    // (not adjacent - differ by 2)
+    let state = {
+      points: {
+        NE: [
+          { pos: 0, originalSide: 'north' },
+          { pos: 1, originalSide: 'north' },
+          { pos: 2, originalSide: 'north' }
+        ],
+        SW: [
+          { pos: 0, originalSide: 'south' }
+        ]
+      },
+      edges: [
+        { from: { side: 'north', pos: 0 }, to: { side: 'south', pos: 0 } },
+        { from: { side: 'west', pos: 0 }, to: { side: 'north', pos: 2 } }
+        // Now we're at north pos 2, trying to close back to north pos 0
+        // These are NOT adjacent (differ by 2), so closing should fail
+      ]
+    };
+    
+    const result = canCloseLoop(state);
+    expect(result.canClose).toBe(false);
+    expect(result.error).toContain('adjacent');
   });
 
   it('should create closing edge on the same side as first point', () => {
@@ -673,5 +700,84 @@ describe('getValidSegments - same-side arc crossing detection', () => {
     );
     
     expect(westAfterPt3).toBeUndefined();
+  });
+});
+
+describe('getValidSegments - same-side touching segment rule', () => {
+  it('should NOT allow segment on same side that touches the from point', () => {
+    // Create a state where we're at west(1) and want to check available segments
+    // We should NOT be able to go to west segments that touch position 1
+    let state = {
+      points: {
+        NE: [
+          { pos: 0, originalSide: 'north' }
+        ],
+        SW: [
+          { pos: 0, originalSide: 'west' },
+          { pos: 1, originalSide: 'west' },
+          { pos: 2, originalSide: 'west' }
+        ]
+      },
+      edges: [
+        { from: { side: 'north', pos: 0 }, to: { side: 'west', pos: 1 } }
+      ]
+    };
+    
+    // Current position is west(1), which continues from south(1)
+    const fromPoint = { side: 'south', pos: 1 };
+    
+    const validSegments = getValidSegments(state, fromPoint);
+    
+    // Segments on south that touch position 1 should be forbidden:
+    // - { startPos: 0, endPos: 1, side: 'south' } - endPos touches 1
+    // - { startPos: 1, endPos: 2, side: 'south' } - startPos touches 1
+    const southTouchingBefore = validSegments.find(
+      s => s.side === 'south' && s.endPos === 1
+    );
+    const southTouchingAfter = validSegments.find(
+      s => s.side === 'south' && s.startPos === 1
+    );
+    
+    expect(southTouchingBefore).toBeUndefined();
+    expect(southTouchingAfter).toBeUndefined();
+  });
+
+  it('should ALLOW segment on identified side that touches the from point position', () => {
+    // When going from south(1), we CAN go to west segments that touch position 1
+    // because south and west are identified sides
+    let state = {
+      points: {
+        NE: [
+          { pos: 0, originalSide: 'north' }
+        ],
+        SW: [
+          { pos: 0, originalSide: 'west' },
+          { pos: 1, originalSide: 'west' },
+          { pos: 2, originalSide: 'west' }
+        ]
+      },
+      edges: [
+        { from: { side: 'north', pos: 0 }, to: { side: 'west', pos: 1 } }
+      ]
+    };
+    
+    // Current position is south(1) - south and west are identified
+    const fromPoint = { side: 'south', pos: 1 };
+    
+    const validSegments = getValidSegments(state, fromPoint);
+    
+    // Segments on west (the identified side) that touch position 1 SHOULD be allowed
+    // These represent different geometric paths than same-side segments
+    const westTouchingBefore = validSegments.find(
+      s => s.side === 'west' && s.endPos === 1
+    );
+    const westTouchingAfter = validSegments.find(
+      s => s.side === 'west' && s.startPos === 1
+    );
+    
+    // At least one of these should be present (unless blocked by crossing)
+    // The key point is they are NOT forbidden by the same-side touching rule
+    // They may still be filtered by crossing detection
+    expect(westTouchingBefore !== undefined || westTouchingAfter !== undefined).toBe(true);
   });
 });
