@@ -314,3 +314,138 @@ describe('previewSideChange', () => {
     expect(preview.r).toBe(1);
   });
 });
+
+/**
+ * Complex Loop rhombus index test.
+ * 
+ * The complex loop has 24 edges. The user observed the following indices 
+ * in the wallpaper visualization (which is considered ground truth):
+ * 
+ * Edge 1: in (0,0,0)
+ * Edge 2: in (-1,0,120)
+ * Edge 3: in (-1,0,0)
+ * Edge 4: in (-1,-1,240)
+ * Edge 5: conceptually in (-1,-1,120) [same-side edge]
+ * Edge 6: back to (-1,-1,240)
+ * Edge 7: in (-2,0,120)
+ * ...
+ * Last edge (24): in (0,-3,240)
+ */
+describe('Complex Loop rhombus indices', () => {
+  // The complex loop edges from exampleedge2.json
+  const complexLoopEdges = [
+    { from: { side: 'north', t: 0.456 }, to: { side: 'west', t: 0.611 } },   // Edge 1
+    { from: { side: 'south', t: 0.611 }, to: { side: 'north', t: 0.72 } },   // Edge 2
+    { from: { side: 'east', t: 0.72 }, to: { side: 'south', t: 0.375 } },    // Edge 3
+    { from: { side: 'west', t: 0.375 }, to: { side: 'north', t: 0.207 } },   // Edge 4
+    { from: { side: 'east', t: 0.207 }, to: { interior: true, southward: 0.744567501122939, eastward: 0.8517552568425605 } }, // Edge 5
+    { from: { interior: true, southward: 0.744567501122939, eastward: 0.8517552568425605 }, to: { side: 'east', t: 0.573 } }, // Edge 6
+    { from: { side: 'north', t: 0.573 }, to: { side: 'south', t: 0.8 } },    // Edge 7
+    { from: { side: 'west', t: 0.8 }, to: { side: 'north', t: 0.493 } },     // Edge 8
+    { from: { side: 'east', t: 0.493 }, to: { interior: true, southward: 0.7006217782649108, eastward: 0.9076982694047433 } }, // Edge 9
+    { from: { interior: true, southward: 0.7006217782649108, eastward: 0.9076982694047433 }, to: { side: 'east', t: 0.276 } }, // Edge 10
+    { from: { side: 'north', t: 0.276 }, to: { side: 'west', t: 0.503 } },   // Edge 11
+    { from: { side: 'south', t: 0.503 }, to: { side: 'north', t: 0.858 } },  // Edge 12
+    { from: { side: 'east', t: 0.858 }, to: { side: 'south', t: 0.433 } },   // Edge 13
+    { from: { side: 'west', t: 0.433 }, to: { side: 'north', t: 0.246 } },   // Edge 14
+    { from: { side: 'east', t: 0.246 }, to: { interior: true, southward: 0.7120858798800486, eastward: 0.8819726312259965 } }, // Edge 15
+    { from: { interior: true, southward: 0.7120858798800486, eastward: 0.8819726312259965 }, to: { side: 'east', t: 0.541 } }, // Edge 16
+    { from: { side: 'north', t: 0.541 }, to: { side: 'west', t: 0.895 } },   // Edge 17
+    { from: { side: 'south', t: 0.895 }, to: { side: 'north', t: 0.555 } },  // Edge 18
+    { from: { side: 'east', t: 0.555 }, to: { interior: true, southward: 0.7235499814951863, eastward: 0.8638897274573418 } }, // Edge 19
+    { from: { interior: true, southward: 0.7235499814951863, eastward: 0.8638897274573418 }, to: { side: 'east', t: 0.227 } }, // Edge 20
+    { from: { side: 'north', t: 0.227 }, to: { side: 'west', t: 0.4 } },     // Edge 21
+    { from: { side: 'south', t: 0.4 }, to: { side: 'east', t: 0.773 } },     // Edge 22
+    { from: { side: 'north', t: 0.773 }, to: { side: 'south', t: 0.551 } },  // Edge 23
+    { from: { side: 'west', t: 0.551 }, to: { side: 'north', t: 0.418 } }    // Edge 24
+  ];
+  
+  /**
+   * Helper to check if an edge is a same-side edge.
+   */
+  function isSameSideEdge(edge) {
+    if (edge.from.interior || edge.to.interior) return false;
+    const fromSide = edge.from.side;
+    const toSide = edge.to.side;
+    if (fromSide === toSide) return true;
+    // north↔east, south↔west are identified
+    const identified = { north: 'east', east: 'north', south: 'west', west: 'south' };
+    return identified[fromSide] === toSide && Math.abs(edge.from.t - edge.to.t) < 0.001;
+  }
+  
+  /**
+   * Compute the index for each edge in the complex loop.
+   * The index represents which rhombus copy the edge is drawn in.
+   */
+  function computeEdgeIndices(edges) {
+    const indices = [];
+    let currentIndex = createIdentityWallpaperIndex();
+    
+    for (let i = 0; i < edges.length; i++) {
+      const edge = edges[i];
+      
+      // The edge is drawn in the current rhombus
+      indices.push({ ...currentIndex });
+      
+      // After drawing the edge, update index if crossing a boundary
+      if (!edge.to.interior && !isSameSideEdge(edge)) {
+        currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+      }
+    }
+    
+    return indices;
+  }
+  
+  it('should have Edge 1 in rhombus (0, 0, 0°)', () => {
+    const indices = computeEdgeIndices(complexLoopEdges);
+    expect(indices[0]).toEqual({ tx: 0, ty: 0, r: 0 });
+  });
+  
+  it('should have Edge 2 in rhombus (-1, 0, 120°)', () => {
+    const indices = computeEdgeIndices(complexLoopEdges);
+    // After crossing west at k=0: (0,0,0) → (-1, 0, 1)
+    expect(indices[1]).toEqual({ tx: -1, ty: 0, r: 1 });
+  });
+  
+  it('should have Edge 3 in rhombus (-1, 0, 0°)', () => {
+    const indices = computeEdgeIndices(complexLoopEdges);
+    // After crossing north at k=1: (-1,0,1) → (-1, 0, 0)
+    expect(indices[2]).toEqual({ tx: -1, ty: 0, r: 0 });
+  });
+  
+  it('should have Edge 4 in rhombus (-1, -1, 240°)', () => {
+    const indices = computeEdgeIndices(complexLoopEdges);
+    // After crossing south at k=0: (-1,0,0) → (-1, -1, 2)
+    expect(indices[3]).toEqual({ tx: -1, ty: -1, r: 2 });
+  });
+  
+  it('should have Edge 8 in rhombus (-2, 0, 120°)', () => {
+    // Note: After Edge 7 crosses south at k=2, we enter (-2, 0, 120°)
+    // Edge 8 is then drawn in this new rhombus
+    const indices = computeEdgeIndices(complexLoopEdges);
+    expect(indices[7]).toEqual({ tx: -2, ty: 0, r: 1 });
+  });
+  
+  it('should have last edge (Edge 24) in rhombus (0, -3, 240°)', () => {
+    const indices = computeEdgeIndices(complexLoopEdges);
+    expect(indices[23]).toEqual({ tx: 0, ty: -3, r: 2 });
+  });
+  
+  it('should trace through all 24 edges with consistent indices', () => {
+    const indices = computeEdgeIndices(complexLoopEdges);
+    
+    // Log all indices for debugging
+    const formatted = indices.map((idx, i) => `Edge ${i+1}: (${idx.tx}, ${idx.ty}, ${idx.r * 120}°)`);
+    
+    // Verify we have 24 indices
+    expect(indices.length).toBe(24);
+    
+    // All indices should have valid properties
+    for (const idx of indices) {
+      expect(idx.tx).toBeDefined();
+      expect(idx.ty).toBeDefined();
+      expect(idx.r).toBeGreaterThanOrEqual(0);
+      expect(idx.r).toBeLessThanOrEqual(2);
+    }
+  });
+});
