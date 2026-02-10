@@ -371,11 +371,10 @@ function CombinatorialApp() {
   return (
     <div className="combinatorial-app-container">
       <header className="app-header">
-        <h1>Combinatorial P3 Loops Editor</h1>
+        <h1>P3 Loops Editor</h1>
         <p className="subtitle">
-          Side-to-side edges with integer positions (no interior points)
+          Create non-crossing paths on a 120/60/120/60 rhombus with edge identifications
         </p>
-        <a href="#" className="nav-link">← Back to Geometric Editor</a>
       </header>
 
       <main className="editor-main">
@@ -692,16 +691,16 @@ function CombinatorialApp() {
         )}
 
         <section className="info-section">
-          <h3>About Combinatorial Mode</h3>
+          <h3>About the Rhombus</h3>
           <ul>
-            <li><strong>No Interior Points:</strong> All edges go from side to side</li>
-            <li><strong>Integer Positions:</strong> Points are ordered, not positioned by floating-point coordinates</li>
-            <li><strong>Same-Side Edges:</strong> Edges can go from a side back to the same side</li>
-            <li><strong>Segment Selection:</strong> New edges join to segments between existing points</li>
+            <li><strong>Shape:</strong> 120/60/120/60 degree rhombus (NE/SW corners are 120°, NW/SE corners are 60°)</li>
+            <li><strong>North ≡ East:</strong> A point at t% along North is the same as t% along East</li>
+            <li><strong>South ≡ West:</strong> A point at t% along South is the same as t% along West</li>
+            <li><strong>Side-to-Side Edges:</strong> All edges go from one side to another (including same-side edges)</li>
           </ul>
           <h3>How to Use</h3>
           <ol>
-            <li>Select a segment from the radio buttons</li>
+            <li>Select a segment from the radio buttons or click on the rhombus</li>
             <li>Choose which specific side (north/east or south/west) for the new point</li>
             <li>Click "Add Edge" to extend the path to the selected segment</li>
             <li>The highlighted line shows where the new point will be created</li>
