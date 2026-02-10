@@ -340,6 +340,14 @@ function getRhombusCenter() {
  * @param {number} totalEdges - Total number of edges (for spacing calculation)
  * @returns {Object} { pathD: string, midPoint: { x, y } } - SVG path and midpoint for arrow
  */
+
+// Curve configuration constants for edge rendering
+const BASE_SAME_SIDE_CURVE = 20;           // Base curve amount for same-side edges
+const SAME_SIDE_CURVE_MULTIPLIER = 60;     // Additional curve proportional to edge span
+const BASE_DIFFERENT_SIDE_CURVE = 15;      // Base curve amount for different-side edges
+const EDGE_LENGTH_CURVE_FACTOR = 0.08;     // Curve multiplier based on edge length
+const EDGE_INDEX_OFFSET_MULTIPLIER = 3;    // Offset per edge index to prevent overlaps
+
 export function getCurvedEdgePath(fromSide, fromT, toSide, toT, edgeIndex = 0, totalEdges = 1) {
   const from = getPointOnSide(fromSide, fromT);
   const to = getPointOnSide(toSide, toT);
@@ -374,15 +382,15 @@ export function getCurvedEdgePath(fromSide, fromT, toSide, toT, edgeIndex = 0, t
     // The curve amount depends on the "span" of the edge (difference in t values)
     const span = Math.abs(toT - fromT);
     // Smaller spans (closer endpoints) need less curve, larger spans need more
-    bowAmount = 20 + span * 60;
+    bowAmount = BASE_SAME_SIDE_CURVE + span * SAME_SIDE_CURVE_MULTIPLIER;
   } else {
     // For different-side edges, moderate curving
-    bowAmount = 15 + edgeLength * 0.08;
+    bowAmount = BASE_DIFFERENT_SIDE_CURVE + edgeLength * EDGE_LENGTH_CURVE_FACTOR;
   }
   
   // Add slight variation based on edge index to prevent exact overlaps
   // when multiple edges share similar endpoints
-  const indexOffset = (edgeIndex - totalEdges / 2) * 3;
+  const indexOffset = (edgeIndex - totalEdges / 2) * EDGE_INDEX_OFFSET_MULTIPLIER;
   bowAmount += indexOffset;
   
   // Calculate the control point for the quadratic bezier
