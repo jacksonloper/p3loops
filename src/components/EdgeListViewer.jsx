@@ -53,6 +53,8 @@ function isSameSideEdge(edge) {
 /**
  * Format a point for display in the edge list.
  * Works with both float edges { side, t } and combinatorial edges { side, pos }.
+ * @param {Object} point - Point object with side and t/pos
+ * @returns {string} Formatted point string
  */
 function formatPoint(point) {
   if (point.interior) {
@@ -64,7 +66,14 @@ function formatPoint(point) {
   if (point.pos !== undefined) {
     return `${point.side} [${point.pos}]`;
   }
-  return point.side || 'unknown';
+  // For edge cases where side is known but no position info (shouldn't happen in normal use)
+  if (point.side) {
+    console.warn('Point missing position info (t or pos):', point);
+    return point.side;
+  }
+  // Unknown format - log for debugging
+  console.warn('Unknown point format:', point);
+  return 'unknown';
 }
 
 /**
