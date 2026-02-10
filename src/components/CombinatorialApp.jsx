@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import CombinatorialRhombus from './CombinatorialRhombus.jsx';
 import ThreeDViewer from './ThreeDViewer.jsx';
 import WallpaperViewer from './WallpaperViewer.jsx';
-import MoveTreeViewer from './MoveTreeViewer.jsx';
+import LoopIteratorViewer from './LoopIteratorViewer.jsx';
 import EdgeListViewer from './EdgeListViewer.jsx';
 import {
   createInitialState,
@@ -50,7 +50,7 @@ function CombinatorialApp() {
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
   const [showEdgeList, setShowEdgeList] = useState(false);
-  const [showMoveTree, setShowMoveTree] = useState(false);
+  const [showLoopIterator, setShowLoopIterator] = useState(false);
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null);
   const [isLoopClosed, setIsLoopClosed] = useState(false);
   const [examplesList, setExamplesList] = useState([]);
@@ -596,12 +596,11 @@ function CombinatorialApp() {
             </button>
             
             <button 
-              onClick={() => setShowMoveTree(true)}
-              disabled={state.edges.length === 0 || isLoopClosed}
+              onClick={() => setShowLoopIterator(true)}
               className="control-btn secondary-btn"
-              title="Show tree of possible move sequences"
+              title="Browse all possible loops"
             >
-              Show Move Tree
+              Browse All Loops
             </button>
             
             <button 
@@ -730,11 +729,18 @@ function CombinatorialApp() {
         />
       )}
 
-      {showMoveTree && (
-        <MoveTreeViewer 
-          state={state}
-          currentWallpaperIndex={currentWallpaperIndex}
-          onClose={() => setShowMoveTree(false)}
+      {showLoopIterator && (
+        <LoopIteratorViewer 
+          onClose={() => setShowLoopIterator(false)}
+          onSelectLoop={(loop) => {
+            // Import the selected loop into the editor
+            const floatEdges = allEdgesToFloat(loop.state);
+            const newState = importFromFloatEdges(floatEdges);
+            setState(newState);
+            setIsLoopClosed(true);
+            setShowLoopIterator(false);
+            setValidationMessage(`Loaded loop with ${loop.length} edges`);
+          }}
         />
       )}
     </div>
