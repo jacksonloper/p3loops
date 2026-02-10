@@ -67,10 +67,11 @@ function computeEdgeListData(edges) {
       // Edge coming from interior to boundary - this DOES cross
       const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
       
+      // Edge is drawn in current rhombus, but triggers a crossing
       result.push({
         edge,
         edgeIndex: i,
-        rhombusIndex: { ...currentIndex }, // Edge is drawn in current rhombus before crossing
+        rhombusIndex: { ...currentIndex },
         isSameSide: false,
         conceptualIndex: null,
         isInterior: true
@@ -94,13 +95,13 @@ function computeEdgeListData(edges) {
         conceptualIndex
       });
     } else {
-      // Edge crosses to new rhombus
+      // Edge crosses to new rhombus - shown in current rhombus, then update for next edge
       const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
       
       result.push({
         edge,
         edgeIndex: i,
-        rhombusIndex: { ...currentIndex }, // Edge is drawn in current rhombus before crossing
+        rhombusIndex: { ...currentIndex },
         isSameSide: false,
         conceptualIndex: null
       });

@@ -36,6 +36,9 @@ const ANGLE_120 = 2 * Math.PI / 3;
 const COS_120 = Math.cos(ANGLE_120);
 const SIN_120 = Math.sin(ANGLE_120);
 
+// Tolerance for comparing float edge positions (t values)
+const FLOAT_POSITION_TOLERANCE = 0.001;
+
 // Rhombus corners (same as wallpaperGeometry.js)
 const NE_CORNER = { x: 0, y: 0 };
 const NW_CORNER = { x: -SIDE, y: 0 };
@@ -403,7 +406,7 @@ function edgeCrossesRhombus(fromPoint, toPoint) {
     // Float edges use 't', combinatorial edges use 'pos'
     if (fromPoint.t !== undefined && toPoint.t !== undefined) {
       // Float format: compare t values with tolerance
-      if (Math.abs(fromPoint.t - toPoint.t) < 0.001) {
+      if (Math.abs(fromPoint.t - toPoint.t) < FLOAT_POSITION_TOLERANCE) {
         return false;
       }
     } else if (fromPoint.pos !== undefined && toPoint.pos !== undefined) {
