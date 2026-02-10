@@ -1,0 +1,37 @@
+.loop-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.loop-selector label {
+  font-size: 0.9rem;
+  color: #b0b0b0;
+  white-space: nowrap;
+}
+
+.loop-selector select {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.loop-selector select:focus {
+  outline: none;
+  border-color: #20c997;
+}
+
+.loop-selector select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loop-selector select option {
+  background: #2d2a4d;
+  color: #e0e0e0;
+}
