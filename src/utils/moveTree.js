@@ -231,13 +231,13 @@ function rotateByK(x, y, k) {
 
 /**
  * Apply inverse rotation by k*120° around the origin.
+ * Since R is a 120° rotation, R³ = identity, so R^(-k) = R^(3-k) for k in {0,1,2}.
  * @param {number} x
  * @param {number} y
  * @param {number} k - Rotation index (0, 1, or 2)
  * @returns {{ x: number, y: number }}
  */
 function rotateByKInverse(x, y, k) {
-  // R^(-k) = R^(3-k) for k in 0,1,2
   return rotateByK(x, y, (3 - k) % 3);
 }
 
@@ -250,6 +250,7 @@ function rotateByKInverse(x, y, k) {
  * Method:
  * 1. Extract k from the rotation part of the frame
  * 2. Compute where the base rhombus centroid maps to under the frame
+ *    (applyFrame applies the affine transformation [a,b,c,d,tx,ty] to a point)
  * 3. Under T1^i * T2^j * R^k, the centroid maps to: i*T1 + j*T2 + R^k(base_centroid)
  * 4. Solve for i, j from: world_centroid - R^k(base_centroid) = i*T1 + j*T2
  * 
@@ -261,6 +262,7 @@ export function extractIndexFromFrame(frame) {
   const k = extractK(frame);
   
   // Step 2: Apply frame to base centroid to get world-space centroid
+  // (applyFrame computes: x' = a*x + b*y + tx, y' = c*x + d*y + ty)
   const worldCentroid = applyFrame(frame, BASE_CENTROID.x, BASE_CENTROID.y);
   
   // Step 3: Compute where R^k would place the base centroid (relative to origin)
