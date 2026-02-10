@@ -12,7 +12,8 @@ import {
 import { 
   createIdentityWallpaperIndex,
   updateWallpaperIndex,
-  formatWallpaperIndex
+  formatWallpaperIndex,
+  indexToFrame
 } from '../utils/moveTree.js';
 import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.js';
 import './WallpaperViewer.css';
@@ -36,22 +37,6 @@ function generateAllEdgesPathString(edges, frame) {
   }
   
   return pathParts.join(' ');
-}
-
-// Tolerance for comparing frame positions (to handle floating point errors)
-const FRAME_TOLERANCE = 0.1;
-
-/**
- * Create a unique key for a reference frame based on its transformation values.
- * Two frames are considered the same if their translation and rotation are equal
- * (within floating point tolerance).
- * @param {Object} frame - Reference frame { a, b, c, d, tx, ty }
- * @returns {string} - A string key representing the frame's position
- */
-function getFrameKey(frame) {
-  // Round to reasonable precision to handle floating point errors
-  const round = (v) => Math.round(v / FRAME_TOLERANCE) * FRAME_TOLERANCE;
-  return `${round(frame.a)},${round(frame.b)},${round(frame.c)},${round(frame.d)},${round(frame.tx)},${round(frame.ty)}`;
 }
 
 /**
@@ -269,6 +254,64 @@ function getNorthMarkerInfo(frame) {
   return { x, y, angle };
 }
 
+// Constants for rhombus grid generation
+// Translation vectors T1/T2 have magnitude ~300 units (half the SIDE)
+// We divide by half this value to ensure sufficient coverage
+const LATTICE_SPACING_ESTIMATE = 150;
+// Safety margin to ensure we don't miss edge rhombi
+const RANGE_SAFETY_MARGIN = 3;
+
+/**
+ * Generate all rhombi (i, j, k) that intersect a given bounding box.
+ * Uses the indexToFrame function to convert indices to frames.
+ * 
+ * @param {Object} bounds - { minX, minY, maxX, maxY }
+ * @param {number} margin - Extra margin around bounds for safety
+ * @returns {Array} - Array of { index, frame } objects
+ */
+function generateAllRhombiInBounds(bounds, margin = 100) {
+  const rhombi = [];
+  
+  // Expand bounds
+  const expandedBounds = {
+    minX: bounds.minX - margin,
+    minY: bounds.minY - margin,
+    maxX: bounds.maxX + margin,
+    maxY: bounds.maxY + margin
+  };
+  
+  // Calculate the maximum dimension of the bounding box
+  // Used to estimate how many lattice cells we need to check
+  const boundingBoxMaxExtent = Math.max(
+    (expandedBounds.maxX - expandedBounds.minX),
+    (expandedBounds.maxY - expandedBounds.minY)
+  );
+  
+  // Estimate range of i, j values needed based on lattice spacing
+  const iRange = Math.ceil(boundingBoxMaxExtent / LATTICE_SPACING_ESTIMATE) + RANGE_SAFETY_MARGIN;
+  const jRange = Math.ceil(boundingBoxMaxExtent / LATTICE_SPACING_ESTIMATE) + RANGE_SAFETY_MARGIN;
+  
+  // Generate all combinations of (i, j, k)
+  for (let i = -iRange; i <= iRange; i++) {
+    for (let j = -jRange; j <= jRange; j++) {
+      for (let k = 0; k < 3; k++) {
+        const index = { tx: i, ty: j, r: k };
+        const frame = indexToFrame(index);
+        const center = getRhombusCenter(frame);
+        
+        // Check if the rhombus center is within the expanded bounds
+        // (we use center as a quick filter; some edge rhombi might be missed)
+        if (center.x >= expandedBounds.minX && center.x <= expandedBounds.maxX &&
+            center.y >= expandedBounds.minY && center.y <= expandedBounds.maxY) {
+          rhombi.push({ index, frame });
+        }
+      }
+    }
+  }
+  
+  return rhombi;
+}
+
 // Default number of repeats for closed loops
 const DEFAULT_CLOSED_LOOP_REPEATS = 2;
 
@@ -287,37 +330,24 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   // Effective repeats: must be 1 if loop is open
   const effectiveRepeats = isLoopClosed ? repeats : 1;
   
-  // Generate wallpaper data
+  // Generate wallpaper data (path points and visited rhombi)
   const { pathPoints, rhombusFrames, rhombusIndices } = useMemo(() => 
     generateWallpaperData(edges, effectiveRepeats), 
     [edges, effectiveRepeats]
   );
   
-  // Deduplicate rhombus frames (with indices) to avoid brightness stacking
-  const uniqueRhombi = useMemo(() => {
-    const seen = new Set();
-    const unique = [];
-    
-    for (let i = 0; i < rhombusFrames.length; i++) {
-      const frame = rhombusFrames[i];
-      const index = rhombusIndices[i];
-      const key = getFrameKey(frame);
-      if (!seen.has(key)) {
-        seen.add(key);
-        unique.push({ frame, index });
-      }
+  // Get set of visited rhombus keys for highlighting
+  const visitedRhombusKeys = useMemo(() => {
+    const keys = new Set();
+    for (const index of rhombusIndices) {
+      keys.add(`${index.tx},${index.ty},${index.r}`);
     }
-    
-    return unique;
-  }, [rhombusFrames, rhombusIndices]);
+    return keys;
+  }, [rhombusIndices]);
   
-  // Calculate bounding box with padding
-  const viewBox = useMemo(() => {
-    if (pathPoints.length === 0 && uniqueRhombi.length === 0) {
-      return '-400 -400 800 800';
-    }
-    
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  // Calculate bounding box from path points first
+  const bounds = useMemo(() => {
+    let minX = -300, minY = -300, maxX = 300, maxY = 300;
     
     // Include all path points
     for (const pt of pathPoints) {
@@ -327,8 +357,8 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
       maxY = Math.max(maxY, pt.y);
     }
     
-    // Include all rhombus corners
-    for (const { frame } of uniqueRhombi) {
+    // Include visited rhombus corners
+    for (const frame of rhombusFrames) {
       const corners = getRhombusCorners(frame);
       for (const corner of [corners.ne, corners.nw, corners.se, corners.sw]) {
         minX = Math.min(minX, corner.x);
@@ -338,18 +368,23 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
       }
     }
     
-    // Add padding
+    return { minX, minY, maxX, maxY };
+  }, [pathPoints, rhombusFrames]);
+  
+  // Generate ALL rhombi that appear within the viewable area
+  const allRhombi = useMemo(() => {
+    return generateAllRhombiInBounds(bounds);
+  }, [bounds]);
+  
+  // Calculate view box with padding
+  const viewBox = useMemo(() => {
     const padding = 60;
-    minX -= padding;
-    minY -= padding;
-    maxX += padding;
-    maxY += padding;
-    
-    const width = maxX - minX;
-    const height = maxY - minY;
-    
+    const minX = bounds.minX - padding;
+    const minY = bounds.minY - padding;
+    const width = bounds.maxX - bounds.minX + 2 * padding;
+    const height = bounds.maxY - bounds.minY + 2 * padding;
     return `${minX} ${minY} ${width} ${height}`;
-  }, [pathPoints, uniqueRhombi]);
+  }, [bounds]);
   
   // Create path string for the trajectory
   const pathString = useMemo(() => {
@@ -369,22 +404,24 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
         
         <div className="wallpaper-canvas-container">
           <svg viewBox={viewBox} className="wallpaper-svg">
-            {/* Draw rhombi first (subtle background) - deduplicated to avoid brightness stacking */}
-            {uniqueRhombi.map(({ frame, index: rhombusIndex }, i) => {
+            {/* Draw ALL rhombi in the viewable area */}
+            {allRhombi.map(({ frame, index: rhombusIndex }) => {
               const markerInfo = getNorthMarkerInfo(frame);
               const center = getRhombusCenter(frame);
               const ghostPathString = generateAllEdgesPathString(edges, frame);
               const indexLabel = formatWallpaperIndex(rhombusIndex);
+              const isVisited = visitedRhombusKeys.has(`${rhombusIndex.tx},${rhombusIndex.ty},${rhombusIndex.r}`);
+              
               return (
-                <g key={i} className="rhombus-instance">
+                <g key={`${rhombusIndex.tx},${rhombusIndex.ty},${rhombusIndex.r}`} className={`rhombus-instance ${isVisited ? 'visited' : ''}`}>
                   {/* Rhombus outline */}
                   <path 
                     d={getRhombusPathString(frame)} 
-                    className="rhombus-outline"
+                    className={`rhombus-outline ${isVisited ? 'visited' : ''}`}
                   />
                   
-                  {/* Ghost paths - all edges shown in subtle gray */}
-                  {ghostPathString && (
+                  {/* Ghost paths - all edges shown in subtle gray (only for visited rhombi) */}
+                  {isVisited && ghostPathString && (
                     <path 
                       d={ghostPathString}
                       className="ghost-path"
@@ -408,28 +445,28 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
                   <text
                     x={center.x}
                     y={center.y}
-                    className="rhombus-index-label"
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                    >
-                      {indexLabel}
-                    </text>
-                  </g>
-                );
-              })}
-              
-              {/* Draw the path trajectory */}
-              {pathString && (
-                <path 
-                  d={pathString}
-                  className="trajectory-line"
-                  fill="none"
-                />
-              )}
-              
-              {/* Draw path vertices */}
-              {pathPoints.map((pt, index) => {
-                const isStart = index === 0;
+                    className={`rhombus-index-label ${isVisited ? 'visited' : ''}`}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    {indexLabel}
+                  </text>
+                </g>
+              );
+            })}
+            
+            {/* Draw the path trajectory */}
+            {pathString && (
+              <path 
+                d={pathString}
+                className="trajectory-line"
+                fill="none"
+              />
+            )}
+            
+            {/* Draw path vertices */}
+            {pathPoints.map((pt, index) => {
+              const isStart = index === 0;
               const isEnd = index === pathPoints.length - 1;
               const radius = (isStart || isEnd) ? 8 : 5;
               const className = isStart ? 'trajectory-start' : 
@@ -472,7 +509,7 @@ function WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
         
         <div className="wallpaper-info">
           <p>
-            Path unfolded onto R² • {pathPoints.length} points • {uniqueRhombi.length} unique {uniqueRhombi.length === 1 ? 'rhombus' : 'rhombi'}
+            Path unfolded onto R² • {pathPoints.length} points • {visitedRhombusKeys.size} visited rhombi • {allRhombi.length} total displayed
             {isLoopClosed && ` • ${effectiveRepeats} repeat${effectiveRepeats === 1 ? '' : 's'}`}
           </p>
           
