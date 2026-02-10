@@ -1,20 +1,27 @@
 # P3 Loops Path Editor
 
-A React/Vite web application for creating and managing non-crossing paths on a bowed square with edge identifications.  View live at https://main--p3loops.netlify.app/
+A React/Vite web application for creating and managing non-crossing paths on a 120/60/120/60 rhombus with edge identifications. View live at https://main--p3loops.netlify.app/
 
 ## Features
 
-- **Bowed Square Visualization**: An SVG-based square with slightly bowed out sides and 4 cusps
+- **Rhombus Visualization**: An SVG-based 120°/60° rhombus with bowed sides for clear visualization
 - **Edge Identifications**: 
   - North ≡ East (a point at t% along North is the same as t% along East)
   - South ≡ West (a point at t% along South is the same as t% along West)
-- **Path Creation**: Click-to-add edges with visual feedback showing the two possible continuation points
+- **Combinatorial Path Creation**: 
+  - Select segments to add edges by clicking on the rhombus or using radio buttons
+  - All edges go from side to side (including same-side edges)
+  - Points are ordered by integer positions, evenly distributed for visualization
 - **Path Validation**: 
   - Edges must chain together (endpoint of one = startpoint of next)
   - Edges cannot cross each other
-  - No loops allowed (cannot return to a point already in the path)
+  - Real-time filtering of valid segments that won't cause crossings
+- **Advanced Features**:
+  - 3D Viewer: Render paths on puffed 3D triangles with animated bead
+  - Wallpaper Viewer: View paths as P3 wallpaper patterns
+  - Move Tree: Explore possible move sequences
+  - Edge List: View combinatorial edge details
 - **JSON Import/Export**: Import paths from JSON and copy current path as JSON
-- **Controls**: Remove last edge, clear all, and toggle JSON panel
 
 ## Edge Directions
 
@@ -28,6 +35,12 @@ A React/Vite web application for creating and managing non-crossing paths on a b
 ```bash
 npm install
 npm run dev
+```
+
+## Testing
+
+```bash
+npm test
 ```
 
 ## Build
