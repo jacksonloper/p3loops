@@ -1,7 +1,11 @@
 import { useMemo } from 'react';
 import { 
+  createIdentityFrame,
+  updateReferenceFrameForSide
+} from '../utils/wallpaperGeometry.js';
+import { 
   createIdentityWallpaperIndex,
-  updateWallpaperIndex,
+  extractIndexFromFrame,
   formatWallpaperIndex
 } from '../utils/moveTree.js';
 import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.js';
@@ -33,6 +37,7 @@ function isSameSideEdge(edge) {
 
 /**
  * Compute edge list data with rhombus indices for each edge.
+ * Uses the same accumulated frame approach as WallpaperViewer for consistency.
  * @param {Array} edges - Array of edge objects with from/to points
  * @returns {Array} - Array of { edge, edgeIndex, rhombusIndex, isSameSide, conceptualIndex }
  */
@@ -40,6 +45,7 @@ function computeEdgeListData(edges) {
   if (edges.length === 0) return [];
   
   const result = [];
+  let currentFrame = createIdentityFrame();
   let currentIndex = createIdentityWallpaperIndex();
   
   for (let i = 0; i < edges.length; i++) {
@@ -47,7 +53,9 @@ function computeEdgeListData(edges) {
     const sameSide = isSameSideEdge(edge);
     
     if (sameSide) {
-      const conceptualIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+      // For same-side edges, compute conceptual index (what it would enter)
+      const conceptualFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+      const conceptualIndex = extractIndexFromFrame(conceptualFrame);
       
       result.push({
         edge,
@@ -57,7 +65,9 @@ function computeEdgeListData(edges) {
         conceptualIndex
       });
     } else {
-      const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+      // Edge crosses to new rhombus
+      const nextFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+      const nextIndex = extractIndexFromFrame(nextFrame);
       
       result.push({
         edge,
@@ -67,6 +77,7 @@ function computeEdgeListData(edges) {
         conceptualIndex: null
       });
       
+      currentFrame = nextFrame;
       currentIndex = nextIndex;
     }
   }

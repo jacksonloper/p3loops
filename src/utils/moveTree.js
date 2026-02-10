@@ -43,6 +43,12 @@ const EAST_ANGLE = -60 * Math.PI / 180;
 const SE_CORNER = { x: SIDE * Math.cos(EAST_ANGLE), y: SIDE * Math.sin(EAST_ANGLE) };
 const SW_CORNER = { x: NW_CORNER.x + SE_CORNER.x, y: NW_CORNER.y + SE_CORNER.y };
 
+// Base rhombus centroid (center point)
+const BASE_CENTROID = {
+  x: (NE_CORNER.x + NW_CORNER.x + SE_CORNER.x + SW_CORNER.x) / 4,
+  y: (NE_CORNER.y + NW_CORNER.y + SE_CORNER.y + SW_CORNER.y) / 4
+};
+
 // Translation generators for P3 hexagonal lattice (from reference Python code)
 // These are the offsets between adjacent hexagon centers in axial coordinates
 // T1 = q-step: moves to adjacent hex in "q" direction
@@ -206,13 +212,67 @@ function solveIJ(tx, ty) {
 }
 
 /**
+ * Apply a rotation by k*120° around the origin.
+ * @param {number} x
+ * @param {number} y
+ * @param {number} k - Rotation index (0, 1, or 2)
+ * @returns {{ x: number, y: number }}
+ */
+function rotateByK(x, y, k) {
+  if (k === 0) return { x, y };
+  const angle = k * ANGLE_120;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: cos * x - sin * y,
+    y: sin * x + cos * y
+  };
+}
+
+/**
+ * Apply inverse rotation by k*120° around the origin.
+ * @param {number} x
+ * @param {number} y
+ * @param {number} k - Rotation index (0, 1, or 2)
+ * @returns {{ x: number, y: number }}
+ */
+function rotateByKInverse(x, y, k) {
+  // R^(-k) = R^(3-k) for k in 0,1,2
+  return rotateByK(x, y, (3 - k) % 3);
+}
+
+/**
  * Extract the wallpaper index (i, j, k) from an affine frame.
+ * 
+ * The frame represents a transformation that maps the base rhombus to its position.
+ * We find (i, j, k) such that T1^i * T2^j * R^k produces the same transformation.
+ * 
+ * Method:
+ * 1. Extract k from the rotation part of the frame
+ * 2. Compute where the base rhombus centroid maps to under the frame
+ * 3. Under T1^i * T2^j * R^k, the centroid maps to: i*T1 + j*T2 + R^k(base_centroid)
+ * 4. Solve for i, j from: world_centroid - R^k(base_centroid) = i*T1 + j*T2
+ * 
  * @param {AffineFrame} frame
  * @returns {WallpaperIndex}
  */
 export function extractIndexFromFrame(frame) {
+  // Step 1: Extract rotation index k
   const k = extractK(frame);
-  const { i, j } = solveIJ(frame.tx, frame.ty);
+  
+  // Step 2: Apply frame to base centroid to get world-space centroid
+  const worldCentroid = applyFrame(frame, BASE_CENTROID.x, BASE_CENTROID.y);
+  
+  // Step 3: Compute where R^k would place the base centroid (relative to origin)
+  const rotatedBaseCentroid = rotateByK(BASE_CENTROID.x, BASE_CENTROID.y, k);
+  
+  // Step 4: The translation part is: world_centroid - rotated_base_centroid = i*T1 + j*T2
+  const translationX = worldCentroid.x - rotatedBaseCentroid.x;
+  const translationY = worldCentroid.y - rotatedBaseCentroid.y;
+  
+  // Step 5: Solve for i, j
+  const { i, j } = solveIJ(translationX, translationY);
+  
   return { tx: i, ty: j, r: k };
 }
 
