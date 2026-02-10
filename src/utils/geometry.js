@@ -291,6 +291,125 @@ export function getBowedRhombusPath(bowAmount = DEFAULT_BOW_AMOUNT) {
 }
 
 /**
+ * Get SVG path for the rhombus outline with straight sides (true rhombus).
+ * @returns {string} SVG path string
+ */
+export function getStraightRhombusPath() {
+  const nw = unitSquareToRhombus(0, 0);
+  const ne = unitSquareToRhombus(0, 1);
+  const se = unitSquareToRhombus(1, 1);
+  const sw = unitSquareToRhombus(1, 0);
+  
+  return `M ${nw.x} ${nw.y} L ${ne.x} ${ne.y} L ${se.x} ${se.y} L ${sw.x} ${sw.y} Z`;
+}
+
+/**
+ * Get an SVG path string for a portion of a straight side.
+ * @param {string} side - The side ('north', 'east', 'south', 'west')
+ * @param {number} t1 - Start parameter (0 to 1)
+ * @param {number} t2 - End parameter (0 to 1)
+ * @returns {string} SVG path string (M ... L ...)
+ */
+export function getStraightSideSegmentPath(side, t1, t2) {
+  const start = getPointOnSide(side, t1);
+  const end = getPointOnSide(side, t2);
+  return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+}
+
+/**
+ * Calculate the center point of the rhombus.
+ * @returns {Object} { x, y } coordinates of the center
+ */
+function getRhombusCenter() {
+  return unitSquareToRhombus(0.5, 0.5);
+}
+
+/**
+ * Create a curved edge path from one boundary point to another.
+ * The edge curves inward toward the center of the rhombus, making edges
+ * individually discernible even when they share endpoints or go from a side to itself.
+ * 
+ * The curve amount is calculated based on the edge's position and length to ensure
+ * edges don't intersect with each other.
+ * 
+ * @param {string} fromSide - Starting side ('north', 'east', 'south', 'west')
+ * @param {number} fromT - Parameter (0 to 1) along the starting side
+ * @param {string} toSide - Ending side ('north', 'east', 'south', 'west')
+ * @param {number} toT - Parameter (0 to 1) along the ending side
+ * @param {number} edgeIndex - Index of this edge (used to offset curves for same endpoints)
+ * @param {number} totalEdges - Total number of edges (for spacing calculation)
+ * @returns {Object} { pathD: string, midPoint: { x, y } } - SVG path and midpoint for arrow
+ */
+export function getCurvedEdgePath(fromSide, fromT, toSide, toT, edgeIndex = 0, totalEdges = 1) {
+  const from = getPointOnSide(fromSide, fromT);
+  const to = getPointOnSide(toSide, toT);
+  const center = getRhombusCenter();
+  
+  // Calculate the midpoint between from and to
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  
+  // Calculate the direction from midpoint to center
+  const toCenterX = center.x - midX;
+  const toCenterY = center.y - midY;
+  const distToCenter = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
+  
+  // Normalize the direction
+  const dirX = distToCenter > 0 ? toCenterX / distToCenter : 0;
+  const dirY = distToCenter > 0 ? toCenterY / distToCenter : 0;
+  
+  // Calculate edge length for proportional curving
+  const edgeLength = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
+  
+  // Determine if this is a same-side edge (or identified side edge)
+  const fromGroup = fromSide === 'north' || fromSide === 'east' ? 'NE' : 'SW';
+  const toGroup = toSide === 'north' || toSide === 'east' ? 'NE' : 'SW';
+  const isSameSideGroup = fromGroup === toGroup;
+  
+  // Base bow amount - proportional to edge length
+  // Same-side edges need more curving to be distinguishable
+  let bowAmount;
+  if (isSameSideGroup) {
+    // For same-side edges, curve more aggressively
+    // The curve amount depends on the "span" of the edge (difference in t values)
+    const span = Math.abs(toT - fromT);
+    // Smaller spans (closer endpoints) need less curve, larger spans need more
+    bowAmount = 20 + span * 60;
+  } else {
+    // For different-side edges, moderate curving
+    bowAmount = 15 + edgeLength * 0.08;
+  }
+  
+  // Add slight variation based on edge index to prevent exact overlaps
+  // when multiple edges share similar endpoints
+  const indexOffset = (edgeIndex - totalEdges / 2) * 3;
+  bowAmount += indexOffset;
+  
+  // Calculate the control point for the quadratic bezier
+  const controlX = midX + dirX * bowAmount;
+  const controlY = midY + dirY * bowAmount;
+  
+  // Calculate the actual midpoint on the curve (at t=0.5)
+  const curveMidX = 0.25 * from.x + 0.5 * controlX + 0.25 * to.x;
+  const curveMidY = 0.25 * from.y + 0.5 * controlY + 0.25 * to.y;
+  
+  // Calculate the tangent direction at the midpoint for arrow rotation
+  // For a quadratic bezier, the tangent at t=0.5 is: to - from (simplified)
+  const tangentX = to.x - from.x;
+  const tangentY = to.y - from.y;
+  const angle = Math.atan2(tangentY, tangentX) * (180 / Math.PI);
+  
+  const pathD = `M ${from.x} ${from.y} Q ${controlX} ${controlY} ${to.x} ${to.y}`;
+  
+  return {
+    pathD,
+    midPoint: { x: curveMidX, y: curveMidY },
+    angle,
+    controlPoint: { x: controlX, y: controlY }
+  };
+}
+
+/**
  * Get the SIZE constant for external use.
  */
 export function getSize() {

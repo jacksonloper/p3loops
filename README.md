@@ -4,7 +4,7 @@ A React/Vite web application for creating and managing non-crossing paths on a 1
 
 ## Features
 
-- **Rhombus Visualization**: An SVG-based 120°/60° rhombus with bowed sides for clear visualization
+- **Rhombus Visualization**: An SVG-based 120°/60° rhombus with straight sides and curved edges for clear visualization. Edges bow toward the center, making same-side edges individually discernible.
 - **Edge Identifications**: 
   - North ≡ East (a point at t% along North is the same as t% along East)
   - South ≡ West (a point at t% along South is the same as t% along West)
