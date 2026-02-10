@@ -51,6 +51,7 @@ export function isInteriorPoint(point) {
 /**
  * Transform from unit square coordinates to rhombus screen coordinates.
  * (southward, eastward) in [0,1]^2 -> (x, y) in screen coordinates
+ * @private
  */
 function unitSquareToRhombus(southward, eastward) {
   const y = southward * SIZE;
