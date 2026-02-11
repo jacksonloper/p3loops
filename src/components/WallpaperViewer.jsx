@@ -241,32 +241,49 @@ function generateWallpaperData(edges, repeats = 1) {
         lastEndT = null;
       }
       
-      // If the endpoint is on a boundary AND this is not a same-side edge,
-      // we might need to update the reference frame for the next edge.
-      // Same-side edges walk along the boundary without crossing into a new rhombus.
-      if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
+      // Determine if we need to update the reference frame for the next edge.
+      // We update the frame when:
+      // 1. Crossing a boundary (non-same-side edge) to a new rhombus, OR
+      // 2. A same-side edge ends at a point where the NEXT edge starts on the
+      //    identified side (transitioning from east to north at same t, etc.)
+      if (!isInteriorPoint(edge.to)) {
         const isLastEdgeOfLastRepeat = (rep === repeats - 1 && i === edges.length - 1);
         const nextEdgeIndex = (i + 1) % edges.length;
         const nextEdge = edges[nextEdgeIndex];
         
-        // Determine if we need to update the frame.
-        // We update the frame when crossing a boundary UNLESS:
-        // - The next edge is a same-side edge that starts on the SAME PHYSICAL SIDE
-        //   as where we ended (meaning the next edge just walks along the boundary
-        //   in the same rhombus)
-        //
-        // We DO update the frame if:
-        // - The next edge starts on a DIFFERENT physical side (even if identified)
-        // - The next edge is not same-side (crosses the rhombus)
-        const nextEdgeStartsSamePhysicalSide = !isInteriorPoint(nextEdge.from) && 
-                                                nextEdge.from.side === edge.to.side;
-        const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
+        let shouldUpdateFrame = false;
         
-        // Only skip the frame update if the next edge is same-side AND starts on 
-        // the same PHYSICAL side (not just identified)
-        const skipFrameUpdate = nextEdgeIsSameSide && nextEdgeStartsSamePhysicalSide;
+        if (!isSameSideEdge(edge)) {
+          // Current edge crosses the rhombus (not same-side)
+          // We update the frame UNLESS the next edge is same-side AND starts on 
+          // the same PHYSICAL side as where we ended
+          const nextEdgeStartsSamePhysicalSide = !isInteriorPoint(nextEdge.from) && 
+                                                  nextEdge.from.side === edge.to.side;
+          const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
+          
+          shouldUpdateFrame = !(nextEdgeIsSameSide && nextEdgeStartsSamePhysicalSide);
+        } else {
+          // Current edge is same-side (walks along boundary)
+          // We still need to update the frame if the NEXT edge starts on the
+          // IDENTIFIED side at the same t value (transitioning from east to north, etc.)
+          if (!isInteriorPoint(nextEdge.from) && !isInteriorPoint(edge.to)) {
+            const edgeEndsSide = edge.to.side;
+            const nextStartsSide = nextEdge.from.side;
+            const edgeEndsT = edge.to.t;
+            const nextStartsT = nextEdge.from.t;
+            
+            // Check if transitioning from one side to its identified counterpart at same t
+            if (edgeEndsSide !== nextStartsSide && 
+                getIdentifiedSide(edgeEndsSide) === nextStartsSide &&
+                Math.abs(edgeEndsT - nextStartsT) < EPSILON) {
+              // Transitioning from edge.to.side to its identified side
+              // This requires a frame update
+              shouldUpdateFrame = true;
+            }
+          }
+        }
         
-        if (!skipFrameUpdate) {
+        if (shouldUpdateFrame) {
           currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
           // Use algebraic index update for consistency with the grid
           currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
