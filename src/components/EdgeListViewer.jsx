@@ -8,6 +8,41 @@ import { isInteriorPoint, getIdentifiedSide, EPSILON } from '../utils/geometry.j
 import './EdgeListViewer.css';
 
 /**
+ * Get the parameter value (t or pos) from a point.
+ * Returns the t value for float edges or pos for combinatorial edges.
+ * @param {Object} point - Point object with either t or pos property
+ * @returns {{ value: number|null, isFloat: boolean }}
+ */
+function getParameterValue(point) {
+  if (point.t !== undefined) {
+    return { value: point.t, isFloat: true };
+  }
+  if (point.pos !== undefined) {
+    return { value: point.pos, isFloat: false };
+  }
+  return { value: null, isFloat: false };
+}
+
+/**
+ * Check if two parameter values are equal.
+ * Uses epsilon comparison for float values, exact comparison for integers.
+ * @param {Object} param1 - First parameter { value, isFloat }
+ * @param {Object} param2 - Second parameter { value, isFloat }
+ * @returns {boolean}
+ */
+function parametersAreEqual(param1, param2) {
+  if (param1.value === null || param2.value === null) {
+    return false;
+  }
+  // Use epsilon comparison if either is a float value
+  if (param1.isFloat || param2.isFloat) {
+    return Math.abs(param1.value - param2.value) < EPSILON;
+  }
+  // Otherwise use exact comparison (for integer pos values)
+  return param1.value === param2.value;
+}
+
+/**
  * Check if an edge is a same-side edge (stays within the same rhombus).
  * Works with both float edges { side, t } and combinatorial edges { side, pos }.
  * Edges with crossedInterior: true are NOT same-side (they trigger a crossing).
@@ -128,30 +163,39 @@ function computeEdgeListData(edges) {
     
     const sameSide = isSameSideEdge(edge);
     
-    if (sameSide) {
-      // For same-side edges, compute conceptual index (what it would enter)
-      const conceptualIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+    // Every edge is IN some rhombus - add it with the current index
+    result.push({
+      edge,
+      edgeIndex: i,
+      rhombusIndex: { ...currentIndex },
+      isSameSide: sameSide,
+      conceptualIndex: null
+    });
+    
+    // Determine if we need to update the index for the next edge
+    if (!sameSide) {
+      // Edge crosses to new rhombus - update the index
+      currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+    } else if (i < edges.length - 1) {
+      // Same-side edge - check if the NEXT edge starts on the identified side
+      // at the same position (transitioning from east to north, etc.)
+      const nextEdge = edges[i + 1];
       
-      result.push({
-        edge,
-        edgeIndex: i,
-        rhombusIndex: { ...currentIndex },
-        isSameSide: true,
-        conceptualIndex
-      });
-    } else {
-      // Edge crosses to new rhombus - shown in current rhombus, then update for next edge
-      const nextIndex = updateWallpaperIndex(edge.to.side, currentIndex);
-      
-      result.push({
-        edge,
-        edgeIndex: i,
-        rhombusIndex: { ...currentIndex },
-        isSameSide: false,
-        conceptualIndex: null
-      });
-      
-      currentIndex = nextIndex;
+      if (!isInteriorPoint(edge.to) && !isInteriorPoint(nextEdge.from)) {
+        const edgeEndsSide = edge.to.side;
+        const nextStartsSide = nextEdge.from.side;
+        const edgeEndsParam = getParameterValue(edge.to);
+        const nextStartsParam = getParameterValue(nextEdge.from);
+        
+        // Check if transitioning from one side to its identified counterpart at same position
+        if (edgeEndsSide !== nextStartsSide && 
+            getIdentifiedSide(edgeEndsSide) === nextStartsSide &&
+            parametersAreEqual(edgeEndsParam, nextStartsParam)) {
+          // Transitioning from edge.to.side to its identified side
+          // This requires an index update
+          currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+        }
+      }
     }
   }
   
@@ -192,32 +236,16 @@ function EdgeListViewer({ edges, onClose }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {edgeListData.map(({ edge, edgeIndex, rhombusIndex, isSameSide, conceptualIndex }) => (
+                  {edgeListData.map(({ edge, edgeIndex, rhombusIndex, isSameSide }) => (
                     <tr key={edgeIndex} className={isSameSide ? 'same-side-edge' : ''}>
                       <td>{edgeIndex + 1}</td>
                       <td>{formatPoint(edge.from)}</td>
                       <td>{formatPoint(edge.to)}</td>
-                      <td>
-                        {isSameSide ? (
-                          <span className="same-side-info">
-                            {formatWallpaperIndex(rhombusIndex)}
-                            <span className="conceptual-index" title="Conceptual rhombus (would enter if not same-side)">
-                              → {formatWallpaperIndex(conceptualIndex)}*
-                            </span>
-                          </span>
-                        ) : (
-                          formatWallpaperIndex(rhombusIndex)
-                        )}
-                      </td>
+                      <td>{formatWallpaperIndex(rhombusIndex)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              {edgeListData.some(e => e.isSameSide) && (
-                <p className="edge-list-footnote">
-                  * Same-side edges stay in current rhombus. Index shown is conceptual (what it would enter).
-                </p>
-              )}
             </>
           )}
         </div>

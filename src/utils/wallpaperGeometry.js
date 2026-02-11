@@ -364,25 +364,22 @@ export function pathToWallpaperPath(edges) {
       }
     }
     
-    // Determine how to draw the endpoint
-    // If this is a same-side edge AND we entered from the identified side,
-    // we need to convert the to point to use the continuation side for proper visualization
+    // Draw the endpoint
+    // Note: We draw the edge using the original edge coordinates UNLESS
+    // the edge connects two identified points at the same t value.
+    // In that case, we convert to use the same physical side to avoid
+    // drawing a line across the rhombus (which would be wrong since
+    // the two points are geometrically the same).
     let toPointForDrawing = edge.to;
     
-    // Check if this edge is same-side but the sides are identified
-    // (e.g., edge.from.side is 'east' but we entered from 'north')
-    // In this case, we should draw using the north geometry to stay consistent
-    if (isSameSideEdge(edge) && lastEndSide !== null) {
-      const edgeFromSide = edge.from.side;
-      const expectedContinuationSide = getIdentifiedSide(lastEndSide);
-      
-      // If we entered from lastEndSide, and this edge is on the identified side,
-      // convert the to point to use the lastEndSide for drawing
-      if (edgeFromSide === expectedContinuationSide && edgeFromSide !== lastEndSide) {
-        // The edge is on the identified side - convert to use lastEndSide
-        // Since this is a same-side edge, to.side === from.side
-        // We should draw it using lastEndSide instead
-        toPointForDrawing = { side: lastEndSide, t: edge.to.t };
+    // Check if this is a same-point edge (identified sides at same t)
+    if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
+      if (getIdentifiedSide(edge.from.side) === edge.to.side) {
+        if (Math.abs(edge.from.t - edge.to.t) < EPSILON) {
+          // This is a zero-length edge connecting the same geometric point.
+          // Convert to use the same physical side so the edge appears as a point.
+          toPointForDrawing = { side: edge.from.side, t: edge.to.t };
+        }
       }
     }
     
@@ -399,16 +396,47 @@ export function pathToWallpaperPath(edges) {
       lastEndT = null;
     }
     
-    // If the endpoint is on a boundary AND this is not a same-side edge,
-    // update the reference frame for the next edge.
-    // Same-side edges walk along the boundary without crossing it.
-    // BUT: if the NEXT edge is a same-side edge, don't update the frame because
-    // the next edge will stay in the current rhombus.
-    if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
+    // Determine if we need to update the reference frame for the next edge.
+    // We update the frame when:
+    // 1. Crossing a boundary (non-same-side edge) to a new rhombus, OR
+    // 2. A same-side edge ends at a point where the NEXT edge starts on the
+    //    identified side (transitioning from east to north at same t, etc.)
+    if (!isInteriorPoint(edge.to)) {
       const nextEdge = edges[i + 1];
-      const nextEdgeIsSameSide = nextEdge && isSameSideEdge(nextEdge);
       
-      if (!nextEdgeIsSameSide) {
+      let shouldUpdateFrame = false;
+      
+      if (!isSameSideEdge(edge)) {
+        // Current edge crosses the rhombus (not same-side)
+        if (nextEdge) {
+          const nextEdgeStartsSamePhysicalSide = !isInteriorPoint(nextEdge.from) && 
+                                                  nextEdge.from.side === edge.to.side;
+          const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
+          
+          shouldUpdateFrame = !(nextEdgeIsSameSide && nextEdgeStartsSamePhysicalSide);
+        } else {
+          // No next edge - update the frame anyway (though it won't be used)
+          shouldUpdateFrame = true;
+        }
+      } else if (nextEdge) {
+        // Current edge is same-side (walks along boundary)
+        // Check if the NEXT edge starts on the identified side at the same t value
+        if (!isInteriorPoint(nextEdge.from)) {
+          const edgeEndsSide = edge.to.side;
+          const nextStartsSide = nextEdge.from.side;
+          const edgeEndsT = edge.to.t;
+          const nextStartsT = nextEdge.from.t;
+          
+          // Check if transitioning from one side to its identified counterpart at same t
+          if (edgeEndsSide !== nextStartsSide && 
+              getIdentifiedSide(edgeEndsSide) === nextStartsSide &&
+              Math.abs(edgeEndsT - nextStartsT) < EPSILON) {
+            shouldUpdateFrame = true;
+          }
+        }
+      }
+      
+      if (shouldUpdateFrame) {
         currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
       }
     }

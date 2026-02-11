@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import CombinatorialRhombus from './CombinatorialRhombus.jsx';
 import ThreeDViewer from './ThreeDViewer.jsx';
 import WallpaperViewer from './WallpaperViewer.jsx';
-import MoveTreeViewer from './MoveTreeViewer.jsx';
+import LoopSelector from './LoopSelector.jsx';
 import EdgeListViewer from './EdgeListViewer.jsx';
 import {
   createInitialState,
@@ -50,7 +50,6 @@ function CombinatorialApp() {
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
   const [showEdgeList, setShowEdgeList] = useState(false);
-  const [showMoveTree, setShowMoveTree] = useState(false);
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null);
   const [isLoopClosed, setIsLoopClosed] = useState(false);
   const [examplesList, setExamplesList] = useState([]);
@@ -596,15 +595,6 @@ function CombinatorialApp() {
             </button>
             
             <button 
-              onClick={() => setShowMoveTree(true)}
-              disabled={state.edges.length === 0 || isLoopClosed}
-              className="control-btn secondary-btn"
-              title="Show tree of possible move sequences"
-            >
-              Show Move Tree
-            </button>
-            
-            <button 
               onClick={() => setShow3DViewer(true)}
               disabled={state.edges.length === 0}
               className="control-btn primary-btn"
@@ -629,27 +619,43 @@ function CombinatorialApp() {
             </button>
           </div>
 
-          {examplesList.length > 0 && (
-            <div className="example-selector">
-              <label htmlFor="example-select">Load Example:</label>
-              <select
-                id="example-select"
-                value={selectedExample}
-                onChange={(e) => {
-                  setSelectedExample(e.target.value);
-                  loadExample(e.target.value);
-                }}
-                disabled={loadingExample}
-              >
-                <option value="">Select an example...</option>
-                {examplesList.map(example => (
-                  <option key={example.id} value={example.id}>
-                    {example.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="selectors-row">
+            {examplesList.length > 0 && (
+              <div className="example-selector">
+                <label htmlFor="example-select">Load Example:</label>
+                <select
+                  id="example-select"
+                  value={selectedExample}
+                  onChange={(e) => {
+                    setSelectedExample(e.target.value);
+                    loadExample(e.target.value);
+                  }}
+                  disabled={loadingExample}
+                >
+                  <option value="">Select an example...</option>
+                  {examplesList.map(example => (
+                    <option key={example.id} value={example.id}>
+                      {example.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <LoopSelector 
+              onSelectLoop={(loop) => {
+                // Import the selected loop into the editor
+                const floatEdges = allEdgesToFloat(loop.state);
+                const newState = importFromFloatEdges(floatEdges);
+                setState(newState);
+                setIsLoopClosed(true);
+                setFirstEdgeMode(false);
+                setFirstEdgeFromSegment(null);
+                setSelectedSegment(null);
+                setValidationMessage(`Loaded loop with ${loop.length} edges`);
+              }}
+            />
+          </div>
 
           {validationMessage && (
             <div className={`message-box ${getMessageStyleClass(validationMessage)}`}>
@@ -727,14 +733,6 @@ function CombinatorialApp() {
         <EdgeListViewer 
           edges={state.edges}
           onClose={() => setShowEdgeList(false)}
-        />
-      )}
-
-      {showMoveTree && (
-        <MoveTreeViewer 
-          state={state}
-          currentWallpaperIndex={currentWallpaperIndex}
-          onClose={() => setShowMoveTree(false)}
         />
       )}
     </div>
