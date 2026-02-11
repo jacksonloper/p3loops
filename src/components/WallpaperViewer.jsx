@@ -269,6 +269,17 @@ function generateWallpaperData(edges, repeats = 1) {
         }
       }
     }
+    
+    // At the end of each loop iteration (except the last), reset the frame/index
+    // back to identity. A closed loop mathematically returns to the starting rhombus,
+    // so when we repeat the loop, we should start from the same position.
+    if (rep < repeats - 1) {
+      currentFrame = createIdentityFrame();
+      currentIndex = createIdentityWallpaperIndex();
+      // Reset the tracking for the next iteration
+      lastEndSide = null;
+      lastEndT = null;
+    }
   }
   
   return { pathPoints, rhombusFrames, rhombusIndices, vertexIndices };
