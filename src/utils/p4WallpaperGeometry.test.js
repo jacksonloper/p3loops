@@ -451,6 +451,36 @@ describe('P4 Wallpaper Index', () => {
     index = updateWallpaperIndex('east', index);
     expect(index.r).toBe(0);
   });
+
+  it('should be consistent with indexToFrame after all crossings', () => {
+    // Test that updateWallpaperIndex produces indices that, when converted to frames
+    // via indexToFrame, match the frames produced by updateReferenceFrameForSide
+    const TOLERANCE = 0.01;
+    
+    const sides = ['north', 'east', 'south', 'west'];
+    
+    for (let startK = 0; startK < 4; startK++) {
+      const startIndex = { tx: 0, ty: 0, r: startK };
+      const startFrame = indexToFrame(startIndex);
+      
+      for (const side of sides) {
+        // Update using updateWallpaperIndex
+        const newIndex = updateWallpaperIndex(side, startIndex);
+        const frameFromIndex = indexToFrame(newIndex);
+        
+        // Update using updateReferenceFrameForSide
+        const frameFromSide = updateReferenceFrameForSide(side, startFrame);
+        
+        // They should match
+        expect(Math.abs(frameFromIndex.a - frameFromSide.a)).toBeLessThan(TOLERANCE);
+        expect(Math.abs(frameFromIndex.b - frameFromSide.b)).toBeLessThan(TOLERANCE);
+        expect(Math.abs(frameFromIndex.c - frameFromSide.c)).toBeLessThan(TOLERANCE);
+        expect(Math.abs(frameFromIndex.d - frameFromSide.d)).toBeLessThan(TOLERANCE);
+        expect(Math.abs(frameFromIndex.tx - frameFromSide.tx)).toBeLessThan(TOLERANCE);
+        expect(Math.abs(frameFromIndex.ty - frameFromSide.ty)).toBeLessThan(TOLERANCE);
+      }
+    }
+  });
 });
 
 describe('P4 edge length sanity check', () => {

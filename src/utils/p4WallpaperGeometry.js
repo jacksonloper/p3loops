@@ -478,6 +478,10 @@ export function createIdentityWallpaperIndex() {
  * For p4 with 90° rotations:
  * - r is 0, 1, 2, or 3 representing 0°, 90°, 180°, 270°
  * 
+ * These rules are derived to be consistent with indexToFrame:
+ * indexToFrame(updateWallpaperIndex(side, index)) should equal
+ * updateReferenceFrameForSide(side, indexToFrame(index))
+ * 
  * Rotation directions (matching updateReferenceFrameForSide):
  * - north: CCW rotation around NE → r increases
  * - east: CW rotation around NE → r decreases
@@ -504,22 +508,31 @@ export function updateWallpaperIndex(side, current) {
     
     case 'south':
       // CCW rotation around SW (position depends on k)
-      // The translation changes based on current rotation
+      // Rules derived from updateReferenceFrameForSide consistency:
+      // k=0: (i,j,0) → (i, j+1, 1)
+      // k=1: (i,j,1) → (i-1, j, 2)
+      // k=2: (i,j,2) → (i, j-1, 3)
+      // k=3: (i,j,3) → (i+1, j, 0)
       switch (k) {
-        case 0: return { tx: i - 1, ty: j, r: 1 };
-        case 1: return { tx: i, ty: j - 1, r: 2 };
-        case 2: return { tx: i + 1, ty: j, r: 3 };
-        case 3: return { tx: i, ty: j + 1, r: 0 };
+        case 0: return { tx: i, ty: j + 1, r: 1 };
+        case 1: return { tx: i - 1, ty: j, r: 2 };
+        case 2: return { tx: i, ty: j - 1, r: 3 };
+        case 3: return { tx: i + 1, ty: j, r: 0 };
         default: throw new Error(`Invalid rotation k: ${k}`);
       }
     
     case 'west':
       // CW rotation around SW (position depends on k)
+      // Rules derived from updateReferenceFrameForSide consistency:
+      // k=0: (i,j,0) → (i-1, j, 3)
+      // k=1: (i,j,1) → (i, j-1, 0)
+      // k=2: (i,j,2) → (i+1, j, 1)
+      // k=3: (i,j,3) → (i, j+1, 2)
       switch (k) {
-        case 0: return { tx: i, ty: j - 1, r: 3 };
-        case 1: return { tx: i + 1, ty: j, r: 0 };
-        case 2: return { tx: i, ty: j + 1, r: 1 };
-        case 3: return { tx: i - 1, ty: j, r: 2 };
+        case 0: return { tx: i - 1, ty: j, r: 3 };
+        case 1: return { tx: i, ty: j - 1, r: 0 };
+        case 2: return { tx: i + 1, ty: j, r: 1 };
+        case 3: return { tx: i, ty: j + 1, r: 2 };
         default: throw new Error(`Invalid rotation k: ${k}`);
       }
     
