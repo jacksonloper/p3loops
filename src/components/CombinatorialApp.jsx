@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import CombinatorialRhombus from './CombinatorialRhombus.jsx';
 import ThreeDViewer from './ThreeDViewer.jsx';
 import WallpaperViewer from './WallpaperViewer.jsx';
+import P4WallpaperViewer from './P4WallpaperViewer.jsx';
 import LoopSelector from './LoopSelector.jsx';
 import EdgeListViewer from './EdgeListViewer.jsx';
 import {
@@ -49,6 +50,7 @@ function CombinatorialApp() {
   const [validationMessage, setValidationMessage] = useState('');
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
+  const [showP4WallpaperViewer, setShowP4WallpaperViewer] = useState(false);
   const [showEdgeList, setShowEdgeList] = useState(false);
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null);
   const [isLoopClosed, setIsLoopClosed] = useState(false);
@@ -611,6 +613,14 @@ function CombinatorialApp() {
             </button>
             
             <button 
+              onClick={() => setShowP4WallpaperViewer(true)}
+              disabled={state.edges.length === 0}
+              className="control-btn primary-btn"
+            >
+              View as P4 Wallpaper
+            </button>
+            
+            <button 
               onClick={() => setShowEdgeList(true)}
               disabled={state.edges.length === 0}
               className="control-btn"
@@ -726,6 +736,14 @@ function CombinatorialApp() {
           edges={floatEdges}
           isLoopClosed={isLoopClosed}
           onClose={() => setShowWallpaperViewer(false)}
+        />
+      )}
+
+      {showP4WallpaperViewer && (
+        <P4WallpaperViewer 
+          edges={floatEdges}
+          isLoopClosed={isLoopClosed}
+          onClose={() => setShowP4WallpaperViewer(false)}
         />
       )}
 
