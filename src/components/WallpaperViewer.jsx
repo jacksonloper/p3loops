@@ -248,15 +248,36 @@ function generateWallpaperData(edges, repeats = 1) {
       // we might need to update the reference frame for the next edge.
       // Same-side edges walk along the boundary without crossing into a new rhombus.
       if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
-        // Check if the next edge is a same-side edge
         const isLastEdgeOfLastRepeat = (rep === repeats - 1 && i === edges.length - 1);
         const nextEdgeIndex = (i + 1) % edges.length;
         const nextEdge = edges[nextEdgeIndex];
+        
+        // Determine if we need to update the frame.
+        // We update the frame if the next edge starts at a GEOMETRICALLY DIFFERENT point.
+        // 
+        // The next edge starts at the SAME geometric point if:
+        // - It starts on the same physical side at the same t, OR
+        // - It starts on an identified side at the same t (north↔east, south↔west)
+        //
+        // If the next edge starts at the same point AND is a same-side edge,
+        // it just walks along the boundary in the same rhombus.
+        // If the next edge starts at a different point (via identification), 
+        // we need to update the frame.
+        let nextEdgeStartsAtSamePoint = false;
+        if (!isInteriorPoint(nextEdge.from)) {
+          const sameSide = nextEdge.from.side === edge.to.side;
+          const identifiedSide = getIdentifiedSide(edge.to.side) === nextEdge.from.side;
+          const sameT = Math.abs(nextEdge.from.t - edge.to.t) < EPSILON;
+          nextEdgeStartsAtSamePoint = (sameSide || identifiedSide) && sameT;
+        }
+        
         const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
         
-        // Only update the frame if the next edge is NOT a same-side edge.
-        // If the next edge is same-side, it stays in the current rhombus.
-        if (!nextEdgeIsSameSide) {
+        // Only skip the frame update if the next edge starts at the same geometric point
+        // AND is a same-side edge (meaning it stays in the current rhombus)
+        const skipFrameUpdate = nextEdgeIsSameSide && nextEdgeStartsAtSamePoint;
+        
+        if (!skipFrameUpdate) {
           currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
           // Use algebraic index update for consistency with the grid
           currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
@@ -268,17 +289,6 @@ function generateWallpaperData(edges, repeats = 1) {
           }
         }
       }
-    }
-    
-    // At the end of each loop iteration (except the last), reset the frame/index
-    // back to identity. A closed loop mathematically returns to the starting rhombus,
-    // so when we repeat the loop, we should start from the same position.
-    if (rep < repeats - 1) {
-      currentFrame = createIdentityFrame();
-      currentIndex = createIdentityWallpaperIndex();
-      // Reset the tracking for the next iteration
-      lastEndSide = null;
-      lastEndT = null;
     }
   }
   

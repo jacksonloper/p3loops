@@ -400,15 +400,40 @@ export function pathToWallpaperPath(edges) {
     }
     
     // If the endpoint is on a boundary AND this is not a same-side edge,
-    // update the reference frame for the next edge.
+    // we might need to update the reference frame for the next edge.
     // Same-side edges walk along the boundary without crossing it.
-    // BUT: if the NEXT edge is a same-side edge, don't update the frame because
-    // the next edge will stay in the current rhombus.
     if (!isInteriorPoint(edge.to) && !isSameSideEdge(edge)) {
       const nextEdge = edges[i + 1];
-      const nextEdgeIsSameSide = nextEdge && isSameSideEdge(nextEdge);
       
-      if (!nextEdgeIsSameSide) {
+      // Determine if we need to update the frame.
+      // We update the frame if the next edge starts at a GEOMETRICALLY DIFFERENT point.
+      // 
+      // The next edge starts at the SAME geometric point if:
+      // - It starts on the same physical side at the same t, OR
+      // - It starts on an identified side at the same t (north↔east, south↔west)
+      //
+      // If the next edge starts at the same point AND is a same-side edge,
+      // it just walks along the boundary in the same rhombus.
+      if (nextEdge) {
+        let nextEdgeStartsAtSamePoint = false;
+        if (!isInteriorPoint(nextEdge.from)) {
+          const sameSide = nextEdge.from.side === edge.to.side;
+          const identifiedSide = getIdentifiedSide(edge.to.side) === nextEdge.from.side;
+          const sameT = Math.abs(nextEdge.from.t - edge.to.t) < EPSILON;
+          nextEdgeStartsAtSamePoint = (sameSide || identifiedSide) && sameT;
+        }
+        
+        const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
+        
+        // Only skip the frame update if the next edge starts at the same geometric point
+        // AND is a same-side edge (meaning it stays in the current rhombus)
+        const skipFrameUpdate = nextEdgeIsSameSide && nextEdgeStartsAtSamePoint;
+        
+        if (!skipFrameUpdate) {
+          currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+        }
+      } else {
+        // No next edge - update the frame anyway (though it won't be used)
         currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
       }
     }
