@@ -187,27 +187,24 @@ function generateWallpaperData(edges, repeats = 1) {
         }
       }
       
-      // Determine how to draw the endpoint
-      // If this is a same-side edge AND we entered from the identified side,
-      // we need to convert the to point to use the continuation side for proper visualization
+      // Draw the endpoint
+      // Note: We draw the edge using the original edge coordinates UNLESS
+      // the edge connects two identified points at the same t value.
+      // In that case, we convert to use the same physical side to avoid
+      // drawing a line across the rhombus (which would be wrong since
+      // the two points are geometrically the same).
       let toPointForDrawing = edge.to;
-      
-      // Check if this edge is same-side but the sides are identified
-      // (e.g., edge.from.side is 'east' but we entered from 'north')
-      // In this case, we should draw using the north geometry to stay consistent
       let fromSideForCurve = edge.from.side;
-      if (isSameSideEdge(edge) && lastEndSide !== null) {
-        const edgeFromSide = edge.from.side;
-        const expectedContinuationSide = getIdentifiedSide(lastEndSide);
-        
-        // If we entered from lastEndSide, and this edge is on the identified side,
-        // convert the to point to use the lastEndSide for drawing
-        if (edgeFromSide === expectedContinuationSide && edgeFromSide !== lastEndSide) {
-          // The edge is on the identified side - convert to use lastEndSide
-          // Since this is a same-side edge, to.side === from.side
-          // We should draw it using lastEndSide instead
-          toPointForDrawing = { side: lastEndSide, t: edge.to.t };
-          fromSideForCurve = lastEndSide;
+      
+      // Check if this is a same-point edge (identified sides at same t)
+      if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
+        if (getIdentifiedSide(edge.from.side) === edge.to.side) {
+          if (Math.abs(edge.from.t - edge.to.t) < EPSILON) {
+            // This is a zero-length edge connecting the same geometric point.
+            // Convert both sides to use the from.side so the edge appears as a point.
+            toPointForDrawing = { side: edge.from.side, t: edge.to.t };
+            // fromSideForCurve is already edge.from.side, so no change needed
+          }
         }
       }
       
@@ -253,29 +250,21 @@ function generateWallpaperData(edges, repeats = 1) {
         const nextEdge = edges[nextEdgeIndex];
         
         // Determine if we need to update the frame.
-        // We update the frame if the next edge starts at a GEOMETRICALLY DIFFERENT point.
-        // 
-        // The next edge starts at the SAME geometric point if:
-        // - It starts on the same physical side at the same t, OR
-        // - It starts on an identified side at the same t (north↔east, south↔west)
+        // We update the frame when crossing a boundary UNLESS:
+        // - The next edge is a same-side edge that starts on the SAME PHYSICAL SIDE
+        //   as where we ended (meaning the next edge just walks along the boundary
+        //   in the same rhombus)
         //
-        // If the next edge starts at the same point AND is a same-side edge,
-        // it just walks along the boundary in the same rhombus.
-        // If the next edge starts at a different point (via identification), 
-        // we need to update the frame.
-        let nextEdgeStartsAtSamePoint = false;
-        if (!isInteriorPoint(nextEdge.from)) {
-          const sameSide = nextEdge.from.side === edge.to.side;
-          const identifiedSide = getIdentifiedSide(edge.to.side) === nextEdge.from.side;
-          const sameT = Math.abs(nextEdge.from.t - edge.to.t) < EPSILON;
-          nextEdgeStartsAtSamePoint = (sameSide || identifiedSide) && sameT;
-        }
-        
+        // We DO update the frame if:
+        // - The next edge starts on a DIFFERENT physical side (even if identified)
+        // - The next edge is not same-side (crosses the rhombus)
+        const nextEdgeStartsSamePhysicalSide = !isInteriorPoint(nextEdge.from) && 
+                                                nextEdge.from.side === edge.to.side;
         const nextEdgeIsSameSide = isSameSideEdge(nextEdge);
         
-        // Only skip the frame update if the next edge starts at the same geometric point
-        // AND is a same-side edge (meaning it stays in the current rhombus)
-        const skipFrameUpdate = nextEdgeIsSameSide && nextEdgeStartsAtSamePoint;
+        // Only skip the frame update if the next edge is same-side AND starts on 
+        // the same PHYSICAL side (not just identified)
+        const skipFrameUpdate = nextEdgeIsSameSide && nextEdgeStartsSamePhysicalSide;
         
         if (!skipFrameUpdate) {
           currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
