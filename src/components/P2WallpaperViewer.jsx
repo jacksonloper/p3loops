@@ -3,6 +3,7 @@ import {
   createIdentityFrame,
   applyReferenceFrame,
   updateReferenceFrameForZone,
+  getPointInZoneWallpaper,
   getCurvedEdgePathWallpaper,
   createIdentityWallpaperIndex,
   updateWallpaperIndex,
@@ -13,7 +14,8 @@ import {
   NW_CORNER,
   SE_CORNER,
   SW_CORNER,
-  SIDE
+  SIDE,
+  HALF
 } from '../utils/p2WallpaperGeometry.js';
 import { getIdentifiedZone } from '../utils/p2PathLogic.js';
 import './WallpaperViewer.css';
@@ -71,19 +73,53 @@ function isSameSquareEdge(edge) {
   return false;
 }
 
+// Number of sample points per edge for curved rendering
+const EDGE_SAMPLES = 20;
+
 /**
- * Generate wallpaper data: square frames and indices for all copies visited
- * as the path crosses boundaries.
+ * Sample points along a curved edge (quadratic Bézier) in screen space.
+ * @param {Object} from - {zone, t}
+ * @param {Object} to - {zone, t}
+ * @param {Object} frame - Reference frame
+ * @returns {Array<{x: number, y: number}>} Sampled screen-space points
+ */
+function sampleEdgePoints(from, to, frame) {
+  const p0 = getPointInZoneWallpaper(from.zone, from.t);
+  const p1 = getPointInZoneWallpaper(to.zone, to.t);
+
+  const cx = -HALF;
+  const cy = HALF;
+  const midX = (p0.x + p1.x) / 2;
+  const midY = (p0.y + p1.y) / 2;
+  const pullFactor = 0.3;
+  const ctrlX = midX + (cx - midX) * pullFactor;
+  const ctrlY = midY + (cy - midY) * pullFactor;
+
+  const points = [];
+  for (let i = 0; i <= EDGE_SAMPLES; i++) {
+    const s = i / EDGE_SAMPLES;
+    const x = (1 - s) * (1 - s) * p0.x + 2 * (1 - s) * s * ctrlX + s * s * p1.x;
+    const y = (1 - s) * (1 - s) * p0.y + 2 * (1 - s) * s * ctrlY + s * s * p1.y;
+    points.push(applyReferenceFrame(x, y, frame));
+  }
+  return points;
+}
+
+/**
+ * Generate wallpaper data: square frames, indices, path points, and vertex indices
+ * for the main trajectory as it crosses boundaries.
  * 
  * @param {Array} edges - Array of float edge objects
  * @param {number} repeats - Number of times to repeat the path
- * @returns {{ squareFrames: Array, squareIndices: Array }}
+ * @returns {{ squareFrames: Array, squareIndices: Array, pathPoints: Array, vertexIndices: Array }}
  */
 function generateWallpaperData(edges, repeats = 1) {
-  if (edges.length === 0) return { squareFrames: [], squareIndices: [] };
+  if (edges.length === 0) return { squareFrames: [], squareIndices: [], pathPoints: [], vertexIndices: [] };
   
   const squareFrames = [];
   const squareIndices = [];
+  const pathPoints = [];
+  const vertexIndices = [];
   let currentFrame = createIdentityFrame();
   let currentIndex = createIdentityWallpaperIndex();
   
@@ -95,6 +131,24 @@ function generateWallpaperData(edges, repeats = 1) {
     for (let i = 0; i < edges.length; i++) {
       const edge = edges[i];
       const isLastEdgeOfLastRepeat = (rep === repeats - 1 && i === edges.length - 1);
+      
+      // Record the start vertex for the first edge of the first repeat
+      if (rep === 0 && i === 0) {
+        vertexIndices.push(pathPoints.length);
+        const fromLocal = getPointInZoneWallpaper(edge.from.zone, edge.from.t);
+        pathPoints.push(applyReferenceFrame(fromLocal.x, fromLocal.y, currentFrame));
+      }
+      
+      // Add intermediate sample points along the curved edge (skip first and last - they're the endpoint vertices)
+      const samples = sampleEdgePoints(edge.from, edge.to, currentFrame);
+      for (let j = 1; j < samples.length - 1; j++) {
+        pathPoints.push(samples[j]);
+      }
+      
+      // Record the end vertex
+      vertexIndices.push(pathPoints.length);
+      const toLocal = getPointInZoneWallpaper(edge.to.zone, edge.to.t);
+      pathPoints.push(applyReferenceFrame(toLocal.x, toLocal.y, currentFrame));
       
       if (!isSameSquareEdge(edge)) {
         // Edge crosses the boundary - update frame based on the destination zone
@@ -128,7 +182,7 @@ function generateWallpaperData(edges, repeats = 1) {
     }
   }
   
-  return { squareFrames, squareIndices };
+  return { squareFrames, squareIndices, pathPoints, vertexIndices };
 }
 
 /**
@@ -228,7 +282,7 @@ function P2WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   const effectiveRepeats = isLoopClosed ? repeats : 1;
   
   // Generate wallpaper data
-  const { squareFrames, squareIndices } = useMemo(() =>
+  const { squareFrames, squareIndices, pathPoints, vertexIndices } = useMemo(() =>
     generateWallpaperData(edges, effectiveRepeats),
     [edges, effectiveRepeats]
   );
@@ -242,9 +296,17 @@ function P2WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     return keys;
   }, [squareIndices]);
   
-  // Calculate bounding box from visited squares
+  // Calculate bounding box from visited squares and path points
   const bounds = useMemo(() => {
     let minX = -SIDE, minY = -SIDE / 2, maxX = SIDE, maxY = SIDE * 1.5;
+    
+    // Include all path points
+    for (const pt of pathPoints) {
+      minX = Math.min(minX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxX = Math.max(maxX, pt.x);
+      maxY = Math.max(maxY, pt.y);
+    }
     
     for (const frame of squareFrames) {
       for (const corner of [NW_CORNER, NE_CORNER, SE_CORNER, SW_CORNER]) {
@@ -257,7 +319,7 @@ function P2WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     }
     
     return { minX, minY, maxX, maxY };
-  }, [squareFrames]);
+  }, [squareFrames, pathPoints]);
   
   // Generate all squares in the viewable area
   const allSquares = useMemo(() => {
@@ -273,6 +335,14 @@ function P2WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     const height = bounds.maxY - bounds.minY + 2 * padding;
     return `${minX} ${minY} ${width} ${height}`;
   }, [bounds]);
+  
+  // Create path string for the trajectory
+  const pathString = useMemo(() => {
+    if (pathPoints.length < 2) return '';
+    return pathPoints.map((pt, i) => 
+      `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`
+    ).join(' ');
+  }, [pathPoints]);
   
   return (
     <div className="wallpaper-viewer-overlay" onClick={onClose}>
@@ -334,12 +404,73 @@ function P2WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
                 </g>
               );
             })}
+            
+            {/* Draw the path trajectory */}
+            {pathString && (
+              <path 
+                d={pathString}
+                className="trajectory-line"
+                fill="none"
+              />
+            )}
+            
+            {/* Draw path vertices (only at actual edge endpoints, not intermediate samples) */}
+            {vertexIndices.map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              if (!pt) return null;
+              const isStart = i === 0;
+              const isEnd = i === vertexIndices.length - 1;
+              const radius = (isStart || isEnd) ? 8 : 5;
+              const className = isStart ? 'trajectory-start' : 
+                               isEnd ? 'trajectory-end' : 
+                               'trajectory-point';
+              return (
+                <circle
+                  key={`vertex-${i}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={radius}
+                  className={className}
+                />
+              );
+            })}
+            
+            {/* Draw direction arrows along the path */}
+            {vertexIndices.length >= 2 && vertexIndices.slice(0, -1).map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              const nextVertexIdx = vertexIndices[i + 1];
+              const nextPt = pathPoints[nextVertexIdx];
+              if (!pt || !nextPt) return null;
+              
+              // Find the midpoint of the curve (use middle sample point between vertices)
+              const midIdx = Math.floor((vertexIdx + nextVertexIdx) / 2);
+              const midPt = pathPoints[midIdx];
+              
+              // Calculate direction at midpoint
+              const prevIdx = Math.max(0, midIdx - 1);
+              const nextIdx = Math.min(pathPoints.length - 1, midIdx + 1);
+              const dx = pathPoints[nextIdx].x - pathPoints[prevIdx].x;
+              const dy = pathPoints[nextIdx].y - pathPoints[prevIdx].y;
+              const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+              
+              // Only draw arrows for every other edge to reduce clutter
+              if (i % 2 !== 0) return null;
+              
+              return (
+                <polygon
+                  key={`arrow-${i}`}
+                  points="0,-4 8,0 0,4"
+                  transform={`translate(${midPt.x}, ${midPt.y}) rotate(${angle})`}
+                  className="trajectory-arrow"
+                />
+              );
+            })}
           </svg>
         </div>
         
         <div className="wallpaper-info">
           <p>
-            P2 wallpaper pattern • {visitedSquareKeys.size} visited squares • {allSquares.length} total displayed
+            P2 wallpaper pattern • {pathPoints.length} points • {visitedSquareKeys.size} visited squares • {allSquares.length} total displayed
             {isLoopClosed && ` • ${effectiveRepeats} repeat${effectiveRepeats === 1 ? '' : 's'}`}
           </p>
           
