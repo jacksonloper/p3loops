@@ -557,8 +557,8 @@ export function formatWallpaperIndex(index) {
  * Computes the transformation for the square at position (i, j) with rotation k.
  * 
  * k=0..3: "outer" triangles — pure rotation by k*90°
- * k=4..7: "inner" triangles — rotation by (k-4)*90° composed with reflection
- *         across the hypotenuse (NW→SE diagonal, line y = x + SIDE).
+ * k=4..7: "inner" triangles — rotation by (k-4)*90° composed with 180° rotation
+ *         around the hypotenuse midpoint. All transforms have determinant +1 (p4).
  *         Each inner triangle is the 180° flip of the corresponding outer triangle
  *         along its hypotenuse, filling the other half of the square.
  * 
@@ -587,12 +587,13 @@ export function indexToFrame(index) {
       ty: translateY
     };
   } else {
-    // Inner triangles: rotation(k-4) ∘ reflection across hypotenuse
+    // Inner triangles: rotation(k-4) ∘ 180° rotation around hypotenuse midpoint
     // The hypotenuse goes from NW(-SIDE,0) to SE(0,SIDE).
-    // Reflection across line y = x + SIDE: (a,b) → (b-SIDE, a+SIDE)
-    // As affine: M=[0,1;1,0], t=(-SIDE, SIDE)
-    // Composed: R(θ) ∘ M_t gives:
-    //   a=-sinθ, b=cosθ, c=cosθ, d=sinθ
+    // Midpoint is (-SIDE/2, SIDE/2).
+    // 180° rotation around midpoint: M(x,y) = (-x - SIDE, -y + SIDE)
+    // As affine: M=[-1,0;0,-1], t=(-SIDE, SIDE)
+    // Composed: R(θ) ∘ M gives:
+    //   a=-cosθ, b=sinθ, c=-sinθ, d=-cosθ
     //   tx = -SIDE(cosθ + sinθ) + translate
     //   ty =  SIDE(cosθ - sinθ) + translate
     const kBase = k - 4;
@@ -601,10 +602,10 @@ export function indexToFrame(index) {
     const sinK = Math.sin(angle);
     
     return {
-      a: -sinK,
-      b: cosK,
-      c: cosK,
-      d: sinK,
+      a: -cosK,
+      b: sinK,
+      c: -sinK,
+      d: -cosK,
       tx: -SIDE * (cosK + sinK) + translateX,
       ty: SIDE * (cosK - sinK) + translateY
     };

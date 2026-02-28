@@ -576,33 +576,33 @@ describe('P4 indexToFrame', () => {
     expect(frame.d).toBeCloseTo(-1, 5);
   });
 
-  it('should produce reflection frame for inner triangle r=4', () => {
-    // Inner triangle k=4 is the reflection of outer k=0 across hypotenuse (NW→SE)
-    // Reflection maps: NW→NW, SE→SE, SW→NE (fills the other half of the square)
+  it('should produce 180° rotation frame for inner triangle r=4', () => {
+    // Inner triangle k=4 is the 180° rotation of outer k=0 around hypotenuse midpoint
+    // 180° rotation swaps: NW↔SE, SW→NE (fills the other half of the square)
     const frame = indexToFrame({ tx: 0, ty: 0, r: 4 });
     
-    // a=-sin(0)=0, b=cos(0)=1, c=cos(0)=1, d=sin(0)=0
-    expect(frame.a).toBeCloseTo(0, 5);
-    expect(frame.b).toBeCloseTo(1, 5);
-    expect(frame.c).toBeCloseTo(1, 5);
-    expect(frame.d).toBeCloseTo(0, 5);
+    // a=-cos(0)=-1, b=sin(0)=0, c=-sin(0)=0, d=-cos(0)=-1
+    expect(frame.a).toBeCloseTo(-1, 5);
+    expect(frame.b).toBeCloseTo(0, 5);
+    expect(frame.c).toBeCloseTo(0, 5);
+    expect(frame.d).toBeCloseTo(-1, 5);
     // tx = -SIDE*(1+0) = -SIDE, ty = SIDE*(1-0) = SIDE
     expect(frame.tx).toBeCloseTo(-SIDE, 1);
     expect(frame.ty).toBeCloseTo(SIDE, 1);
   });
 
-  it('should map NW and SE to themselves for inner triangle r=4', () => {
+  it('should swap NW and SE for inner triangle r=4', () => {
     const frame = indexToFrame({ tx: 0, ty: 0, r: 4 });
     
-    // NW(-SIDE, 0) should stay at NW(-SIDE, 0)
+    // NW(-SIDE, 0) should map to SE(0, SIDE) — 180° rotation swaps them
     const nwResult = applyReferenceFrame(NW_CORNER.x, NW_CORNER.y, frame);
-    expect(nwResult.x).toBeCloseTo(NW_CORNER.x, 1);
-    expect(nwResult.y).toBeCloseTo(NW_CORNER.y, 1);
+    expect(nwResult.x).toBeCloseTo(SE_CORNER.x, 1);
+    expect(nwResult.y).toBeCloseTo(SE_CORNER.y, 1);
     
-    // SE(0, SIDE) should stay at SE(0, SIDE)
+    // SE(0, SIDE) should map to NW(-SIDE, 0) — 180° rotation swaps them
     const seResult = applyReferenceFrame(SE_CORNER.x, SE_CORNER.y, frame);
-    expect(seResult.x).toBeCloseTo(SE_CORNER.x, 1);
-    expect(seResult.y).toBeCloseTo(SE_CORNER.y, 1);
+    expect(seResult.x).toBeCloseTo(NW_CORNER.x, 1);
+    expect(seResult.y).toBeCloseTo(NW_CORNER.y, 1);
     
     // SW(-SIDE, SIDE) should map to NE(0, 0)
     const swResult = applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame);
@@ -611,11 +611,11 @@ describe('P4 indexToFrame', () => {
   });
 
   it('should produce correct frames for all inner triangles r=4..7', () => {
-    // Inner triangles should have determinant -1 (orientation-reversing)
+    // Inner triangles should have determinant +1 (orientation-preserving, p4 rotations only)
     for (let k = 4; k < 8; k++) {
       const frame = indexToFrame({ tx: 0, ty: 0, r: k });
       const det = frame.a * frame.d - frame.b * frame.c;
-      expect(det).toBeCloseTo(-1, 5);
+      expect(det).toBeCloseTo(1, 5);
     }
   });
 });
