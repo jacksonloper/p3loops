@@ -289,7 +289,7 @@ function generateAllTrianglesInBounds(bounds, margin = 100) {
   
   for (let i = -iRange; i <= iRange; i++) {
     for (let j = -jRange; j <= jRange; j++) {
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < 8; k++) {
         const index = { tx: i, ty: j, r: k };
         const frame = indexToFrame(index);
         const center = getTriangleCenter(frame);
@@ -327,6 +327,10 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     const keys = new Set();
     for (const index of squareIndices) {
       keys.add(`${index.tx},${index.ty},${index.r}`);
+      // Inner triangle (r+4) is visited when its outer counterpart (r<4) is visited
+      if (index.r < 4) {
+        keys.add(`${index.tx},${index.ty},${index.r + 4}`);
+      }
     }
     return keys;
   }, [squareIndices]);

@@ -547,42 +547,68 @@ export function updateWallpaperIndex(side, current) {
  * @returns {string}
  */
 export function formatWallpaperIndex(index) {
-  const rotLabel = ['0°', '90°', '180°', '270°'][index.r];
+  const rotLabels = ['0°', '90°', '180°', '270°', '0°′', '90°′', '180°′', '270°′'];
+  const rotLabel = rotLabels[index.r] || `${index.r}`;
   return `(${index.tx}, ${index.ty}, ${rotLabel})`;
 }
 
 /**
  * Convert a p4 wallpaper index to an affine frame.
  * Computes the transformation for the square at position (i, j) with rotation k.
+ * 
+ * k=0..3: "outer" triangles — pure rotation by k*90°
+ * k=4..7: "inner" triangles — rotation by (k-4)*90° composed with reflection
+ *         across the hypotenuse (NW→SE diagonal, line y = x + SIDE).
+ *         Each inner triangle is the 180° flip of the corresponding outer triangle
+ *         along its hypotenuse, filling the other half of the square.
+ * 
  * @param {P4WallpaperIndex} index
  * @returns {{ a: number, b: number, c: number, d: number, tx: number, ty: number }}
  */
 export function indexToFrame(index) {
   const { tx: i, ty: j, r: k } = index;
   
-  // Rotation by k * 90°
-  const angle = k * ANGLE_90;
-  const cosK = Math.cos(angle);
-  const sinK = Math.sin(angle);
-  
   // Translation vectors for p4 square lattice
-  // T1 = (2*SIDE, 0) - horizontal translation
-  // T2 = (0, 2*SIDE) - vertical translation
-  const T1 = { x: 2 * SIDE, y: 0 };
-  const T2 = { x: 0, y: 2 * SIDE };
+  const translateX = i * 2 * SIDE;
+  const translateY = j * 2 * SIDE;
   
-  // Translation by i*T1 + j*T2
-  const translateX = i * T1.x + j * T2.x;
-  const translateY = i * T1.y + j * T2.y;
-  
-  return {
-    a: cosK,
-    b: -sinK,
-    c: sinK,
-    d: cosK,
-    tx: translateX,
-    ty: translateY
-  };
+  if (k < 4) {
+    // Outer triangles: pure rotation by k * 90°
+    const angle = k * ANGLE_90;
+    const cosK = Math.cos(angle);
+    const sinK = Math.sin(angle);
+    
+    return {
+      a: cosK,
+      b: -sinK,
+      c: sinK,
+      d: cosK,
+      tx: translateX,
+      ty: translateY
+    };
+  } else {
+    // Inner triangles: rotation(k-4) ∘ reflection across hypotenuse
+    // The hypotenuse goes from NW(-SIDE,0) to SE(0,SIDE).
+    // Reflection across line y = x + SIDE: (a,b) → (b-SIDE, a+SIDE)
+    // As affine: M=[0,1;1,0], t=(-SIDE, SIDE)
+    // Composed: R(θ) ∘ M_t gives:
+    //   a=-sinθ, b=cosθ, c=cosθ, d=sinθ
+    //   tx = -SIDE(cosθ + sinθ) + translate
+    //   ty =  SIDE(cosθ - sinθ) + translate
+    const kBase = k - 4;
+    const angle = kBase * ANGLE_90;
+    const cosK = Math.cos(angle);
+    const sinK = Math.sin(angle);
+    
+    return {
+      a: -sinK,
+      b: cosK,
+      c: cosK,
+      d: sinK,
+      tx: -SIDE * (cosK + sinK) + translateX,
+      ty: SIDE * (cosK - sinK) + translateY
+    };
+  }
 }
 
 // ============================================================================
