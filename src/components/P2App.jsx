@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import P2Square from './P2Square.jsx';
 import P2ThreeDViewer from './P2ThreeDViewer.jsx';
 import P2LoopSelector from './P2LoopSelector.jsx';
+import P2WallpaperViewer from './P2WallpaperViewer.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -41,6 +42,7 @@ function P2App() {
   const [firstEdgeMode, setFirstEdgeMode] = useState(false);
   const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
   const [show3DViewer, setShow3DViewer] = useState(false);
+  const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
   const [showJsonPanel, setShowJsonPanel] = useState(false);
   const [jsonInputText, setJsonInputText] = useState('');
 
@@ -363,6 +365,11 @@ function P2App() {
                     className="control-btn primary-btn">
               Render in 3D
             </button>
+            <button onClick={() => setShowWallpaperViewer(true)}
+                    disabled={state.edges.length === 0}
+                    className="control-btn primary-btn">
+              Wallpaper View
+            </button>
 
             <P2LoopSelector
               onSelectLoop={(loop) => {
@@ -421,6 +428,14 @@ function P2App() {
         <P2ThreeDViewer
           edges={floatEdges}
           onClose={() => setShow3DViewer(false)}
+        />
+      )}
+
+      {showWallpaperViewer && (
+        <P2WallpaperViewer
+          edges={floatEdges}
+          isLoopClosed={isLoopClosed}
+          onClose={() => setShowWallpaperViewer(false)}
         />
       )}
     </div>
