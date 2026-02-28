@@ -2,17 +2,23 @@
  * Geometry utilities for the p2 square.
  *
  * The fundamental domain is a square. Each side is divided at its midpoint
- * into two half-sides (zones). Opposite sides are identified by 180° rotation.
+ * into two half-sides (zones). The two halves of each side are identified
+ * with reversed parameterization.
  *
  * Zones and their parameterization (t goes from 0 to 1 within each half-side):
- *   NW: NW corner → N midpoint
- *   NE: N midpoint → NE corner
- *   EN: NE corner → E midpoint
- *   ES: E midpoint → SE corner
- *   SE: SE corner → S midpoint
- *   SW: S midpoint → SW corner
- *   WS: SW corner → W midpoint
- *   WN: W midpoint → NW corner
+ *   NNW: NW corner → N midpoint
+ *   NNE: N midpoint → NE corner
+ *   ENE: NE corner → E midpoint
+ *   ESE: E midpoint → SE corner
+ *   SSE: SE corner → S midpoint
+ *   SSW: S midpoint → SW corner
+ *   WSW: SW corner → W midpoint
+ *   WNW: W midpoint → NW corner
+ *
+ * Identifications (adjacent half-sides, reversed):
+ *   NNW ≡ NNE, ENE ≡ ESE, SSE ≡ SSW, WSW ≡ WNW
+ *
+ * All four corners are identified as the same point.
  */
 
 const SIZE = 300;
@@ -40,21 +46,21 @@ export function getSize() {
  */
 export function getPointInZone(zone, t) {
   switch (zone) {
-    case 'NW': // NW corner (0,0) → N mid (HALF,0)
+    case 'NNW': // NW corner (0,0) → N mid (HALF,0)
       return { x: t * HALF, y: 0 };
-    case 'NE': // N mid (HALF,0) → NE corner (SIZE,0)
+    case 'NNE': // N mid (HALF,0) → NE corner (SIZE,0)
       return { x: HALF + t * HALF, y: 0 };
-    case 'EN': // NE corner (SIZE,0) → E mid (SIZE,HALF)
+    case 'ENE': // NE corner (SIZE,0) → E mid (SIZE,HALF)
       return { x: SIZE, y: t * HALF };
-    case 'ES': // E mid (SIZE,HALF) → SE corner (SIZE,SIZE)
+    case 'ESE': // E mid (SIZE,HALF) → SE corner (SIZE,SIZE)
       return { x: SIZE, y: HALF + t * HALF };
-    case 'SE': // SE corner (SIZE,SIZE) → S mid (HALF,SIZE)
+    case 'SSE': // SE corner (SIZE,SIZE) → S mid (HALF,SIZE)
       return { x: SIZE - t * HALF, y: SIZE };
-    case 'SW': // S mid (HALF,SIZE) → SW corner (0,SIZE)
+    case 'SSW': // S mid (HALF,SIZE) → SW corner (0,SIZE)
       return { x: HALF - t * HALF, y: SIZE };
-    case 'WS': // SW corner (0,SIZE) → W mid (0,HALF)
+    case 'WSW': // SW corner (0,SIZE) → W mid (0,HALF)
       return { x: 0, y: SIZE - t * HALF };
-    case 'WN': // W mid (0,HALF) → NW corner (0,0)
+    case 'WNW': // W mid (0,HALF) → NW corner (0,0)
       return { x: 0, y: HALF - t * HALF };
     default:
       throw new Error(`Unknown zone: ${zone}`);

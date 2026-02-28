@@ -214,14 +214,14 @@ function P2App() {
 
   // Zone display info for the UI
   const zoneInfo = {
-    NW: { label: 'NW', id: '≡SE', color: 'side-north' },
-    NE: { label: 'NE', id: '≡SW', color: 'side-north' },
-    EN: { label: 'EN', id: '≡WS', color: 'side-east' },
-    ES: { label: 'ES', id: '≡WN', color: 'side-east' },
-    SE: { label: 'SE', id: '≡NW', color: 'side-south' },
-    SW: { label: 'SW', id: '≡NE', color: 'side-south' },
-    WS: { label: 'WS', id: '≡EN', color: 'side-west' },
-    WN: { label: 'WN', id: '≡ES', color: 'side-west' }
+    NNW: { label: 'NNW', id: '≡NNE', color: 'side-north' },
+    NNE: { label: 'NNE', id: '≡NNW', color: 'side-north' },
+    ENE: { label: 'ENE', id: '≡ESE', color: 'side-east' },
+    ESE: { label: 'ESE', id: '≡ENE', color: 'side-east' },
+    SSE: { label: 'SSE', id: '≡SSW', color: 'side-south' },
+    SSW: { label: 'SSW', id: '≡SSE', color: 'side-south' },
+    WSW: { label: 'WSW', id: '≡WNW', color: 'side-west' },
+    WNW: { label: 'WNW', id: '≡WSW', color: 'side-west' }
   };
 
   // Count points per group for info display
@@ -383,10 +383,10 @@ function P2App() {
         <section className="info-section">
           <h3>About the P2 Square</h3>
           <ul>
-            <li><strong>Shape:</strong> Square fundamental domain with 180° rotation identifications</li>
+            <li><strong>Shape:</strong> Square fundamental domain with edge identifications</li>
             <li><strong>8 Zones:</strong> Each side is split at its midpoint into two half-sides</li>
-            <li><strong>Identifications:</strong> NW≡SE, NE≡SW, EN≡WS, ES≡WN (opposite half-sides identified by 180° rotation)</li>
-            <li><strong>Corners:</strong> NW≡SE corner, NE≡SW corner (each pair identified)</li>
+            <li><strong>Identifications:</strong> NNW≡NNE, ENE≡ESE, SSE≡SSW, WSW≡WNW (adjacent half-sides identified with reversed order)</li>
+            <li><strong>Corners:</strong> All four corners are identified as the same point</li>
           </ul>
           <h3>How to Use</h3>
           <ol>

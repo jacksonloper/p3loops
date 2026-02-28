@@ -1,66 +1,68 @@
 /**
  * Combinatorial path logic for edges on the p2 square.
- * 
- * The p2 orbifold has a square fundamental domain where opposite sides
- * are identified by 180° rotation (not mirror!). This means each side
- * is split at its midpoint into two half-sides, and the identification
- * reverses the parameterization.
  *
- * The 8 half-sides (zones):
- *   NW - north side, west half (left half of top)
- *   NE - north side, east half (right half of top)
- *   EN - east side, north half (top half of right)
- *   ES - east side, south half (bottom half of right)
- *   SE - south side, east half (right half of bottom)
- *   SW - south side, west half (left half of bottom)
- *   WS - west side, south half (bottom half of left)
- *   WN - west side, north half (top half of left)
+ * The p2 orbifold has a square fundamental domain where each side is
+ * split at its midpoint into two half-sides. The two halves of each side
+ * are identified with reversed parameterization (180° rotation about the
+ * midpoint of the side).
  *
- * Identifications (180° rotation of opposite sides):
- *   NW ≡ SE  (north-west half ↔ south-east half)
- *   NE ≡ SW  (north-east half ↔ south-west half)
- *   EN ≡ WS  (east-north half ↔ west-south half)
- *   ES ≡ WN  (east-south half ↔ west-north half)
+ * The 8 half-sides (zones), clockwise from NW corner:
+ *   NNW - north side, west half (NW corner → N midpoint)
+ *   NNE - north side, east half (N midpoint → NE corner)
+ *   ENE - east side, north half (NE corner → E midpoint)
+ *   ESE - east side, south half (E midpoint → SE corner)
+ *   SSE - south side, east half (SE corner → S midpoint)
+ *   SSW - south side, west half (S midpoint → SW corner)
+ *   WSW - west side, south half (SW corner → W midpoint)
+ *   WNW - west side, north half (W midpoint → NW corner)
+ *
+ * Identifications (adjacent half-sides sharing a midpoint, reversed):
+ *   NNW ≡ NNE  (both halves of north side, reversed)
+ *   ENE ≡ ESE  (both halves of east side, reversed)
+ *   SSE ≡ SSW  (both halves of south side, reversed)
+ *   WSW ≡ WNW  (both halves of west side, reversed)
+ *
+ * All four corners of the square are identified as the same point.
  *
  * Points within an identified pair share the same integer position index.
- * The parameterization within each half-side goes from the corner toward
- * the midpoint of the full side:
- *   NW: NW corner → N midpoint
- *   NE: N midpoint → NE corner
- *   EN: NE corner → E midpoint
- *   ES: E midpoint → SE corner
- *   SE: SE corner → S midpoint
- *   SW: S midpoint → SW corner
- *   WS: SW corner → W midpoint
- *   WN: W midpoint → NW corner
+ * The first zone in each pair uses forward parameterization (pos 0 near
+ * the corner, pos k-1 near the midpoint). The second zone uses reversed
+ * parameterization (pos 0 maps to t near the far corner, pos k-1 near
+ * the midpoint).
  *
  * Points are stored as { zone: string, pos: number }
  * Edges are stored as { from: point, to: point }
  */
 
 /**
- * All 8 half-side zones.
+ * All 8 half-side zones (clockwise from NW corner).
  */
-export const ZONES = ['NW', 'NE', 'EN', 'ES', 'SE', 'SW', 'WS', 'WN'];
+export const ZONES = ['NNW', 'NNE', 'ENE', 'ESE', 'SSE', 'SSW', 'WSW', 'WNW'];
 
 /**
- * Zone groups - identified pairs under 180° rotation.
+ * Zone groups - identified pairs (adjacent half-sides of the same full side).
  */
 const ZONE_GROUPS = {
-  NW: 'NW_SE',
-  SE: 'NW_SE',
-  NE: 'NE_SW',
-  SW: 'NE_SW',
-  EN: 'EN_WS',
-  WS: 'EN_WS',
-  ES: 'ES_WN',
-  WN: 'ES_WN'
+  NNW: 'NNW_NNE',
+  NNE: 'NNW_NNE',
+  ENE: 'ENE_ESE',
+  ESE: 'ENE_ESE',
+  SSE: 'SSE_SSW',
+  SSW: 'SSE_SSW',
+  WSW: 'WSW_WNW',
+  WNW: 'WSW_WNW'
 };
 
 /**
  * All group names.
  */
-export const GROUPS = ['NW_SE', 'NE_SW', 'EN_WS', 'ES_WN'];
+export const GROUPS = ['NNW_NNE', 'ENE_ESE', 'SSE_SSW', 'WSW_WNW'];
+
+/**
+ * Zones with reversed parameterization (second zone in each pair).
+ * For these zones, pos i maps to float parameter (k-1-i+0.5)/k instead of (i+0.5)/k.
+ */
+const REVERSED_ZONES = new Set(['NNE', 'ESE', 'SSW', 'WNW']);
 
 /**
  * Get the group for a zone.
@@ -74,14 +76,14 @@ export function getZoneGroup(zone) {
  */
 export function getIdentifiedZone(zone) {
   switch (zone) {
-    case 'NW': return 'SE';
-    case 'SE': return 'NW';
-    case 'NE': return 'SW';
-    case 'SW': return 'NE';
-    case 'EN': return 'WS';
-    case 'WS': return 'EN';
-    case 'ES': return 'WN';
-    case 'WN': return 'ES';
+    case 'NNW': return 'NNE';
+    case 'NNE': return 'NNW';
+    case 'ENE': return 'ESE';
+    case 'ESE': return 'ENE';
+    case 'SSE': return 'SSW';
+    case 'SSW': return 'SSE';
+    case 'WSW': return 'WNW';
+    case 'WNW': return 'WSW';
     default: throw new Error(`Unknown zone: ${zone}`);
   }
 }
@@ -99,10 +101,10 @@ export function zonesAreIdentified(zone1, zone2) {
 export function createInitialState() {
   return {
     points: {
-      NW_SE: [],
-      NE_SW: [],
-      EN_WS: [],
-      ES_WN: []
+      NNW_NNE: [],
+      ENE_ESE: [],
+      SSE_SSW: [],
+      WSW_WNW: []
     },
     edges: []
   };
@@ -213,66 +215,44 @@ export function segmentToString(segment) {
 /**
  * Perimeter key: map each point to a unique integer in cyclic perimeter order.
  *
- * The perimeter walk (CCW from NW corner):
- *   NW (corner→mid), NE (mid→corner), EN (corner→mid), ES (mid→corner),
- *   SE (corner→mid), SW (mid→corner), WS (corner→mid), WN (mid→corner)
+ * The perimeter walk (clockwise from NW corner):
+ *   NNW (NW corner→N mid), NNE (N mid→NE corner),
+ *   ENE (NE corner→E mid), ESE (E mid→SE corner),
+ *   SSE (SE corner→S mid), SSW (S mid→SW corner),
+ *   WSW (SW corner→W mid), WNW (W mid→NW corner)
  *
  * Each group contributes its points twice on the perimeter (once per zone).
- * The position within a zone is either forward or reversed depending on
- * the walking direction relative to the point ordering.
+ * The first zone in each pair uses forward order, the second uses reversed
+ * order (because the identification reverses parameterization).
  *
- * Within each zone the points are in forward order (pos 0, 1, 2, ...).
- * The perimeter key assigns consecutive slots:
- *   NW: offset 0,   positions 0..n-1  (forward)
- *   NE: offset n,   positions 0..m-1  (forward)
- *   EN: offset n+m, positions 0..p-1  (forward)
- *   ES: ...
- *   SE: ...
- *   SW: ...
- *   WS: ...
- *   WN: ...
- *
- * But identified zones share point indices. Walking around the perimeter,
- * on the identified zone the order is reversed (because 180° rotation).
- *
- * For NW zone (group NW_SE), points go pos 0,1,...,k-1
- * For SE zone (same group), points go in reverse: k-1,...,1,0
+ * For NNW zone (group NNW_NNE), points go pos 0,1,...,k-1 (forward)
+ * For NNE zone (same group), points go pos k-1,...,1,0 (reversed)
  */
 function perimeterKey(point, groupCounts) {
   const { zone, pos } = point;
-  const nNW_SE = groupCounts.NW_SE;
-  const nNE_SW = groupCounts.NE_SW;
-  const nEN_WS = groupCounts.EN_WS;
-  const nES_WN = groupCounts.ES_WN;
-
-  // Offsets for each zone in the perimeter walk
-  // NW: [0, nNW_SE)
-  // NE: [nNW_SE, nNW_SE + nNE_SW)
-  // EN: [nNW_SE + nNE_SW, nNW_SE + nNE_SW + nEN_WS)
-  // ES: [... + nES_WN)
-  // SE: [... + nNW_SE)   (reversed)
-  // SW: [... + nNE_SW)   (reversed)
-  // WS: [... + nEN_WS)   (reversed)
-  // WN: [... + nES_WN)   (reversed)
+  const nN = groupCounts.NNW_NNE;
+  const nE = groupCounts.ENE_ESE;
+  const nS = groupCounts.SSE_SSW;
+  const nW = groupCounts.WSW_WNW;
 
   const o0 = 0;
-  const o1 = nNW_SE;
-  const o2 = o1 + nNE_SW;
-  const o3 = o2 + nEN_WS;
-  const o4 = o3 + nES_WN;
-  const o5 = o4 + nNW_SE;
-  const o6 = o5 + nNE_SW;
-  const o7 = o6 + nEN_WS;
+  const o1 = nN;
+  const o2 = 2 * nN;
+  const o3 = 2 * nN + nE;
+  const o4 = 2 * nN + 2 * nE;
+  const o5 = 2 * nN + 2 * nE + nS;
+  const o6 = 2 * nN + 2 * nE + 2 * nS;
+  const o7 = 2 * nN + 2 * nE + 2 * nS + nW;
 
   switch (zone) {
-    case 'NW': return o0 + pos;                          // forward
-    case 'NE': return o1 + pos;                          // forward
-    case 'EN': return o2 + pos;                          // forward
-    case 'ES': return o3 + pos;                          // forward
-    case 'SE': return o4 + (nNW_SE - 1 - pos);          // reversed
-    case 'SW': return o5 + (nNE_SW - 1 - pos);          // reversed
-    case 'WS': return o6 + (nEN_WS - 1 - pos);         // reversed
-    case 'WN': return o7 + (nES_WN - 1 - pos);          // reversed
+    case 'NNW': return o0 + pos;                  // forward
+    case 'NNE': return o1 + (nN - 1 - pos);       // reversed
+    case 'ENE': return o2 + pos;                   // forward
+    case 'ESE': return o3 + (nE - 1 - pos);       // reversed
+    case 'SSE': return o4 + pos;                   // forward
+    case 'SSW': return o5 + (nS - 1 - pos);       // reversed
+    case 'WSW': return o6 + pos;                   // forward
+    case 'WNW': return o7 + (nW - 1 - pos);       // reversed
     default: throw new Error(`Unknown zone: ${zone}`);
   }
 }
@@ -282,10 +262,10 @@ function perimeterKey(point, groupCounts) {
  */
 function getGroupCounts(state) {
   return {
-    NW_SE: countPointsInGroup(state, 'NW_SE'),
-    NE_SW: countPointsInGroup(state, 'NE_SW'),
-    EN_WS: countPointsInGroup(state, 'EN_WS'),
-    ES_WN: countPointsInGroup(state, 'ES_WN')
+    NNW_NNE: countPointsInGroup(state, 'NNW_NNE'),
+    ENE_ESE: countPointsInGroup(state, 'ENE_ESE'),
+    SSE_SSW: countPointsInGroup(state, 'SSE_SSW'),
+    WSW_WNW: countPointsInGroup(state, 'WSW_WNW')
   };
 }
 
@@ -304,7 +284,7 @@ function betweenCCW(a, b, x, P) {
  */
 export function edgesCross(edge1, edge2, state) {
   const gc = getGroupCounts(state);
-  const P = 2 * (gc.NW_SE + gc.NE_SW + gc.EN_WS + gc.ES_WN);
+  const P = 2 * (gc.NNW_NNE + gc.ENE_ESE + gc.SSE_SSW + gc.WSW_WNW);
 
   if (P < 4) return false;
 
@@ -556,12 +536,20 @@ export function addFirstEdge(state, fromSegment, toSegment) {
 
 /**
  * Convert a point to float for visualization.
- * t = (pos + 0.5) / numPoints within the zone's half-side.
+ * For "forward" zones (first in each pair): t = (pos + 0.5) / numPoints
+ * For "reversed" zones (second in each pair): t = (numPoints - 1 - pos + 0.5) / numPoints
  */
 export function pointToFloat(point, state) {
   const group = getZoneGroup(point.zone);
   const numPoints = countPointsInGroup(state, group);
-  const t = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
+  let t;
+  if (numPoints === 0) {
+    t = 0.5;
+  } else if (REVERSED_ZONES.has(point.zone)) {
+    t = (numPoints - 1 - point.pos + 0.5) / numPoints;
+  } else {
+    t = (point.pos + 0.5) / numPoints;
+  }
   return { zone: point.zone, t };
 }
 
@@ -695,6 +683,7 @@ export function closeLoop(state) {
 /**
  * Get all points for display.
  * Each point appears on both identified zones.
+ * The first zone uses forward parameterization, the second uses reversed.
  */
 export function getAllPointsForDisplay(state) {
   const result = [];
@@ -705,10 +694,11 @@ export function getAllPointsForDisplay(state) {
     const [zone1, zone2] = group.split('_');
 
     for (const point of points) {
-      const t = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
+      const t1 = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
+      const t2 = numPoints > 0 ? (numPoints - 1 - point.pos + 0.5) / numPoints : 0.5;
 
-      result.push({ zone: zone1, pos: point.pos, group, t });
-      result.push({ zone: zone2, pos: point.pos, group, t });
+      result.push({ zone: zone1, pos: point.pos, group, t: t1 });
+      result.push({ zone: zone2, pos: point.pos, group, t: t2 });
     }
   }
 

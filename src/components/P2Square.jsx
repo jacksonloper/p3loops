@@ -208,10 +208,10 @@ function P2Square({
   // Group color for points
   const groupClass = (group) => {
     switch (group) {
-      case 'NW_SE': return 'boundary-point-ne';
-      case 'NE_SW': return 'boundary-point-sw';
-      case 'EN_WS': return 'boundary-point-ne';
-      case 'ES_WN': return 'boundary-point-sw';
+      case 'NNW_NNE': return 'boundary-point-ne';
+      case 'ENE_ESE': return 'boundary-point-sw';
+      case 'SSE_SSW': return 'boundary-point-ne';
+      case 'WSW_WNW': return 'boundary-point-sw';
       default: return '';
     }
   };
@@ -219,10 +219,10 @@ function P2Square({
   // Get label offset for a zone (push label outward from the square)
   const labelOffset = (zone) => {
     const d = baseLabelDist * strokeScale;
-    if (zone.startsWith('N') && zone.length === 2 && ['NW', 'NE'].includes(zone)) return { x: 0, y: -d };
-    if (['EN', 'ES'].includes(zone)) return { x: d, y: 0 };
-    if (['SE', 'SW'].includes(zone)) return { x: 0, y: d };
-    if (['WS', 'WN'].includes(zone)) return { x: -d, y: 0 };
+    if (['NNW', 'NNE'].includes(zone)) return { x: 0, y: -d };
+    if (['ENE', 'ESE'].includes(zone)) return { x: d, y: 0 };
+    if (['SSE', 'SSW'].includes(zone)) return { x: 0, y: d };
+    if (['WSW', 'WNW'].includes(zone)) return { x: -d, y: 0 };
     return { x: 0, y: 0 };
   };
 
@@ -264,16 +264,16 @@ function P2Square({
 
         {/* Identification labels near midpoints */}
         <text x={midpoints.n.x} y={midpoints.n.y - 12 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale} textAnchor="middle">
-          NW≡SE | NE≡SW
+          NNW≡NNE
         </text>
         <text x={midpoints.s.x} y={midpoints.s.y + 20 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale} textAnchor="middle">
-          SE≡NW | SW≡NE
+          SSE≡SSW
         </text>
         <text x={midpoints.e.x + 15 * strokeScale} y={midpoints.e.y} className="identification-text" fontSize={baseSmallFontSize * strokeScale} textAnchor="start" dominantBaseline="middle">
-          EN≡WS | ES≡WN
+          ENE≡ESE
         </text>
         <text x={midpoints.w.x - 15 * strokeScale} y={midpoints.w.y} className="identification-text" fontSize={baseSmallFontSize * strokeScale} textAnchor="end" dominantBaseline="middle">
-          WN≡ES | WS≡EN
+          WSW≡WNW
         </text>
 
         {/* Clickable segment regions */}
