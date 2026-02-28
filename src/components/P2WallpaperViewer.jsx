@@ -17,12 +17,13 @@ import {
   SIDE,
   HALF
 } from '../utils/p2WallpaperGeometry.js';
+import { getEdgeSamplePoints } from '../utils/p2Geometry.js';
 import { getIdentifiedZone } from '../utils/p2PathLogic.js';
 import './WallpaperViewer.css';
 
 /**
  * Generate SVG path string for all edges rendered in a given reference frame.
- * Uses curved Bézier paths (control point pulled toward center).
+ * Uses the diffeomorphism-based curved paths.
  * @param {Array} edges - Array of float edge objects with from/to {zone, t}
  * @param {Object} frame - Reference frame
  * @returns {string} SVG path string
@@ -77,32 +78,28 @@ function isSameSquareEdge(edge) {
 const EDGE_SAMPLES = 20;
 
 /**
- * Sample points along a curved edge (quadratic Bézier) in screen space.
+ * Sample points along a curved edge using the diffeomorphism approach, in screen space.
  * @param {Object} from - {zone, t}
  * @param {Object} to - {zone, t}
  * @param {Object} frame - Reference frame
  * @returns {Array<{x: number, y: number}>} Sampled screen-space points
  */
 function sampleEdgePoints(from, to, frame) {
-  const p0 = getPointInZoneWallpaper(from.zone, from.t);
-  const p1 = getPointInZoneWallpaper(to.zone, to.t);
+  const samplePts = getEdgeSamplePoints(
+    from.zone, from.t,
+    to.zone, to.t,
+    EDGE_SAMPLES + 1
+  );
 
-  const cx = -HALF;
-  const cy = HALF;
-  const midX = (p0.x + p1.x) / 2;
-  const midY = (p0.y + p1.y) / 2;
-  const pullFactor = 0.3;
-  const ctrlX = midX + (cx - midX) * pullFactor;
-  const ctrlY = midY + (cy - midY) * pullFactor;
-
-  const points = [];
-  for (let i = 0; i <= EDGE_SAMPLES; i++) {
-    const s = i / EDGE_SAMPLES;
-    const x = (1 - s) * (1 - s) * p0.x + 2 * (1 - s) * s * ctrlX + s * s * p1.x;
-    const y = (1 - s) * (1 - s) * p0.y + 2 * (1 - s) * s * ctrlY + s * s * p1.y;
-    points.push(applyReferenceFrame(x, y, frame));
-  }
-  return points;
+  // Convert unit-square points to local wallpaper-square screen coords,
+  // then apply the reference frame.
+  return samplePts.map(p => {
+    // unit square: x=eastward [0,1], y=southward [0,1]
+    // wallpaper square: NW=(-SIDE,0), NE=(0,0), SE=(0,SIDE), SW=(-SIDE,SIDE)
+    const localX = -SIDE + p.x * SIDE;
+    const localY = p.y * SIDE;
+    return applyReferenceFrame(localX, localY, frame);
+  });
 }
 
 /**
