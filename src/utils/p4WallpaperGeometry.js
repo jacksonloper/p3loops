@@ -585,5 +585,57 @@ export function indexToFrame(index) {
   };
 }
 
+// ============================================================================
+// TRIANGLE DIFFEO: Square → 45-45-90 Triangle
+// ============================================================================
+// 
+// The diffeomorphism F(u,v) = (u*(1 - v/2), v*(1 - u/2)) maps the unit square
+// [0,1]² to the triangle with vertices (0,0), (1,0), (0,1):
+//   - (0,0) → (0,0)  [NW corner]
+//   - (1,0) → (1,0)  [NE corner]
+//   - (0,1) → (0,1)  [SW corner]
+//   - (1,1) → (0.5, 0.5) [hypotenuse midpoint, where SE was]
+//
+// The north and west edges map to the triangle legs.
+// Both east and south edges map to the hypotenuse (x+y=1).
+// The 4-way cone points end up at the 90° vertex and the identified 45° vertices.
+// The 180° cone point is at the hypotenuse midpoint.
+
+/**
+ * Convert paper coordinates to screen coordinates via the triangle diffeomorphism.
+ * Applies F(u,v) = (u*(1 - v/2), v*(1 - u/2)) then maps to screen space.
+ * 
+ * @param {number} southward - Southward position [0, 1]
+ * @param {number} eastward - Eastward position [0, 1]
+ * @returns {{ x: number, y: number }} - Screen coordinates in triangle
+ */
+export function paperToTriangle(southward, eastward) {
+  const u = eastward;
+  const v = southward;
+  // Apply diffeo: square → triangle
+  const x = u * (1.0 - 0.5 * v);
+  const y = v * (1.0 - 0.5 * u);
+  
+  // Map to screen coordinates using same linear mapping as paperToTrueSquare
+  const screenX = NW_CORNER.x + x * (NE_CORNER.x - NW_CORNER.x) + y * (SW_CORNER.x - NW_CORNER.x);
+  const screenY = NW_CORNER.y + x * (NE_CORNER.y - NW_CORNER.y) + y * (SW_CORNER.y - NW_CORNER.y);
+  
+  return { x: screenX, y: screenY };
+}
+
+/**
+ * Convert a point to triangle screen coordinates using a reference frame.
+ * Uses the triangle diffeomorphism mapping.
+ * 
+ * @param {Object} point - Point in square (boundary or interior)
+ * @param {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} frame - Reference frame
+ * @returns {{ x: number, y: number }} - Screen coordinates
+ */
+export function pointToTriangleScreenSpace(point, frame) {
+  const paperCoords = getPointPaperCoordinates(point);
+  const localScreen = paperToTriangle(paperCoords.southward, paperCoords.eastward);
+  return applyReferenceFrame(localScreen.x, localScreen.y, frame);
+}
+
 // Export corner coordinates and square dimensions for testing
 export { NE_CORNER, SW_CORNER, NW_CORNER, SE_CORNER, SIDE };

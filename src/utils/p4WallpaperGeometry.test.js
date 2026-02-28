@@ -20,6 +20,8 @@ import {
   pathToWallpaperPath,
   getPointOnSideTrueSquare,
   paperToTrueSquare,
+  paperToTriangle,
+  pointToTriangleScreenSpace,
   createIdentityWallpaperIndex,
   updateWallpaperIndex,
   formatWallpaperIndex,
@@ -572,5 +574,80 @@ describe('P4 indexToFrame', () => {
     expect(frame.b).toBeCloseTo(0, 5);
     expect(frame.c).toBeCloseTo(0, 5);
     expect(frame.d).toBeCloseTo(-1, 5);
+  });
+});
+
+describe('P4 Triangle Diffeo - paperToTriangle', () => {
+  it('should map NW corner (0,0) to NW screen position', () => {
+    const result = paperToTriangle(0, 0);
+    expectPointsClose(result, { x: NW_CORNER.x, y: NW_CORNER.y });
+  });
+
+  it('should map NE corner (0,1) to NE screen position', () => {
+    const result = paperToTriangle(0, 1);
+    expectPointsClose(result, { x: NE_CORNER.x, y: NE_CORNER.y });
+  });
+
+  it('should map SW corner (1,0) to SW screen position', () => {
+    const result = paperToTriangle(1, 0);
+    expectPointsClose(result, { x: SW_CORNER.x, y: SW_CORNER.y });
+  });
+
+  it('should map SE corner (1,1) to hypotenuse midpoint', () => {
+    const result = paperToTriangle(1, 1);
+    // F(1,1) = (0.5, 0.5) → midpoint of NE and SW
+    const expected = {
+      x: (NE_CORNER.x + SW_CORNER.x) / 2,
+      y: (NE_CORNER.y + SW_CORNER.y) / 2
+    };
+    expectPointsClose(result, expected);
+  });
+
+  it('should map north edge (v=0) along bottom leg', () => {
+    // North edge: southward=0, eastward varies
+    // F(u, 0) = (u, 0) → same as square north edge
+    for (const t of [0.25, 0.5, 0.75]) {
+      const triangle = paperToTriangle(0, t);
+      const square = paperToTrueSquare(0, t);
+      expectPointsClose(triangle, square);
+    }
+  });
+
+  it('should map west edge (u=0) along left leg', () => {
+    // West edge: eastward=0, southward varies
+    // F(0, v) = (0, v) → same as square west edge
+    for (const t of [0.25, 0.5, 0.75]) {
+      const triangle = paperToTriangle(t, 0);
+      const square = paperToTrueSquare(t, 0);
+      expectPointsClose(triangle, square);
+    }
+  });
+
+  it('should map interior points inside the triangle (x+y <= 1 in normalized coords)', () => {
+    // Interior point (0.5, 0.5): F(0.5, 0.5) = (0.5*0.75, 0.5*0.75) = (0.375, 0.375)
+    // x+y = 0.75 < 1, so inside triangle ✓
+    const result = paperToTriangle(0.5, 0.5);
+    // Should be different from square mapping
+    const squareResult = paperToTrueSquare(0.5, 0.5);
+    // Triangle result should be "compressed" toward the NW-NE-SW triangle
+    expect(result.x).not.toBeCloseTo(squareResult.x, 1);
+  });
+});
+
+describe('P4 Triangle - pointToTriangleScreenSpace', () => {
+  it('should correctly convert boundary point with identity frame', () => {
+    const frame = createIdentityFrame();
+    const point = { side: 'north', t: 0.5 };
+    const result = pointToTriangleScreenSpace(point, frame);
+    const expected = paperToTriangle(0, 0.5);
+    expectPointsClose(result, expected);
+  });
+
+  it('should correctly convert interior point with identity frame', () => {
+    const frame = createIdentityFrame();
+    const point = { interior: true, southward: 0.5, eastward: 0.5 };
+    const result = pointToTriangleScreenSpace(point, frame);
+    const expected = paperToTriangle(0.5, 0.5);
+    expectPointsClose(result, expected);
   });
 });
