@@ -214,7 +214,7 @@ function generateWallpaperData(edges, repeats = 1) {
 
 /**
  * Get the three corners of the triangle in a given reference frame.
- * With the corrected diffeomorphism, NE collapses to the hypotenuse midpoint,
+ * The diffeomorphism maps NE to the hypotenuse midpoint,
  * so the triangle vertices are NW, SW, SE.
  */
 function getTriangleCorners(frame) {

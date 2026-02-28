@@ -585,7 +585,7 @@ describe('P4 Triangle Diffeo - paperToTriangle', () => {
 
   it('should map NE corner (0,1) to hypotenuse midpoint', () => {
     const result = paperToTriangle(0, 1);
-    // G(1,0) = (0.5, 0.5) → midpoint of NW and SE
+    // paperToTriangle(southward=0, eastward=1) → G(u=1, v=0) = (0.5, 0.5) → midpoint of NW and SE
     const expected = {
       x: (NW_CORNER.x + SE_CORNER.x) / 2,
       y: (NW_CORNER.y + SE_CORNER.y) / 2
@@ -604,8 +604,7 @@ describe('P4 Triangle Diffeo - paperToTriangle', () => {
   });
 
   it('should map south edge (v=1) along bottom leg', () => {
-    // South edge: southward=1, eastward varies
-    // G(u, 1) = (u, 1) → same as square south edge
+    // South edge: southward=1, eastward=t → G(u=t, v=1) = (t, 1) → same as square south edge
     for (const t of [0.25, 0.5, 0.75]) {
       const triangle = paperToTriangle(1, t);
       const square = paperToTrueSquare(1, t);
@@ -624,8 +623,7 @@ describe('P4 Triangle Diffeo - paperToTriangle', () => {
   });
 
   it('should map north edge to hypotenuse (x=y line)', () => {
-    // North edge: southward=0, eastward varies
-    // G(u, 0) = (u/2, u/2) → on the x=y line (hypotenuse)
+    // North edge: southward=0, eastward=t → G(u=t, v=0) = (t/2, t/2) → on the x=y line (hypotenuse)
     for (const t of [0.25, 0.5, 0.75]) {
       const result = paperToTriangle(0, t);
       // In normalized coords, x should equal y
