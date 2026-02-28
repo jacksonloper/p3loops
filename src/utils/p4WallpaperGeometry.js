@@ -547,42 +547,122 @@ export function updateWallpaperIndex(side, current) {
  * @returns {string}
  */
 export function formatWallpaperIndex(index) {
-  const rotLabel = ['0°', '90°', '180°', '270°'][index.r];
+  const rotLabels = ['0°', '90°', '180°', '270°', '0°′', '90°′', '180°′', '270°′'];
+  const rotLabel = rotLabels[index.r] || `${index.r}`;
   return `(${index.tx}, ${index.ty}, ${rotLabel})`;
 }
 
 /**
  * Convert a p4 wallpaper index to an affine frame.
  * Computes the transformation for the square at position (i, j) with rotation k.
+ * 
+ * k=0..3: "outer" triangles — pure rotation by k*90°
+ * k=4..7: "inner" triangles — rotation by (k-4)*90° composed with 180° rotation
+ *         around the hypotenuse midpoint. All transforms have determinant +1 (p4).
+ *         Each inner triangle is the 180° flip of the corresponding outer triangle
+ *         along its hypotenuse, filling the other half of the square.
+ * 
  * @param {P4WallpaperIndex} index
  * @returns {{ a: number, b: number, c: number, d: number, tx: number, ty: number }}
  */
 export function indexToFrame(index) {
   const { tx: i, ty: j, r: k } = index;
   
-  // Rotation by k * 90°
-  const angle = k * ANGLE_90;
-  const cosK = Math.cos(angle);
-  const sinK = Math.sin(angle);
-  
   // Translation vectors for p4 square lattice
-  // T1 = (2*SIDE, 0) - horizontal translation
-  // T2 = (0, 2*SIDE) - vertical translation
-  const T1 = { x: 2 * SIDE, y: 0 };
-  const T2 = { x: 0, y: 2 * SIDE };
+  const translateX = i * 2 * SIDE;
+  const translateY = j * 2 * SIDE;
   
-  // Translation by i*T1 + j*T2
-  const translateX = i * T1.x + j * T2.x;
-  const translateY = i * T1.y + j * T2.y;
+  if (k < 4) {
+    // Outer triangles: pure rotation by k * 90°
+    const angle = k * ANGLE_90;
+    const cosK = Math.cos(angle);
+    const sinK = Math.sin(angle);
+    
+    return {
+      a: cosK,
+      b: -sinK,
+      c: sinK,
+      d: cosK,
+      tx: translateX,
+      ty: translateY
+    };
+  } else {
+    // Inner triangles: rotation(k-4) ∘ 180° rotation around hypotenuse midpoint
+    // The hypotenuse goes from NW(-SIDE,0) to SE(0,SIDE).
+    // Midpoint is (-SIDE/2, SIDE/2).
+    // 180° rotation around midpoint: M(x,y) = (-x - SIDE, -y + SIDE)
+    // As affine: M=[-1,0;0,-1], t=(-SIDE, SIDE)
+    // Composed: R(θ) ∘ M gives:
+    //   a=-cosθ, b=sinθ, c=-sinθ, d=-cosθ
+    //   tx = -SIDE(cosθ + sinθ) + translate
+    //   ty =  SIDE(cosθ - sinθ) + translate
+    const kBase = k - 4;
+    const angle = kBase * ANGLE_90;
+    const cosK = Math.cos(angle);
+    const sinK = Math.sin(angle);
+    
+    return {
+      a: -cosK,
+      b: sinK,
+      c: -sinK,
+      d: -cosK,
+      tx: -SIDE * (cosK + sinK) + translateX,
+      ty: SIDE * (cosK - sinK) + translateY
+    };
+  }
+}
+
+// ============================================================================
+// TRIANGLE DIFFEO: Square → 45-45-90 Triangle
+// ============================================================================
+// 
+// The diffeomorphism G(u,v) = (u*(1+v)/2, v + u*(1-v)/2) maps the unit square
+// [0,1]² to the triangle with vertices (0,0), (0,1), (1,0):
+//   - (0,0) → (0,0)  [NW corner → 45° vertex]
+//   - (1,0) → (0.5, 0.5) [NE corner → hypotenuse midpoint, 180° cone]
+//   - (0,1) → (0,1)  [SW corner → 90° vertex]
+//   - (1,1) → (1,1)  [SE corner → 45° vertex]
+//
+// The south and west edges map to the triangle legs.
+// Both north and east edges map to the hypotenuse (x=y line).
+// This correctly collapses the identified pair (north↔east) onto
+// the hypotenuse, with the NE corner becoming the 180° cone point.
+// The 4-way cone points are at SW (90°) and NW≡SE (45°+45°).
+
+/**
+ * Convert paper coordinates to screen coordinates via the triangle diffeomorphism.
+ * Applies G(u,v) = (u*(1+v)/2, v + u*(1-v)/2) then maps to screen space.
+ * 
+ * @param {number} southward - Southward position [0, 1]
+ * @param {number} eastward - Eastward position [0, 1]
+ * @returns {{ x: number, y: number }} - Screen coordinates in triangle
+ */
+export function paperToTriangle(southward, eastward) {
+  const u = eastward;
+  const v = southward;
+  // Apply diffeo: square → triangle (north+east collapse to hypotenuse)
+  const x = u * (1.0 + v) / 2.0;
+  const y = v + u * (1.0 - v) / 2.0;
   
-  return {
-    a: cosK,
-    b: -sinK,
-    c: sinK,
-    d: cosK,
-    tx: translateX,
-    ty: translateY
-  };
+  // Map to screen coordinates using same linear mapping as paperToTrueSquare
+  const screenX = NW_CORNER.x + x * (NE_CORNER.x - NW_CORNER.x) + y * (SW_CORNER.x - NW_CORNER.x);
+  const screenY = NW_CORNER.y + x * (NE_CORNER.y - NW_CORNER.y) + y * (SW_CORNER.y - NW_CORNER.y);
+  
+  return { x: screenX, y: screenY };
+}
+
+/**
+ * Convert a point to triangle screen coordinates using a reference frame.
+ * Uses the triangle diffeomorphism mapping.
+ * 
+ * @param {Object} point - Point in square (boundary or interior)
+ * @param {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} frame - Reference frame
+ * @returns {{ x: number, y: number }} - Screen coordinates
+ */
+export function pointToTriangleScreenSpace(point, frame) {
+  const paperCoords = getPointPaperCoordinates(point);
+  const localScreen = paperToTriangle(paperCoords.southward, paperCoords.eastward);
+  return applyReferenceFrame(localScreen.x, localScreen.y, frame);
 }
 
 // Export corner coordinates and square dimensions for testing

@@ -20,6 +20,8 @@ import {
   pathToWallpaperPath,
   getPointOnSideTrueSquare,
   paperToTrueSquare,
+  paperToTriangle,
+  pointToTriangleScreenSpace,
   createIdentityWallpaperIndex,
   updateWallpaperIndex,
   formatWallpaperIndex,
@@ -572,5 +574,133 @@ describe('P4 indexToFrame', () => {
     expect(frame.b).toBeCloseTo(0, 5);
     expect(frame.c).toBeCloseTo(0, 5);
     expect(frame.d).toBeCloseTo(-1, 5);
+  });
+
+  it('should produce 180° rotation frame for inner triangle r=4', () => {
+    // Inner triangle k=4 is the 180° rotation of outer k=0 around hypotenuse midpoint
+    // 180° rotation swaps: NW↔SE, SW→NE (fills the other half of the square)
+    const frame = indexToFrame({ tx: 0, ty: 0, r: 4 });
+    
+    // a=-cos(0)=-1, b=sin(0)=0, c=-sin(0)=0, d=-cos(0)=-1
+    expect(frame.a).toBeCloseTo(-1, 5);
+    expect(frame.b).toBeCloseTo(0, 5);
+    expect(frame.c).toBeCloseTo(0, 5);
+    expect(frame.d).toBeCloseTo(-1, 5);
+    // tx = -SIDE*(1+0) = -SIDE, ty = SIDE*(1-0) = SIDE
+    expect(frame.tx).toBeCloseTo(-SIDE, 1);
+    expect(frame.ty).toBeCloseTo(SIDE, 1);
+  });
+
+  it('should swap NW and SE for inner triangle r=4', () => {
+    const frame = indexToFrame({ tx: 0, ty: 0, r: 4 });
+    
+    // NW(-SIDE, 0) should map to SE(0, SIDE) — 180° rotation swaps them
+    const nwResult = applyReferenceFrame(NW_CORNER.x, NW_CORNER.y, frame);
+    expect(nwResult.x).toBeCloseTo(SE_CORNER.x, 1);
+    expect(nwResult.y).toBeCloseTo(SE_CORNER.y, 1);
+    
+    // SE(0, SIDE) should map to NW(-SIDE, 0) — 180° rotation swaps them
+    const seResult = applyReferenceFrame(SE_CORNER.x, SE_CORNER.y, frame);
+    expect(seResult.x).toBeCloseTo(NW_CORNER.x, 1);
+    expect(seResult.y).toBeCloseTo(NW_CORNER.y, 1);
+    
+    // SW(-SIDE, SIDE) should map to NE(0, 0)
+    const swResult = applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame);
+    expect(swResult.x).toBeCloseTo(NE_CORNER.x, 1);
+    expect(swResult.y).toBeCloseTo(NE_CORNER.y, 1);
+  });
+
+  it('should produce correct frames for all inner triangles r=4..7', () => {
+    // Inner triangles should have determinant +1 (orientation-preserving, p4 rotations only)
+    for (let k = 4; k < 8; k++) {
+      const frame = indexToFrame({ tx: 0, ty: 0, r: k });
+      const det = frame.a * frame.d - frame.b * frame.c;
+      expect(det).toBeCloseTo(1, 5);
+    }
+  });
+});
+
+describe('P4 Triangle Diffeo - paperToTriangle', () => {
+  it('should map NW corner (0,0) to NW screen position', () => {
+    const result = paperToTriangle(0, 0);
+    expectPointsClose(result, { x: NW_CORNER.x, y: NW_CORNER.y });
+  });
+
+  it('should map NE corner (0,1) to hypotenuse midpoint', () => {
+    const result = paperToTriangle(0, 1);
+    // paperToTriangle(southward=0, eastward=1) → G(u=1, v=0) = (0.5, 0.5) → midpoint of NW and SE
+    const expected = {
+      x: (NW_CORNER.x + SE_CORNER.x) / 2,
+      y: (NW_CORNER.y + SE_CORNER.y) / 2
+    };
+    expectPointsClose(result, expected);
+  });
+
+  it('should map SW corner (1,0) to SW screen position', () => {
+    const result = paperToTriangle(1, 0);
+    expectPointsClose(result, { x: SW_CORNER.x, y: SW_CORNER.y });
+  });
+
+  it('should map SE corner (1,1) to SE screen position', () => {
+    const result = paperToTriangle(1, 1);
+    expectPointsClose(result, { x: SE_CORNER.x, y: SE_CORNER.y });
+  });
+
+  it('should map south edge (v=1) along bottom leg', () => {
+    // South edge: southward=1, eastward=t → G(u=t, v=1) = (t, 1) → same as square south edge
+    for (const t of [0.25, 0.5, 0.75]) {
+      const triangle = paperToTriangle(1, t);
+      const square = paperToTrueSquare(1, t);
+      expectPointsClose(triangle, square);
+    }
+  });
+
+  it('should map west edge (u=0) along left leg', () => {
+    // West edge: eastward=0, southward varies
+    // G(0, v) = (0, v) → same as square west edge
+    for (const t of [0.25, 0.5, 0.75]) {
+      const triangle = paperToTriangle(t, 0);
+      const square = paperToTrueSquare(t, 0);
+      expectPointsClose(triangle, square);
+    }
+  });
+
+  it('should map north edge to hypotenuse (x=y line)', () => {
+    // North edge: southward=0, eastward=t → G(u=t, v=0) = (t/2, t/2) → on the x=y line (hypotenuse)
+    for (const t of [0.25, 0.5, 0.75]) {
+      const result = paperToTriangle(0, t);
+      // In normalized coords, x should equal y
+      // screenX = NW.x + x*(NE.x-NW.x) + y*(SW.x-NW.x)
+      // For x=y=t/2: screenX = NW.x + (t/2)*SIDE + (t/2)*0 = NW.x + t*SIDE/2
+      //              screenY = NW.y + 0 + (t/2)*SIDE = t*SIDE/2
+      const expectedX = NW_CORNER.x + (t / 2) * (NE_CORNER.x - NW_CORNER.x) + (t / 2) * (SW_CORNER.x - NW_CORNER.x);
+      const expectedY = NW_CORNER.y + (t / 2) * (NE_CORNER.y - NW_CORNER.y) + (t / 2) * (SW_CORNER.y - NW_CORNER.y);
+      expectPointsClose(result, { x: expectedX, y: expectedY });
+    }
+  });
+
+  it('should map interior points inside the triangle', () => {
+    const result = paperToTriangle(0.5, 0.5);
+    // Should be different from square mapping
+    const squareResult = paperToTrueSquare(0.5, 0.5);
+    expect(result.x).not.toBeCloseTo(squareResult.x, 1);
+  });
+});
+
+describe('P4 Triangle - pointToTriangleScreenSpace', () => {
+  it('should correctly convert boundary point with identity frame', () => {
+    const frame = createIdentityFrame();
+    const point = { side: 'north', t: 0.5 };
+    const result = pointToTriangleScreenSpace(point, frame);
+    const expected = paperToTriangle(0, 0.5);
+    expectPointsClose(result, expected);
+  });
+
+  it('should correctly convert interior point with identity frame', () => {
+    const frame = createIdentityFrame();
+    const point = { interior: true, southward: 0.5, eastward: 0.5 };
+    const result = pointToTriangleScreenSpace(point, frame);
+    const expected = paperToTriangle(0.5, 0.5);
+    expectPointsClose(result, expected);
   });
 });

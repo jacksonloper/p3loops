@@ -1,11 +1,11 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import {
-  getStraightRhombusPath,
-  getStraightSideSegmentPath,
-  getCurvedEdgePath,
+  getOutlinePathBlended,
+  getSideSegmentPathBlended,
+  getCurvedEdgePathBlended,
   getSize,
   getShear,
-  getPointOnSide
+  getPointOnSideBlended
 } from '../utils/geometry.js';
 import { getSideGroup } from '../utils/combinatorialPathLogic.js';
 import './CombinatorialRhombus.css';
@@ -19,23 +19,31 @@ const WHEEL_ZOOM_FACTOR = 1.1;
 const TAP_MAX_DURATION_MS = 300;  // Maximum duration for a tap (vs pan)
 const TAP_MAX_DISTANCE = 10;      // Maximum movement for a tap (in screen pixels)
 
+// Shape morphing configuration
+const SHAPE_WEIGHTS = {
+  rhombus:  { rhombus: 1, square: 0, triangle: 0 },
+  square:   { rhombus: 0, square: 1, triangle: 0 },
+  triangle: { rhombus: 0, square: 0, triangle: 1 }
+};
+const ANIMATION_DURATION_MS = 600;
+
+// Shape-specific angle info for corner labels
+const SHAPE_ANGLES = {
+  rhombus:  { nw: '60°', ne: '120°', se: '60°', sw: '120°' },
+  square:   { nw: '90°', ne: '90°', se: '90°', sw: '90°' },
+  triangle: { nw: '45°', ne: '', se: '45°', sw: '90°' }
+};
+
 /**
- * Calculate segment coordinates for display/interaction using straight sides.
- * Now segment has a specific `side` (not just group).
- * Returns coordinates only for that specific side, including an SVG path
- * that follows the straight boundary.
+ * Calculate segment coordinates for display/interaction using blended shape mapping.
+ * Returns coordinates for a specific side, including an SVG path.
  */
-function getSegmentCoords(segment, allPoints) {
+function getSegmentCoords(segment, allPoints, shapeWeights) {
   const side = segment.side;
   const group = getSideGroup(side);
   
-  // Get the points in this group (filter by group, not by side, since all points
-  // in a group share the same t values regardless of which identified side they're on)
   const groupPoints = allPoints.filter(p => p.group === group);
   
-  // Determine t range for the segment by looking up points by their pos field,
-  // NOT by array index. The segment.startPos/endPos are position indices that
-  // correspond to the point's pos field, not array indices.
   let startT, endT;
   if (segment.startPos === null && segment.endPos === null) {
     startT = 0;
@@ -55,14 +63,9 @@ function getSegmentCoords(segment, allPoints) {
     endT = endPoint?.t ?? 1;
   }
   
-  // Calculate the midpoint (where the new point would go)
   const midT = (startT + endT) / 2;
-  
-  // Get the SVG path for this straight segment on the boundary
-  const pathD = getStraightSideSegmentPath(side, startT, endT);
-  
-  // Get the midpoint coordinates for the marker (on the straight side)
-  const midPt = getPointOnSide(side, midT);
+  const pathD = getSideSegmentPathBlended(side, startT, endT, shapeWeights);
+  const midPt = getPointOnSideBlended(side, midT, shapeWeights);
   
   return [{
     side,
@@ -76,16 +79,17 @@ function getSegmentCoords(segment, allPoints) {
 }
 
 /**
- * Get curved edge path data for a float edge (from combinatorial edge).
- * Uses diffeomorphism-based rendering for guaranteed non-intersection.
+ * Get curved edge path data for a float edge using the blended shape mapping.
  * @param {Object} edge - Float edge with { from: { side, t }, to: { side, t } }
+ * @param {{ rhombus: number, square: number, triangle: number }} shapeWeights
  */
-function getCurvedEdgeData(edge) {
-  return getCurvedEdgePath(
+function getCurvedEdgeData(edge, shapeWeights) {
+  return getCurvedEdgePathBlended(
     edge.from.side, 
     edge.from.t, 
     edge.to.side, 
-    edge.to.t
+    edge.to.t,
+    shapeWeights
   );
 }
 
@@ -117,6 +121,13 @@ function CombinatorialRhombus({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   
+  // Shape morphing state
+  const [targetShape, setTargetShape] = useState('rhombus');
+  const [shapeWeights, setShapeWeights] = useState(SHAPE_WEIGHTS.rhombus);
+  const animationRef = useRef(null);
+  const startWeightsRef = useRef(SHAPE_WEIGHTS.rhombus);
+  const startTimeRef = useRef(null);
+  
   // Ref for SVG element
   const svgRef = useRef(null);
   
@@ -131,6 +142,48 @@ function CombinatorialRhombus({
     pinchCenter: null,        // Screen coordinates of pinch center
     pinchCenterSvg: null      // SVG coordinates of pinch center (for zoom anchoring)
   });
+  
+  // Handle shape change with animated transition
+  const handleShapeChange = useCallback((newShape) => {
+    if (newShape === targetShape) return;
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    startWeightsRef.current = { ...shapeWeights };
+    startTimeRef.current = performance.now();
+    setTargetShape(newShape);
+    
+    const target = SHAPE_WEIGHTS[newShape];
+    function animate(now) {
+      const elapsed = now - startTimeRef.current;
+      const progress = Math.min(elapsed / ANIMATION_DURATION_MS, 1);
+      // Ease in-out cubic
+      const eased = progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      
+      const start = startWeightsRef.current;
+      setShapeWeights({
+        rhombus:  start.rhombus  + (target.rhombus  - start.rhombus)  * eased,
+        square:   start.square   + (target.square   - start.square)   * eased,
+        triangle: start.triangle + (target.triangle - start.triangle) * eased
+      });
+      
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        animationRef.current = null;
+      }
+    }
+    animationRef.current = requestAnimationFrame(animate);
+  }, [targetShape, shapeWeights]);
+  
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, []);
   
   const size = getSize();
   const shear = getShear();
@@ -362,15 +415,17 @@ function CombinatorialRhombus({
   const baseRhombusStrokeWidth = 2;
   const baseLabelDist = 15;
   
-  // Use the straight rhombus path (true rhombus with straight sides)
-  // Edges are curved inward to remain individually discernible
-  const rhombusPath = getStraightRhombusPath();
+  // Use the blended outline path (morphs between rhombus, square, triangle)
+  const outlinePath = getOutlinePathBlended(shapeWeights);
   
-  // Get corner positions for labels
-  const nw = getPointOnSide('north', 0);
-  const ne = getPointOnSide('north', 1);
-  const se = getPointOnSide('south', 0);
-  const sw = getPointOnSide('south', 1);
+  // Get corner positions for labels using blended mapping
+  const nw = getPointOnSideBlended('north', 0, shapeWeights);
+  const ne = getPointOnSideBlended('north', 1, shapeWeights);
+  const se = getPointOnSideBlended('south', 0, shapeWeights);
+  const sw = getPointOnSideBlended('south', 1, shapeWeights);
+  
+  // Shape-specific angle labels
+  const angles = SHAPE_ANGLES[targetShape];
   
   // Side labels
   const labelOffset = 25;
@@ -386,22 +441,21 @@ function CombinatorialRhombus({
     return availableSegments.map((segment, index) => ({
       segment,
       index,
-      coords: getSegmentCoords(segment, allPoints)
+      coords: getSegmentCoords(segment, allPoints, shapeWeights)
     }));
-  }, [availableSegments, allPoints]);
+  }, [availableSegments, allPoints, shapeWeights]);
   
   // Calculate highlighted segment line if a segment is selected
-  // Since segment now has specific side, just use it directly
   const selectedSegmentCoords = useMemo(() => {
     if (!selectedSegment) return null;
-    return getSegmentCoords(selectedSegment, allPoints);
-  }, [selectedSegment, allPoints]);
+    return getSegmentCoords(selectedSegment, allPoints, shapeWeights);
+  }, [selectedSegment, allPoints, shapeWeights]);
   
   // Calculate "from" segment highlight for first edge creation
   const fromSegmentCoords = useMemo(() => {
     if (!firstEdgeFromSegment) return null;
-    return getSegmentCoords(firstEdgeFromSegment, allPoints);
-  }, [firstEdgeFromSegment, allPoints]);
+    return getSegmentCoords(firstEdgeFromSegment, allPoints, shapeWeights);
+  }, [firstEdgeFromSegment, allPoints, shapeWeights]);
   
   // Handle segment click
   const handleSegmentClick = useCallback((segment) => {
@@ -421,6 +475,11 @@ function CombinatorialRhombus({
   return (
     <div className="combinatorial-rhombus-container">
       <div className="zoom-controls">
+        <div className="shape-controls">
+          <button onClick={() => handleShapeChange('rhombus')} className={`shape-btn ${targetShape === 'rhombus' ? 'shape-btn-active' : ''}`}>◇ Rhombus</button>
+          <button onClick={() => handleShapeChange('square')} className={`shape-btn ${targetShape === 'square' ? 'shape-btn-active' : ''}`}>□ Square</button>
+          <button onClick={() => handleShapeChange('triangle')} className={`shape-btn ${targetShape === 'triangle' ? 'shape-btn-active' : ''}`}>△ Triangle</button>
+        </div>
         <span className="zoom-level">Zoom: {zoom.toFixed(1)}x</span>
         <button onClick={handleResetView} className="reset-view-btn" title="Reset View">
           Reset View
@@ -438,14 +497,14 @@ function CombinatorialRhombus({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Rhombus outline */}
-        <path d={rhombusPath} className="rhombus-path" strokeWidth={baseRhombusStrokeWidth * strokeScale} />
+        {/* Shape outline (morphs between rhombus/square/triangle) */}
+        <path d={outlinePath} className="rhombus-path" strokeWidth={baseRhombusStrokeWidth * strokeScale} />
         
-        {/* Corner angle indicators */}
-        <text x={ne.x + 10 * strokeScale} y={ne.y - 10 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
-        <text x={sw.x - 25 * strokeScale} y={sw.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>120°</text>
-        <text x={nw.x - 25 * strokeScale} y={nw.y - 5 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
-        <text x={se.x + 10 * strokeScale} y={se.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>60°</text>
+        {/* Corner angle indicators (follow corners during animation) */}
+        {angles.ne && <text x={ne.x + 10 * strokeScale} y={ne.y - 10 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>{angles.ne}</text>}
+        {angles.sw && <text x={sw.x - 25 * strokeScale} y={sw.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>{angles.sw}</text>}
+        {angles.nw && <text x={nw.x - 25 * strokeScale} y={nw.y - 5 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>{angles.nw}</text>}
+        {angles.se && <text x={se.x + 10 * strokeScale} y={se.y + 15 * strokeScale} className="angle-text" fontSize={baseSmallFontSize * strokeScale}>{angles.se}</text>}
         
         {/* Identification indicators */}
         <text x={ne.x + 35 * strokeScale} y={ne.y - 25 * strokeScale} className="identification-text" fontSize={baseSmallFontSize * strokeScale}>N≡E</text>
@@ -523,7 +582,7 @@ function CombinatorialRhombus({
         
         {/* Edges - rendered using diffeomorphism for guaranteed non-intersection */}
         {floatEdges.map((edge, index) => {
-          const edgeData = getCurvedEdgeData(edge);
+          const edgeData = getCurvedEdgeData(edge, shapeWeights);
           const isHighlighted = highlightedEdgeIndex === index;
           
           return (
@@ -549,11 +608,9 @@ function CombinatorialRhombus({
           );
         })}
         
-        {/* All points (equally spaced) - using straight side positions with integer labels */}
-        {/* Points appear on both identified sides with different colors per group */}
+        {/* All points - using blended side positions with integer labels */}
         {allPoints.map((point, index) => {
-          const coords = getPointOnSide(point.side, point.t);
-          // Calculate label offset based on side to position label outside the rhombus
+          const coords = getPointOnSideBlended(point.side, point.t, shapeWeights);
           let labelOffsetX = 0;
           let labelOffsetY = 0;
           const scaledLabelDist = baseLabelDist * strokeScale;
@@ -571,7 +628,6 @@ function CombinatorialRhombus({
               labelOffsetX = -scaledLabelDist;
               break;
           }
-          // Use different colors for NE vs SW groups
           const groupClass = point.group === 'NE' ? 'boundary-point-ne' : 'boundary-point-sw';
           return (
             <g key={`point-${index}`}>
@@ -590,23 +646,25 @@ function CombinatorialRhombus({
                 dominantBaseline="middle"
                 fontSize={baseFontSize * strokeScale}
               >
-                {/* Display 1-based position (pos is 0-based internally) */}
                 {point.pos + 1}
               </text>
             </g>
           );
         })}
         
-        {/* Next start point indicator - using straight side position */}
-        {nextStartPoint && (
-          <circle
-            cx={getPointOnSide(nextStartPoint.side, nextStartPoint.t).x}
-            cy={getPointOnSide(nextStartPoint.side, nextStartPoint.t).y}
-            r={baseStartPointRadius * strokeScale}
-            className="start-point"
-            strokeWidth={2 * strokeScale}
-          />
-        )}
+        {/* Next start point indicator - using blended side position */}
+        {nextStartPoint && (() => {
+          const startPtCoords = getPointOnSideBlended(nextStartPoint.side, nextStartPoint.t, shapeWeights);
+          return (
+            <circle
+              cx={startPtCoords.x}
+              cy={startPtCoords.y}
+              r={baseStartPointRadius * strokeScale}
+              className="start-point"
+              strokeWidth={2 * strokeScale}
+            />
+          );
+        })()}
       </svg>
     </div>
   );
