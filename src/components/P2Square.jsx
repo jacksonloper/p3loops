@@ -23,7 +23,7 @@ function getSegmentCoords(segment, allPoints) {
   const zone = segment.zone;
   const group = getZoneGroup(zone);
 
-  const groupPoints = allPoints.filter(p => p.group === group);
+  const groupPoints = allPoints.filter(p => p.group === group && p.zone === zone);
 
   let startT, endT;
   if (segment.startPos === null && segment.endPos === null) {
