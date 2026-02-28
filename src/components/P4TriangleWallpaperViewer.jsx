@@ -94,9 +94,10 @@ function isSameSideEdge(edge) {
  * Computes visited frames and bounding box. Path points use triangle mapping.
  */
 function generateWallpaperData(edges, repeats = 1) {
-  if (edges.length === 0) return { pathPoints: [], squareFrames: [], squareIndices: [] };
+  if (edges.length === 0) return { pathPoints: [], squareFrames: [], squareIndices: [], vertexIndices: [] };
   
   const pathPoints = [];
+  const vertexIndices = [];
   const squareFrames = [];
   const squareIndices = [];
   let currentFrame = createIdentityFrame();
@@ -111,11 +112,13 @@ function generateWallpaperData(edges, repeats = 1) {
     for (let i = 0; i < edges.length; i++) {
       const edge = edges[i];
       
-      // Add the starting point
+      // Add the starting point (and track as vertex)
       if (rep === 0 && i === 0) {
+        vertexIndices.push(pathPoints.length);
         pathPoints.push(pointToTriangleScreenSpace(edge.from, currentFrame));
       } else {
         if (isInteriorPoint(edge.from) || lastEndSide === null) {
+          vertexIndices.push(pathPoints.length);
           pathPoints.push(pointToTriangleScreenSpace(edge.from, currentFrame));
         } else {
           const fromSide = edge.from.side;
@@ -125,6 +128,7 @@ function generateWallpaperData(edges, repeats = 1) {
           const sameT = lastEndT !== null && Math.abs(fromT - lastEndT) < EPSILON;
           
           if (!((sameSide || identifiedSide) && sameT)) {
+            vertexIndices.push(pathPoints.length);
             pathPoints.push(pointToTriangleScreenSpace(edge.from, currentFrame));
           }
         }
@@ -157,6 +161,7 @@ function generateWallpaperData(edges, repeats = 1) {
         }
       }
       
+      vertexIndices.push(pathPoints.length);
       pathPoints.push(pointToTriangleScreenSpace(toPointForDrawing, currentFrame));
       
       if (!isInteriorPoint(toPointForDrawing)) {
@@ -209,7 +214,7 @@ function generateWallpaperData(edges, repeats = 1) {
     }
   }
   
-  return { pathPoints, squareFrames, squareIndices };
+  return { pathPoints, squareFrames, squareIndices, vertexIndices };
 }
 
 /**
@@ -318,7 +323,7 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   const effectiveRepeats = isLoopClosed ? repeats : 1;
   
   // Generate wallpaper data using triangle mapping
-  const { pathPoints, squareFrames, squareIndices } = useMemo(() => 
+  const { pathPoints, squareFrames, squareIndices, vertexIndices } = useMemo(() => 
     generateWallpaperData(edges, effectiveRepeats), 
     [edges, effectiveRepeats]
   );
@@ -373,6 +378,14 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     const height = bounds.maxY - bounds.minY + 2 * padding;
     return `${minX} ${minY} ${width} ${height}`;
   }, [bounds]);
+  
+  // Create path string for the trajectory
+  const pathString = useMemo(() => {
+    if (pathPoints.length < 2) return '';
+    return pathPoints.map((pt, i) => 
+      `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`
+    ).join(' ');
+  }, [pathPoints]);
   
   return (
     <div className="wallpaper-viewer-overlay" onClick={onClose}>
@@ -432,6 +445,65 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
                     {indexLabel}
                   </text>
                 </g>
+              );
+            })}
+            
+            {/* Draw the path trajectory */}
+            {pathString && (
+              <path 
+                d={pathString}
+                className="trajectory-line"
+                fill="none"
+              />
+            )}
+            
+            {/* Draw path vertices (only at actual edge endpoints, not intermediate samples) */}
+            {vertexIndices.map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              if (!pt) return null;
+              const isStart = i === 0;
+              const isEnd = i === vertexIndices.length - 1;
+              const radius = (isStart || isEnd) ? 8 : 5;
+              const className = isStart ? 'trajectory-start' : 
+                               isEnd ? 'trajectory-end' : 
+                               'trajectory-point';
+              return (
+                <circle
+                  key={`vertex-${i}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={radius}
+                  className={className}
+                />
+              );
+            })}
+            
+            {/* Draw direction arrows along the path (one per edge, at vertex midpoints) */}
+            {vertexIndices.length >= 2 && vertexIndices.slice(0, -1).map((vertexIdx, i) => {
+              const pt = pathPoints[vertexIdx];
+              const nextVertexIdx = vertexIndices[i + 1];
+              const nextPt = pathPoints[nextVertexIdx];
+              if (!pt || !nextPt) return null;
+              
+              const midIdx = Math.floor((vertexIdx + nextVertexIdx) / 2);
+              const midPt = pathPoints[midIdx];
+              
+              const prevIdx = Math.max(0, midIdx - 1);
+              const nextIdx = Math.min(pathPoints.length - 1, midIdx + 1);
+              const dx = pathPoints[nextIdx].x - pathPoints[prevIdx].x;
+              const dy = pathPoints[nextIdx].y - pathPoints[prevIdx].y;
+              const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+              
+              // Only draw arrows for every other edge to reduce clutter
+              if (i % 2 !== 0) return null;
+              
+              return (
+                <polygon
+                  key={`arrow-${i}`}
+                  points="0,-4 8,0 0,4"
+                  transform={`translate(${midPt.x}, ${midPt.y}) rotate(${angle})`}
+                  className="trajectory-arrow"
+                />
               );
             })}
           </svg>
