@@ -738,3 +738,183 @@ export function getSize() {
 export function getShear() {
   return SHEAR;
 }
+
+// ============================================================================
+// BLENDED SHAPE MAPPING (for animated shape morphing)
+// ============================================================================
+// All three shape mappings go from paper coordinates (southward, eastward)
+// in [0,1]² to screen coordinates, using the same coordinate system (SIZE=300).
+//
+// Rhombus: the existing 120/60° rhombus with shear
+// Square:  a plain square [0,SIZE]² (no shear)
+// Triangle: square-to-triangle diffeomorphism F(u,v) = (u(1-v/2), v(1-u/2))
+//
+// Blending interpolates the screen coordinates using weights that sum to 1.
+// ============================================================================
+
+/**
+ * Map paper coordinates to screen coordinates for a plain square (no shear).
+ * @param {number} southward - [0, 1]
+ * @param {number} eastward - [0, 1]
+ * @returns {{ x: number, y: number }}
+ */
+function paperToSquare(southward, eastward) {
+  return { x: eastward * SIZE, y: southward * SIZE };
+}
+
+/**
+ * Map paper coordinates to screen coordinates via the triangle diffeomorphism.
+ * F(u,v) = (u*(1-v/2), v*(1-u/2)) scaled by SIZE.
+ * @param {number} southward - [0, 1]
+ * @param {number} eastward - [0, 1]
+ * @returns {{ x: number, y: number }}
+ */
+function paperToTriangleLocal(southward, eastward) {
+  const u = eastward, v = southward;
+  return {
+    x: u * (1 - v / 2) * SIZE,
+    y: v * (1 - u / 2) * SIZE
+  };
+}
+
+/**
+ * Blend between rhombus, square, and triangle mappings.
+ * Weights should sum to 1.
+ *
+ * @param {number} southward - [0, 1]
+ * @param {number} eastward - [0, 1]
+ * @param {{ rhombus: number, square: number, triangle: number }} weights
+ * @returns {{ x: number, y: number }}
+ */
+export function paperToScreenBlended(southward, eastward, weights) {
+  let x = 0, y = 0;
+
+  if (weights.rhombus > 0) {
+    const r = unitSquareToRhombus(southward, eastward);
+    x += weights.rhombus * r.x;
+    y += weights.rhombus * r.y;
+  }
+
+  if (weights.square > 0) {
+    const s = paperToSquare(southward, eastward);
+    x += weights.square * s.x;
+    y += weights.square * s.y;
+  }
+
+  if (weights.triangle > 0) {
+    const t = paperToTriangleLocal(southward, eastward);
+    x += weights.triangle * t.x;
+    y += weights.triangle * t.y;
+  }
+
+  return { x, y };
+}
+
+/**
+ * Get screen coordinates for a point on a side using the blended mapping.
+ * @param {string} side - 'north', 'east', 'south', 'west'
+ * @param {number} t - Parameter [0, 1]
+ * @param {{ rhombus: number, square: number, triangle: number }} weights
+ * @returns {{ x: number, y: number }}
+ */
+export function getPointOnSideBlended(side, t, weights) {
+  const paper = getPointPaperCoordinates({ side, t });
+  return paperToScreenBlended(paper.southward, paper.eastward, weights);
+}
+
+/**
+ * Get SVG path for the shape outline using the blended mapping.
+ * @param {{ rhombus: number, square: number, triangle: number }} weights
+ * @returns {string} SVG path string
+ */
+export function getOutlinePathBlended(weights) {
+  const nw = paperToScreenBlended(0, 0, weights);
+  const ne = paperToScreenBlended(0, 1, weights);
+  const se = paperToScreenBlended(1, 1, weights);
+  const sw = paperToScreenBlended(1, 0, weights);
+  return `M ${nw.x} ${nw.y} L ${ne.x} ${ne.y} L ${se.x} ${se.y} L ${sw.x} ${sw.y} Z`;
+}
+
+/**
+ * Get SVG path for a straight segment along a side using the blended mapping.
+ * @param {string} side
+ * @param {number} t1
+ * @param {number} t2
+ * @param {{ rhombus: number, square: number, triangle: number }} weights
+ * @returns {string} SVG path string
+ */
+export function getSideSegmentPathBlended(side, t1, t2, weights) {
+  const start = getPointOnSideBlended(side, t1, weights);
+  const end = getPointOnSideBlended(side, t2, weights);
+  return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+}
+
+/**
+ * Create a curved edge path using the blended shape mapping.
+ * Samples chord-in-disk points (via paper coords) and renders through
+ * the blended mapping, preserving non-intersection.
+ *
+ * @param {string} fromSide
+ * @param {number} fromT
+ * @param {string} toSide
+ * @param {number} toT
+ * @param {{ rhombus: number, square: number, triangle: number }} weights
+ * @returns {{ pathD: string, midPoint: { x: number, y: number }, angle: number }}
+ */
+export function getCurvedEdgePathBlended(fromSide, fromT, toSide, toT, weights) {
+  // Get paper-space points along the chord
+  const paperPts = getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, EDGE_PATH_SAMPLES);
+
+  // Map to screen coords using blended weights
+  const pts = paperPts.map(p => {
+    const screen = paperToScreenBlended(p.southward, p.eastward, weights);
+    return [screen.x, screen.y];
+  });
+
+  // Select knots for Catmull-Rom spline
+  const knots = [];
+  for (let i = 0; i < pts.length; i += EDGE_PATH_KNOT_STEP) {
+    knots.push(pts[i]);
+  }
+  const lastPt = pts[pts.length - 1];
+  const lastKnot = knots[knots.length - 1];
+  if (!lastKnot || lastKnot[0] !== lastPt[0] || lastKnot[1] !== lastPt[1]) {
+    knots.push(lastPt);
+  }
+
+  // Convert to Bézier segments
+  const segs = catmullRomToBeziers(knots);
+
+  if (segs.length === 0) {
+    const from = getPointOnSideBlended(fromSide, fromT, weights);
+    const to = getPointOnSideBlended(toSide, toT, weights);
+    const midX = (from.x + to.x) / 2;
+    const midY = (from.y + to.y) / 2;
+    const angle = Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI);
+    return {
+      pathD: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+      midPoint: { x: midX, y: midY },
+      angle
+    };
+  }
+
+  // Build SVG path string with cubic Bézier curves
+  let d = `M ${segs[0].p1[0]} ${segs[0].p1[1]}`;
+  for (const seg of segs) {
+    d += ` C ${seg.c1[0]} ${seg.c1[1]} ${seg.c2[0]} ${seg.c2[1]} ${seg.p2[0]} ${seg.p2[1]}`;
+  }
+
+  // Calculate midpoint
+  const midIdx = Math.floor(pts.length / 2);
+  const midScreen = { x: pts[midIdx][0], y: pts[midIdx][1] };
+
+  // Calculate angle at midpoint
+  const prevIdx = Math.max(0, midIdx - 1);
+  const nextIdx = Math.min(pts.length - 1, midIdx + 1);
+  const angle = Math.atan2(
+    pts[nextIdx][1] - pts[prevIdx][1],
+    pts[nextIdx][0] - pts[prevIdx][0]
+  ) * (180 / Math.PI);
+
+  return { pathD: d, midPoint: midScreen, angle };
+}
