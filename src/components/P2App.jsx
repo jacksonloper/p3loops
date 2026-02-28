@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import P2Square from './P2Square.jsx';
+import P2LoopSelector from './P2LoopSelector.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -355,6 +356,17 @@ function P2App() {
                     className="control-btn secondary-btn">
               {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
             </button>
+
+            <P2LoopSelector
+              onSelectLoop={(loop) => {
+                setState(loop.state);
+                setIsLoopClosed(true);
+                setFirstEdgeMode(false);
+                setFirstEdgeFromSegment(null);
+                setSelectedSegment(null);
+                setValidationMessage(`Loaded loop with ${loop.length} edges`);
+              }}
+            />
           </div>
 
           {validationMessage && (
