@@ -22,6 +22,8 @@
  * Cupola height: z = (u * (1-u) * v * (1-v))^(1/3)
  */
 
+import { getEdgeSamplePoints } from './p2Geometry.js';
+
 /**
  * Convert zone + t coordinates to unit square (x, y) ∈ [0,1]².
  * x = eastward, y = southward.
@@ -136,34 +138,21 @@ export function unitSquareTo3D(x, y) {
 }
 
 /**
- * Sample points along a quadratic bezier edge between two zone-parameterized
- * boundary points, then convert each to 3D.
+ * Sample points along an edge between two zone-parameterized boundary points,
+ * using the diffeomorphism approach, then convert each to 3D.
  *
  * @param {Object} edge - Edge with from: {zone, t} and to: {zone, t}
  * @param {number} numSamples - Number of sample points
  * @returns {Array<{x: number, y: number, z: number}>}
  */
 export function interpolateEdge3D(edge, numSamples = 15) {
-  const p0 = zoneToUnitSquare(edge.from.zone, edge.from.t);
-  const p1 = zoneToUnitSquare(edge.to.zone, edge.to.t);
+  const samplePts = getEdgeSamplePoints(
+    edge.from.zone, edge.from.t,
+    edge.to.zone, edge.to.t,
+    numSamples
+  );
 
-  // Control point: pull midpoint toward center of square
-  const midX = (p0.x + p1.x) / 2;
-  const midY = (p0.y + p1.y) / 2;
-  const pullFactor = 0.3;
-  const ctrlX = midX + (0.5 - midX) * pullFactor;
-  const ctrlY = midY + (0.5 - midY) * pullFactor;
-
-  const points = [];
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / (numSamples - 1);
-    // Quadratic bezier
-    const bx = (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * ctrlX + t * t * p1.x;
-    const by = (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * ctrlY + t * t * p1.y;
-    points.push(unitSquareTo3D(bx, by));
-  }
-
-  return points;
+  return samplePts.map(p => unitSquareTo3D(p.x, p.y));
 }
 
 /**

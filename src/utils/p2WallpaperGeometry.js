@@ -25,6 +25,8 @@
  *   y' = c*x + d*y + ty
  */
 
+import { getEdgeSamplePoints } from './p2Geometry.js';
+
 const SIDE = 300;
 const HALF = SIDE / 2;
 
@@ -196,8 +198,8 @@ export function pointToScreenSpace(point, frame) {
 }
 
 /**
- * Get a curved edge path (quadratic Bézier) between two zone/t points.
- * The control point is pulled toward the center of the square.
+ * Get a curved edge path between two zone/t points using the diffeomorphism.
+ * Samples points along the chord-based curve and transforms them.
  * 
  * @param {{ zone: string, t: number }} from
  * @param {{ zone: string, t: number }} to
@@ -205,28 +207,23 @@ export function pointToScreenSpace(point, frame) {
  * @returns {string} SVG path string
  */
 export function getCurvedEdgePathWallpaper(from, to, frame) {
-  const p0Local = getPointInZoneWallpaper(from.zone, from.t);
-  const p1Local = getPointInZoneWallpaper(to.zone, to.t);
-  
-  // Control point: midpoint pulled toward center
-  const cx = -HALF; // center of wallpaper square
-  const cy = HALF;
-  const midX = (p0Local.x + p1Local.x) / 2;
-  const midY = (p0Local.y + p1Local.y) / 2;
-  const pullFactor = 0.3;
-  const ctrlX = midX + (cx - midX) * pullFactor;
-  const ctrlY = midY + (cy - midY) * pullFactor;
-  
-  // Sample points along the quadratic Bézier for transformation
   const numSamples = 20;
-  const points = [];
-  for (let i = 0; i <= numSamples; i++) {
-    const s = i / numSamples;
-    const x = (1 - s) * (1 - s) * p0Local.x + 2 * (1 - s) * s * ctrlX + s * s * p1Local.x;
-    const y = (1 - s) * (1 - s) * p0Local.y + 2 * (1 - s) * s * ctrlY + s * s * p1Local.y;
-    points.push(applyReferenceFrame(x, y, frame));
-  }
-  
+  const samplePts = getEdgeSamplePoints(
+    from.zone, from.t,
+    to.zone, to.t,
+    numSamples
+  );
+
+  // Convert unit-square points to local wallpaper-square screen coords,
+  // then apply the reference frame.
+  const points = samplePts.map(p => {
+    // unit square: x=eastward [0,1], y=southward [0,1]
+    // wallpaper square: NW=(-SIDE,0), NE=(0,0), SE=(0,SIDE), SW=(-SIDE,SIDE)
+    const localX = -SIDE + p.x * SIDE;
+    const localY = p.y * SIDE;
+    return applyReferenceFrame(localX, localY, frame);
+  });
+
   if (points.length < 2) return '';
   
   let path = `M ${points[0].x} ${points[0].y}`;
