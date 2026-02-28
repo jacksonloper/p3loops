@@ -378,6 +378,9 @@ function CombinatorialApp() {
         <p className="subtitle">
           Create non-crossing paths on a 120/60/120/60 rhombus with edge identifications
         </p>
+        <p className="subtitle">
+          <a href="/p2" style={{ color: '#667eea', textDecoration: 'none' }}>→ Try the P2 Editor</a>
+        </p>
       </header>
 
       <main className="editor-main">
