@@ -583,9 +583,14 @@ describe('P4 Triangle Diffeo - paperToTriangle', () => {
     expectPointsClose(result, { x: NW_CORNER.x, y: NW_CORNER.y });
   });
 
-  it('should map NE corner (0,1) to NE screen position', () => {
+  it('should map NE corner (0,1) to hypotenuse midpoint', () => {
     const result = paperToTriangle(0, 1);
-    expectPointsClose(result, { x: NE_CORNER.x, y: NE_CORNER.y });
+    // G(1,0) = (0.5, 0.5) → midpoint of NW and SE
+    const expected = {
+      x: (NW_CORNER.x + SE_CORNER.x) / 2,
+      y: (NW_CORNER.y + SE_CORNER.y) / 2
+    };
+    expectPointsClose(result, expected);
   });
 
   it('should map SW corner (1,0) to SW screen position', () => {
@@ -593,29 +598,24 @@ describe('P4 Triangle Diffeo - paperToTriangle', () => {
     expectPointsClose(result, { x: SW_CORNER.x, y: SW_CORNER.y });
   });
 
-  it('should map SE corner (1,1) to hypotenuse midpoint', () => {
+  it('should map SE corner (1,1) to SE screen position', () => {
     const result = paperToTriangle(1, 1);
-    // F(1,1) = (0.5, 0.5) → midpoint of NE and SW
-    const expected = {
-      x: (NE_CORNER.x + SW_CORNER.x) / 2,
-      y: (NE_CORNER.y + SW_CORNER.y) / 2
-    };
-    expectPointsClose(result, expected);
+    expectPointsClose(result, { x: SE_CORNER.x, y: SE_CORNER.y });
   });
 
-  it('should map north edge (v=0) along bottom leg', () => {
-    // North edge: southward=0, eastward varies
-    // F(u, 0) = (u, 0) → same as square north edge
+  it('should map south edge (v=1) along bottom leg', () => {
+    // South edge: southward=1, eastward varies
+    // G(u, 1) = (u, 1) → same as square south edge
     for (const t of [0.25, 0.5, 0.75]) {
-      const triangle = paperToTriangle(0, t);
-      const square = paperToTrueSquare(0, t);
+      const triangle = paperToTriangle(1, t);
+      const square = paperToTrueSquare(1, t);
       expectPointsClose(triangle, square);
     }
   });
 
   it('should map west edge (u=0) along left leg', () => {
     // West edge: eastward=0, southward varies
-    // F(0, v) = (0, v) → same as square west edge
+    // G(0, v) = (0, v) → same as square west edge
     for (const t of [0.25, 0.5, 0.75]) {
       const triangle = paperToTriangle(t, 0);
       const square = paperToTrueSquare(t, 0);
@@ -623,13 +623,25 @@ describe('P4 Triangle Diffeo - paperToTriangle', () => {
     }
   });
 
-  it('should map interior points inside the triangle (x+y <= 1 in normalized coords)', () => {
-    // Interior point (0.5, 0.5): F(0.5, 0.5) = (0.5*0.75, 0.5*0.75) = (0.375, 0.375)
-    // x+y = 0.75 < 1, so inside triangle ✓
+  it('should map north edge to hypotenuse (x=y line)', () => {
+    // North edge: southward=0, eastward varies
+    // G(u, 0) = (u/2, u/2) → on the x=y line (hypotenuse)
+    for (const t of [0.25, 0.5, 0.75]) {
+      const result = paperToTriangle(0, t);
+      // In normalized coords, x should equal y
+      // screenX = NW.x + x*(NE.x-NW.x) + y*(SW.x-NW.x)
+      // For x=y=t/2: screenX = NW.x + (t/2)*SIDE + (t/2)*0 = NW.x + t*SIDE/2
+      //              screenY = NW.y + 0 + (t/2)*SIDE = t*SIDE/2
+      const expectedX = NW_CORNER.x + (t / 2) * (NE_CORNER.x - NW_CORNER.x) + (t / 2) * (SW_CORNER.x - NW_CORNER.x);
+      const expectedY = NW_CORNER.y + (t / 2) * (NE_CORNER.y - NW_CORNER.y) + (t / 2) * (SW_CORNER.y - NW_CORNER.y);
+      expectPointsClose(result, { x: expectedX, y: expectedY });
+    }
+  });
+
+  it('should map interior points inside the triangle', () => {
     const result = paperToTriangle(0.5, 0.5);
     // Should be different from square mapping
     const squareResult = paperToTrueSquare(0.5, 0.5);
-    // Triangle result should be "compressed" toward the NW-NE-SW triangle
     expect(result.x).not.toBeCloseTo(squareResult.x, 1);
   });
 });

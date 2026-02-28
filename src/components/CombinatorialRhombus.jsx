@@ -31,7 +31,7 @@ const ANIMATION_DURATION_MS = 600;
 const SHAPE_ANGLES = {
   rhombus:  { nw: '60°', ne: '120°', se: '60°', sw: '120°' },
   square:   { nw: '90°', ne: '90°', se: '90°', sw: '90°' },
-  triangle: { nw: '90°', ne: '45°', se: '', sw: '45°' }
+  triangle: { nw: '45°', ne: '', se: '45°', sw: '90°' }
 };
 
 /**

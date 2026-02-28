@@ -53,20 +53,20 @@ describe('paperToScreenBlended', () => {
 
   it('should return triangle coords when triangle weight is 1', () => {
     const weights = { rhombus: 0, square: 0, triangle: 1 };
-    // (0, 0) = NW → (0, 0) in triangle mapping
+    // (0, 0) = NW → (0, 0) in triangle mapping (same as square)
     const nw = paperToScreenBlended(0, 0, weights);
     expect(nw.x).toBeCloseTo(0, 5);
     expect(nw.y).toBeCloseTo(0, 5);
     
-    // (0, 1) = NE → (SIZE, 0) (u=1, v=0 → (1, 0)*SIZE)
+    // (0, 1) = NE → collapses to hypotenuse midpoint (SIZE/2, SIZE/2)
     const ne = paperToScreenBlended(0, 1, weights);
-    expect(ne.x).toBeCloseTo(SIZE, 5);
-    expect(ne.y).toBeCloseTo(0, 5);
+    expect(ne.x).toBeCloseTo(SIZE / 2, 5);
+    expect(ne.y).toBeCloseTo(SIZE / 2, 5);
     
-    // (1, 1) = SE → (0.5*SIZE, 0.5*SIZE) (hypotenuse midpoint)
+    // (1, 1) = SE → (SIZE, SIZE) (same as square)
     const se = paperToScreenBlended(1, 1, weights);
-    expect(se.x).toBeCloseTo(SIZE / 2, 5);
-    expect(se.y).toBeCloseTo(SIZE / 2, 5);
+    expect(se.x).toBeCloseTo(SIZE, 5);
+    expect(se.y).toBeCloseTo(SIZE, 5);
   });
 
   it('should interpolate between shapes at weight 0.5', () => {

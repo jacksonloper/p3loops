@@ -589,21 +589,22 @@ export function indexToFrame(index) {
 // TRIANGLE DIFFEO: Square → 45-45-90 Triangle
 // ============================================================================
 // 
-// The diffeomorphism F(u,v) = (u*(1 - v/2), v*(1 - u/2)) maps the unit square
-// [0,1]² to the triangle with vertices (0,0), (1,0), (0,1):
-//   - (0,0) → (0,0)  [NW corner]
-//   - (1,0) → (1,0)  [NE corner]
-//   - (0,1) → (0,1)  [SW corner]
-//   - (1,1) → (0.5, 0.5) [hypotenuse midpoint, where SE was]
+// The diffeomorphism G(u,v) = (u*(1+v)/2, v + u*(1-v)/2) maps the unit square
+// [0,1]² to the triangle with vertices (0,0), (0,1), (1,0):
+//   - (0,0) → (0,0)  [NW corner → 45° vertex]
+//   - (1,0) → (0.5, 0.5) [NE corner → hypotenuse midpoint, 180° cone]
+//   - (0,1) → (0,1)  [SW corner → 90° vertex]
+//   - (1,1) → (1,1)  [SE corner → 45° vertex]
 //
-// The north and west edges map to the triangle legs.
-// Both east and south edges map to the hypotenuse (x+y=1).
-// The 4-way cone points end up at the 90° vertex and the identified 45° vertices.
-// The 180° cone point is at the hypotenuse midpoint.
+// The south and west edges map to the triangle legs.
+// Both north and east edges map to the hypotenuse (x=y line).
+// This correctly collapses the identified pair (north↔east) onto
+// the hypotenuse, with the NE corner becoming the 180° cone point.
+// The 4-way cone points are at SW (90°) and NW≡SE (45°+45°).
 
 /**
  * Convert paper coordinates to screen coordinates via the triangle diffeomorphism.
- * Applies F(u,v) = (u*(1 - v/2), v*(1 - u/2)) then maps to screen space.
+ * Applies G(u,v) = (u*(1+v)/2, v + u*(1-v)/2) then maps to screen space.
  * 
  * @param {number} southward - Southward position [0, 1]
  * @param {number} eastward - Eastward position [0, 1]
@@ -612,9 +613,9 @@ export function indexToFrame(index) {
 export function paperToTriangle(southward, eastward) {
   const u = eastward;
   const v = southward;
-  // Apply diffeo: square → triangle
-  const x = u * (1.0 - 0.5 * v);
-  const y = v * (1.0 - 0.5 * u);
+  // Apply diffeo: square → triangle (north+east collapse to hypotenuse)
+  const x = u * (1.0 + v) / 2.0;
+  const y = v + u * (1.0 - v) / 2.0;
   
   // Map to screen coordinates using same linear mapping as paperToTrueSquare
   const screenX = NW_CORNER.x + x * (NE_CORNER.x - NW_CORNER.x) + y * (SW_CORNER.x - NW_CORNER.x);

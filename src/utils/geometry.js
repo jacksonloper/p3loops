@@ -764,7 +764,8 @@ function paperToSquare(southward, eastward) {
 
 /**
  * Map paper coordinates to screen coordinates via the triangle diffeomorphism.
- * F(u,v) = (u*(1-v/2), v*(1-u/2)) scaled by SIZE.
+ * G(u,v) = (u*(1+v)/2, v + u*(1-v)/2) scaled by SIZE.
+ * North and east edges collapse to the hypotenuse; south and west are legs.
  * @param {number} southward - [0, 1]
  * @param {number} eastward - [0, 1]
  * @returns {{ x: number, y: number }}
@@ -772,8 +773,8 @@ function paperToSquare(southward, eastward) {
 function paperToTriangleLocal(southward, eastward) {
   const u = eastward, v = southward;
   return {
-    x: u * (1 - v / 2) * SIZE,
-    y: v * (1 - u / 2) * SIZE
+    x: u * (1 + v) / 2 * SIZE,
+    y: (v + u * (1 - v) / 2) * SIZE
   };
 }
 

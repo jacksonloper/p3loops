@@ -9,9 +9,9 @@ import {
   updateWallpaperIndex,
   formatWallpaperIndex,
   indexToFrame,
-  NE_CORNER,
   NW_CORNER,
-  SW_CORNER
+  SW_CORNER,
+  SE_CORNER
 } from '../utils/p4WallpaperGeometry.js';
 import { isInteriorPoint, getIdentifiedSide, EPSILON, getEdgeSamplePointsPaper } from '../utils/geometry.js';
 import './WallpaperViewer.css';
@@ -214,12 +214,14 @@ function generateWallpaperData(edges, repeats = 1) {
 
 /**
  * Get the three corners of the triangle in a given reference frame.
+ * With the corrected diffeomorphism, NE collapses to the hypotenuse midpoint,
+ * so the triangle vertices are NW, SW, SE.
  */
 function getTriangleCorners(frame) {
   return {
     nw: applyReferenceFrame(NW_CORNER.x, NW_CORNER.y, frame),
-    ne: applyReferenceFrame(NE_CORNER.x, NE_CORNER.y, frame),
-    sw: applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame)
+    sw: applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame),
+    se: applyReferenceFrame(SE_CORNER.x, SE_CORNER.y, frame)
   };
 }
 
@@ -229,8 +231,8 @@ function getTriangleCorners(frame) {
 function getTriangleCenter(frame) {
   const corners = getTriangleCorners(frame);
   return {
-    x: (corners.nw.x + corners.ne.x + corners.sw.x) / 3,
-    y: (corners.nw.y + corners.ne.y + corners.sw.y) / 3
+    x: (corners.nw.x + corners.sw.x + corners.se.x) / 3,
+    y: (corners.nw.y + corners.sw.y + corners.se.y) / 3
   };
 }
 
@@ -239,20 +241,21 @@ function getTriangleCenter(frame) {
  */
 function getTrianglePathString(frame) {
   const corners = getTriangleCorners(frame);
-  return `M ${corners.nw.x} ${corners.nw.y} L ${corners.ne.x} ${corners.ne.y} L ${corners.sw.x} ${corners.sw.y} Z`;
+  return `M ${corners.nw.x} ${corners.nw.y} L ${corners.sw.x} ${corners.sw.y} L ${corners.se.x} ${corners.se.y} Z`;
 }
 
 /**
  * Get the position and rotation for the "N" marker on the north edge.
+ * North maps to the hypotenuse (NW→SE direction), so place the marker there.
  */
 function getNorthMarkerInfo(frame) {
   const corners = getTriangleCorners(frame);
   
-  const x = (corners.nw.x + corners.ne.x) / 2;
-  const y = (corners.nw.y + corners.ne.y) / 2;
+  const x = (corners.nw.x + corners.se.x) / 2;
+  const y = (corners.nw.y + corners.se.y) / 2;
   
-  const dx = corners.ne.x - corners.nw.x;
-  const dy = corners.ne.y - corners.nw.y;
+  const dx = corners.se.x - corners.nw.x;
+  const dy = corners.se.y - corners.nw.y;
   const angle = Math.atan2(dy, dx) * 180 / Math.PI;
   
   return { x, y, angle };
@@ -341,7 +344,7 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     
     for (const frame of squareFrames) {
       const corners = getTriangleCorners(frame);
-      for (const corner of [corners.nw, corners.ne, corners.sw]) {
+      for (const corner of [corners.nw, corners.sw, corners.se]) {
         minX = Math.min(minX, corner.x);
         minY = Math.min(minY, corner.y);
         maxX = Math.max(maxX, corner.x);
