@@ -391,7 +391,7 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     <div className="wallpaper-viewer-overlay" onClick={onClose}>
       <div className="wallpaper-viewer-container" onClick={(e) => e.stopPropagation()}>
         <div className="wallpaper-viewer-header">
-          <h2>P4 Triangle Wallpaper View</h2>
+          <h2>P4 (NE 180° flip) Wallpaper View</h2>
           <button onClick={onClose} className="wallpaper-close-btn">×</button>
         </div>
         
@@ -511,7 +511,7 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
         
         <div className="wallpaper-info">
           <p>
-            Path unfolded onto R² (P4 triangle mode) • {visitedTriangleKeys.size} visited triangles • {allTriangles.length} total displayed
+            Path unfolded onto R² (P4, NE 180° flip) • {visitedTriangleKeys.size} visited triangles • {allTriangles.length} total displayed
             {isLoopClosed && ` • ${effectiveRepeats} repeat${effectiveRepeats === 1 ? '' : 's'}`}
           </p>
           

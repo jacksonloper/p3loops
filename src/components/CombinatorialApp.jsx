@@ -619,7 +619,7 @@ function CombinatorialApp() {
               disabled={state.edges.length === 0}
               className="control-btn primary-btn"
             >
-              View as P4 Wallpaper
+              P4 (NW 180° flip)
             </button>
             
             <button 
@@ -627,7 +627,7 @@ function CombinatorialApp() {
               disabled={state.edges.length === 0}
               className="control-btn primary-btn"
             >
-              View as P4 Triangle
+              P4 (NE 180° flip)
             </button>
             
             <button 

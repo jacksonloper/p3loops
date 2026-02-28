@@ -493,7 +493,7 @@ function P4WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     <div className="wallpaper-viewer-overlay" onClick={onClose}>
       <div className="wallpaper-viewer-container" onClick={(e) => e.stopPropagation()}>
         <div className="wallpaper-viewer-header">
-          <h2>P4 Wallpaper View</h2>
+          <h2>P4 (NW 180° flip) Wallpaper View</h2>
           <button onClick={onClose} className="wallpaper-close-btn">×</button>
         </div>
         
@@ -615,7 +615,7 @@ function P4WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
         
         <div className="wallpaper-info">
           <p>
-            Path unfolded onto R² (P4 symmetry) • {pathPoints.length} points • {visitedSquareKeys.size} visited squares • {allSquares.length} total displayed
+            Path unfolded onto R² (P4, NW 180° flip) • {pathPoints.length} points • {visitedSquareKeys.size} visited squares • {allSquares.length} total displayed
             {isLoopClosed && ` • ${effectiveRepeats} repeat${effectiveRepeats === 1 ? '' : 's'}`}
           </p>
           
