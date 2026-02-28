@@ -8,7 +8,7 @@ import {
   getCorners,
   getMidpoints
 } from '../utils/p2Geometry.js';
-import { getZoneGroup } from '../utils/p2PathLogic.js';
+import { getZoneGroup, REVERSED_ZONES } from '../utils/p2PathLogic.js';
 import './CombinatorialRhombus.css'; // reuse existing styles
 
 const MIN_ZOOM = 1;
@@ -22,6 +22,7 @@ const TAP_MAX_DISTANCE = 10;
 function getSegmentCoords(segment, allPoints) {
   const zone = segment.zone;
   const group = getZoneGroup(zone);
+  const isReversed = REVERSED_ZONES.has(zone);
 
   const groupPoints = allPoints.filter(p => p.group === group && p.zone === zone);
 
@@ -31,17 +32,29 @@ function getSegmentCoords(segment, allPoints) {
     endT = 1;
   } else if (segment.startPos === null) {
     const endPoint = groupPoints.find(p => p.pos === segment.endPos);
-    startT = 0;
-    endT = endPoint?.t ?? 0;
+    if (isReversed) {
+      startT = endPoint?.t ?? 1;
+      endT = 1;
+    } else {
+      startT = 0;
+      endT = endPoint?.t ?? 0;
+    }
   } else if (segment.endPos === null) {
     const startPoint = groupPoints.find(p => p.pos === segment.startPos);
-    startT = startPoint?.t ?? 1;
-    endT = 1;
+    if (isReversed) {
+      startT = 0;
+      endT = startPoint?.t ?? 0;
+    } else {
+      startT = startPoint?.t ?? 1;
+      endT = 1;
+    }
   } else {
     const startPoint = groupPoints.find(p => p.pos === segment.startPos);
     const endPoint = groupPoints.find(p => p.pos === segment.endPos);
-    startT = startPoint?.t ?? 0;
-    endT = endPoint?.t ?? 1;
+    const t1 = startPoint?.t ?? 0;
+    const t2 = endPoint?.t ?? 1;
+    startT = Math.min(t1, t2);
+    endT = Math.max(t1, t2);
   }
 
   const midT = (startT + endT) / 2;

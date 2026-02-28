@@ -62,7 +62,7 @@ export const GROUPS = ['NNW_NNE', 'ENE_ESE', 'SSE_SSW', 'WSW_WNW'];
  * Zones with reversed parameterization (second zone in each pair).
  * For these zones, pos i maps to float parameter (k-1-i+0.5)/k instead of (i+0.5)/k.
  */
-const REVERSED_ZONES = new Set(['NNE', 'ESE', 'SSW', 'WNW']);
+export const REVERSED_ZONES = new Set(['NNE', 'ESE', 'SSW', 'WNW']);
 
 /**
  * Get the group for a zone.
