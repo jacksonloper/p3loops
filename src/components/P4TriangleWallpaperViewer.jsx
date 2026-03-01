@@ -23,14 +23,15 @@ const EDGE_SAMPLES = 20;
  * Generate SVG path string for a single edge using diffeomorphism-based curved path,
  * mapped through the triangle diffeomorphism.
  */
-function generateCurvedEdgePath(edge, frame) {
+function generateCurvedEdgePath(edge, frame, radialPower = 1) {
   if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
     const samplePoints = getEdgeSamplePointsPaper(
       edge.from.side,
       edge.from.t,
       edge.to.side,
       edge.to.t,
-      EDGE_SAMPLES
+      EDGE_SAMPLES,
+      radialPower
     );
     
     const screenPoints = samplePoints.map(pt => {
@@ -55,12 +56,12 @@ function generateCurvedEdgePath(edge, frame) {
 /**
  * Generate SVG path string for all edges rendered in a given reference frame.
  */
-function generateAllEdgesPathString(edges, frame) {
+function generateAllEdgesPathString(edges, frame, radialPower = 1) {
   if (edges.length === 0) return '';
   
   const pathParts = [];
   for (const edge of edges) {
-    pathParts.push(generateCurvedEdgePath(edge, frame));
+    pathParts.push(generateCurvedEdgePath(edge, frame, radialPower));
   }
   return pathParts.join(' ');
 }
@@ -93,7 +94,7 @@ function isSameSideEdge(edge) {
  * Generate the wallpaper data using triangle diffeomorphism.
  * Computes visited frames and bounding box. Path points use triangle mapping.
  */
-function generateWallpaperData(edges, repeats = 1) {
+function generateWallpaperData(edges, repeats = 1, radialPower = 1) {
   if (edges.length === 0) return { pathPoints: [], squareFrames: [], squareIndices: [], vertexIndices: [] };
   
   const pathPoints = [];
@@ -151,7 +152,8 @@ function generateWallpaperData(edges, repeats = 1) {
           edge.from.t,
           toPointForDrawing.side,
           toPointForDrawing.t,
-          EDGE_SAMPLES
+          EDGE_SAMPLES,
+          radialPower
         );
         
         for (let j = 1; j < samplePoints.length - 1; j++) {
@@ -317,15 +319,15 @@ const DEFAULT_CLOSED_LOOP_REPEATS = 2;
  * 45-45-90 triangle fundamental domains with the square-to-triangle diffeomorphism.
  * Shows ghost paths in each triangle copy (no main trajectory tracing).
  */
-function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
+function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, radialPower = 1, onClose }) {
   const [repeats, setRepeats] = useState(isLoopClosed ? DEFAULT_CLOSED_LOOP_REPEATS : 1);
   
   const effectiveRepeats = isLoopClosed ? repeats : 1;
   
   // Generate wallpaper data using triangle mapping
   const { pathPoints, squareFrames, squareIndices, vertexIndices } = useMemo(() => 
-    generateWallpaperData(edges, effectiveRepeats), 
-    [edges, effectiveRepeats]
+    generateWallpaperData(edges, effectiveRepeats, radialPower), 
+    [edges, effectiveRepeats, radialPower]
   );
   
   const visitedTriangleKeys = useMemo(() => {
@@ -403,7 +405,7 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
             {allTriangles.map(({ frame, index: triIndex }) => {
               const markerInfo = getNorthMarkerInfo(frame);
               const center = getTriangleCenter(frame);
-              const ghostPathString = generateAllEdgesPathString(edges, frame);
+              const ghostPathString = generateAllEdgesPathString(edges, frame, radialPower);
               const indexLabel = formatWallpaperIndex(triIndex);
               const isVisited = visitedTriangleKeys.has(`${triIndex.tx},${triIndex.ty},${triIndex.r}`);
               

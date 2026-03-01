@@ -495,13 +495,32 @@ function diskToRhombus(u, v) {
 // ---------- Chord Sampling ----------
 
 /**
+ * Apply radial power transform to a point in the disk.
+ * Keeps theta unchanged and maps r → r^radialPower.
+ * This pulls chords toward the center when radialPower > 1.
+ * @param {number} u - u coordinate in disk
+ * @param {number} v - v coordinate in disk
+ * @param {number} radialPower - Power to raise r to (>= 1)
+ * @returns {number[]} [u', v'] transformed point in disk
+ */
+function applyRadialPower(u, v, radialPower) {
+  if (radialPower === 1) return [u, v];
+  const r = Math.hypot(u, v);
+  if (r < 1e-12) return [0, 0];
+  const newR = Math.pow(r, radialPower);
+  const scale = newR / r;
+  return [u * scale, v * scale];
+}
+
+/**
  * Sample points along a chord in the disk and map them to the rhombus.
  * @param {Object} start - Start point { sideIndex, s }
  * @param {Object} end - End point { sideIndex, s }
  * @param {number} nSamples - Number of samples along the chord
+ * @param {number} radialPower - Power for the radial transform (default: 1, no transform)
  * @returns {number[][]} Array of [X, Y] points in normalized rhombus coords
  */
-function chordImagePoints(start, end, nSamples) {
+function chordImagePoints(start, end, nSamples, radialPower = 1) {
   const [u1, v1] = boundaryToDisk(start.sideIndex, start.s);
   const [u2, v2] = boundaryToDisk(end.sideIndex, end.s);
 
@@ -513,8 +532,10 @@ function chordImagePoints(start, end, nSamples) {
     if (i === 0) t = ENDPOINT_EPSILON;
     if (i === nSamples - 1) t = 1 - ENDPOINT_EPSILON;
 
-    const u = (1 - t) * u1 + t * u2;
-    const v = (1 - t) * v1 + t * v2;
+    let u = (1 - t) * u1 + t * u2;
+    let v = (1 - t) * v1 + t * v2;
+
+    [u, v] = applyRadialPower(u, v, radialPower);
 
     pts.push(diskToRhombus(u, v));
   }
@@ -580,15 +601,16 @@ function normalizedToScreen(X, Y) {
  * @param {number} fromT - Parameter (0 to 1) along the starting side
  * @param {string} toSide - Ending side ('north', 'east', 'south', 'west')
  * @param {number} toT - Parameter (0 to 1) along the ending side
+ * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  * @returns {Object} { pathD: string, midPoint: { x, y }, angle: number }
  */
-export function getCurvedEdgePath(fromSide, fromT, toSide, toT) {
+export function getCurvedEdgePath(fromSide, fromT, toSide, toT, radialPower = 1) {
   // Convert side names to side indices
   const start = sideNameToIndexAndT(fromSide, fromT);
   const end = sideNameToIndexAndT(toSide, toT);
   
   // Sample points along the chord in the disk, mapped to the rhombus
-  const pts = chordImagePoints(start, end, EDGE_PATH_SAMPLES);
+  const pts = chordImagePoints(start, end, EDGE_PATH_SAMPLES, radialPower);
   
   // Select knots for the spline (reduce to manageable number of Bézier segments)
   // We take every EDGE_PATH_KNOT_STEP-th point, plus always include the last point
@@ -691,9 +713,10 @@ function normalizedToPaper(X, Y) {
  * @param {string} toSide - Ending side ('north', 'east', 'south', 'west')
  * @param {number} toT - Parameter (0 to 1) along the ending side
  * @param {number} numSamples - Number of sample points (default: 20)
+ * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  * @returns {Array<{southward: number, eastward: number}>} Array of paper coordinate points
  */
-export function getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, numSamples = 20) {
+export function getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, numSamples = 20, radialPower = 1) {
   // Convert side names to side indices
   const start = sideNameToIndexAndT(fromSide, fromT);
   const end = sideNameToIndexAndT(toSide, toT);
@@ -711,8 +734,11 @@ export function getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, numSample
     if (i === numSamples - 1) t = 1 - ENDPOINT_EPSILON;
     
     // Interpolate along chord in disk
-    const u = (1 - t) * u1 + t * u2;
-    const v = (1 - t) * v1 + t * v2;
+    let u = (1 - t) * u1 + t * u2;
+    let v = (1 - t) * v1 + t * v2;
+    
+    // Apply radial power transform
+    [u, v] = applyRadialPower(u, v, radialPower);
     
     // Map back to rhombus (normalized coords)
     const [X, Y] = diskToRhombus(u, v);
@@ -860,11 +886,12 @@ export function getSideSegmentPathBlended(side, t1, t2, weights) {
  * @param {string} toSide
  * @param {number} toT
  * @param {{ rhombus: number, square: number, triangle: number }} weights
+ * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  * @returns {{ pathD: string, midPoint: { x: number, y: number }, angle: number }}
  */
-export function getCurvedEdgePathBlended(fromSide, fromT, toSide, toT, weights) {
+export function getCurvedEdgePathBlended(fromSide, fromT, toSide, toT, weights, radialPower = 1) {
   // Get paper-space points along the chord
-  const paperPts = getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, EDGE_PATH_SAMPLES);
+  const paperPts = getEdgeSamplePointsPaper(fromSide, fromT, toSide, toT, EDGE_PATH_SAMPLES, radialPower);
 
   // Map to screen coords using blended weights
   const pts = paperPts.map(p => {

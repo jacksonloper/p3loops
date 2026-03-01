@@ -26,7 +26,7 @@ const EDGE_SAMPLES = 20;
  * @param {Object} frame - Reference frame to transform points into
  * @returns {string} - SVG path string (M followed by L commands for sampled points)
  */
-function generateCurvedEdgePath(edge, frame) {
+function generateCurvedEdgePath(edge, frame, radialPower = 1) {
   // For boundary-to-boundary edges, use the diffeomorphism
   if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
     const samplePoints = getEdgeSamplePointsPaper(
@@ -34,7 +34,8 @@ function generateCurvedEdgePath(edge, frame) {
       edge.from.t,
       edge.to.side,
       edge.to.t,
-      EDGE_SAMPLES
+      EDGE_SAMPLES,
+      radialPower
     );
     
     // Convert paper coords to screen space using the frame
@@ -67,13 +68,13 @@ function generateCurvedEdgePath(edge, frame) {
  * @param {Object} frame - Reference frame to transform points into
  * @returns {string} - SVG path string
  */
-function generateAllEdgesPathString(edges, frame) {
+function generateAllEdgesPathString(edges, frame, radialPower = 1) {
   if (edges.length === 0) return '';
   
   const pathParts = [];
   
   for (const edge of edges) {
-    pathParts.push(generateCurvedEdgePath(edge, frame));
+    pathParts.push(generateCurvedEdgePath(edge, frame, radialPower));
   }
   
   return pathParts.join(' ');
@@ -127,7 +128,7 @@ function isSameSideEdge(edge) {
  * @param {number} repeats - Number of times to repeat the path (for closed loops)
  * @returns {{ pathPoints: Array, squareFrames: Array, squareIndices: Array, vertexIndices: Array }}
  */
-function generateWallpaperData(edges, repeats = 1) {
+function generateWallpaperData(edges, repeats = 1, radialPower = 1) {
   if (edges.length === 0) return { pathPoints: [], squareFrames: [], squareIndices: [], vertexIndices: [] };
   
   const pathPoints = [];
@@ -214,7 +215,8 @@ function generateWallpaperData(edges, repeats = 1) {
           edge.from.t,
           toPointForDrawing.side,
           toPointForDrawing.t,
-          EDGE_SAMPLES
+          EDGE_SAMPLES,
+          radialPower
         );
         
         // Add intermediate points (skip first and last - they're the endpoints)
@@ -416,7 +418,7 @@ const DEFAULT_CLOSED_LOOP_REPEATS = 2;
  * @param {boolean} isLoopClosed - Whether the loop is closed
  * @param {function} onClose - Callback to close the viewer
  */
-function P4WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
+function P4WallpaperViewer({ edges, isLoopClosed = false, radialPower = 1, onClose }) {
   // State for number of repeats (only applies when loop is closed)
   // Note: The viewer is mounted fresh each time it's opened, so initial state
   // correctly reflects the isLoopClosed prop at mount time.
@@ -427,8 +429,8 @@ function P4WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
   
   // Generate wallpaper data (path points and visited squares)
   const { pathPoints, squareFrames, squareIndices, vertexIndices } = useMemo(() => 
-    generateWallpaperData(edges, effectiveRepeats), 
-    [edges, effectiveRepeats]
+    generateWallpaperData(edges, effectiveRepeats, radialPower), 
+    [edges, effectiveRepeats, radialPower]
   );
   
   // Get set of visited square keys for highlighting
@@ -503,7 +505,7 @@ function P4WallpaperViewer({ edges, isLoopClosed = false, onClose }) {
             {allSquares.map(({ frame, index: squareIndex }) => {
               const markerInfo = getNorthMarkerInfo(frame);
               const center = getSquareCenter(frame);
-              const ghostPathString = generateAllEdgesPathString(edges, frame);
+              const ghostPathString = generateAllEdgesPathString(edges, frame, radialPower);
               const indexLabel = formatWallpaperIndex(squareIndex);
               const isVisited = visitedSquareKeys.has(`${squareIndex.tx},${squareIndex.ty},${squareIndex.r}`);
               

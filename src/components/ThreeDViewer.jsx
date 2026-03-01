@@ -13,9 +13,10 @@ const EDGE_SAMPLES_3D = 15;
 /**
  * ThreeDViewer component - renders the path on puffed 3D triangles.
  * @param {Object[]} edges - Array of edge objects defining the path
+ * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  * @param {function} onClose - Callback to close the 3D viewer
  */
-function ThreeDViewer({ edges, onClose }) {
+function ThreeDViewer({ edges, radialPower = 1, onClose }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -107,7 +108,7 @@ function ThreeDViewer({ edges, onClose }) {
         const edge = edges[edgeIndex];
         
         // Use diffeomorphism-based interpolation for non-intersecting curves
-        const interpolatedPoints = interpolateEdgeDiffeomorphism3D(edge, EDGE_SAMPLES_3D);
+        const interpolatedPoints = interpolateEdgeDiffeomorphism3D(edge, EDGE_SAMPLES_3D, radialPower);
         
         // Add points (avoiding duplicates at edge junctions)
         const startIdx = (edgeIndex === 0) ? 0 : 1;

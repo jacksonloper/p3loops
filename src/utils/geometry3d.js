@@ -151,9 +151,10 @@ export function interpolateEdge3D(from, to, subdivisions = 10) {
  * 
  * @param {Object} edge - Edge object with from/to points (boundary points with side and t)
  * @param {number} numSamples - Number of sample points (default: 15)
+ * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  * @returns {Array} Array of points with x, y, z coordinates
  */
-export function interpolateEdgeDiffeomorphism3D(edge, numSamples = 15) {
+export function interpolateEdgeDiffeomorphism3D(edge, numSamples = 15, radialPower = 1) {
   // For edges involving interior points, fall back to linear interpolation
   if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) {
     // Get paper coordinates and do linear interpolation
@@ -174,7 +175,8 @@ export function interpolateEdgeDiffeomorphism3D(edge, numSamples = 15) {
     edge.from.t,
     edge.to.side,
     edge.to.t,
-    numSamples
+    numSamples,
+    radialPower
   );
   
   // Convert each paper coordinate point to 3D

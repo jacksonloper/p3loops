@@ -63,6 +63,7 @@ function CombinatorialApp() {
   const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
   const [showJsonPanel, setShowJsonPanel] = useState(false);
   const [jsonInputText, setJsonInputText] = useState('');
+  const [radialPower, setRadialPower] = useState(1);
 
   // Load examples manifest on mount
   useEffect(() => {
@@ -395,6 +396,7 @@ function CombinatorialApp() {
               highlightedEdgeIndex={highlightedEdgeIndex}
               onSegmentClick={isLoopClosed ? null : handleSegmentChange}
               firstEdgeFromSegment={firstEdgeFromSegment}
+              radialPower={radialPower}
             />
             
             {/* Add Edge button - prominent and near the rhombus for mobile */}
@@ -680,6 +682,20 @@ function CombinatorialApp() {
             />
           </div>
 
+          <div className="radial-power-row">
+            <label htmlFor="radial-power-slider">Chord Pull (r^p):</label>
+            <input
+              id="radial-power-slider"
+              type="range"
+              min="1"
+              max="5"
+              step="0.1"
+              value={radialPower}
+              onChange={(e) => setRadialPower(parseFloat(e.target.value))}
+            />
+            <span className="radial-power-value">{radialPower.toFixed(1)}</span>
+          </div>
+
           {validationMessage && (
             <div className={`message-box ${getMessageStyleClass(validationMessage)}`}>
               {validationMessage}
@@ -740,6 +756,7 @@ function CombinatorialApp() {
       {show3DViewer && (
         <ThreeDViewer 
           edges={floatEdges}
+          radialPower={radialPower}
           onClose={() => setShow3DViewer(false)}
         />
       )}
@@ -748,6 +765,7 @@ function CombinatorialApp() {
         <WallpaperViewer 
           edges={floatEdges}
           isLoopClosed={isLoopClosed}
+          radialPower={radialPower}
           onClose={() => setShowWallpaperViewer(false)}
         />
       )}
@@ -756,6 +774,7 @@ function CombinatorialApp() {
         <P4WallpaperViewer 
           edges={floatEdges}
           isLoopClosed={isLoopClosed}
+          radialPower={radialPower}
           onClose={() => setShowP4WallpaperViewer(false)}
         />
       )}
@@ -764,6 +783,7 @@ function CombinatorialApp() {
         <P4TriangleWallpaperViewer 
           edges={floatEdges}
           isLoopClosed={isLoopClosed}
+          radialPower={radialPower}
           onClose={() => setShowP4TriangleWallpaperViewer(false)}
         />
       )}

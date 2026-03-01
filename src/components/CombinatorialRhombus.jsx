@@ -82,14 +82,16 @@ function getSegmentCoords(segment, allPoints, shapeWeights) {
  * Get curved edge path data for a float edge using the blended shape mapping.
  * @param {Object} edge - Float edge with { from: { side, t }, to: { side, t } }
  * @param {{ rhombus: number, square: number, triangle: number }} shapeWeights
+ * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  */
-function getCurvedEdgeData(edge, shapeWeights) {
+function getCurvedEdgeData(edge, shapeWeights, radialPower = 1) {
   return getCurvedEdgePathBlended(
     edge.from.side, 
     edge.from.t, 
     edge.to.side, 
     edge.to.t,
-    shapeWeights
+    shapeWeights,
+    radialPower
   );
 }
 
@@ -106,6 +108,7 @@ function getCurvedEdgeData(edge, shapeWeights) {
  * @param {number|null} highlightedEdgeIndex - Index of edge to highlight (for crossing errors)
  * @param {Function|null} onSegmentClick - Callback when a segment is clicked
  * @param {Object|null} firstEdgeFromSegment - The "from" segment when creating first edge
+ * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  */
 function CombinatorialRhombus({ 
   floatEdges, 
@@ -115,7 +118,8 @@ function CombinatorialRhombus({
   nextStartPoint,
   highlightedEdgeIndex = null,
   onSegmentClick = null,
-  firstEdgeFromSegment = null
+  firstEdgeFromSegment = null,
+  radialPower = 1
 }) {
   // Zoom and pan state
   const [zoom, setZoom] = useState(1);
@@ -582,7 +586,7 @@ function CombinatorialRhombus({
         
         {/* Edges - rendered using diffeomorphism for guaranteed non-intersection */}
         {floatEdges.map((edge, index) => {
-          const edgeData = getCurvedEdgeData(edge, shapeWeights);
+          const edgeData = getCurvedEdgeData(edge, shapeWeights, radialPower);
           const isHighlighted = highlightedEdgeIndex === index;
           
           return (
