@@ -25,6 +25,7 @@ import {
   pointToTriangleScreenSpace,
   createIdentityWallpaperIndex,
   updateWallpaperIndex,
+  updateWallpaperIndexTriangle,
   formatWallpaperIndex,
   indexToFrame,
   NE_CORNER,
@@ -781,6 +782,72 @@ describe('P4 Triangle no-teleport test for reported bug example', () => {
       expect(gap).toBeLessThan(TOLERANCE);
 
       frame = newFrame;
+    }
+  });
+});
+
+describe('P4 Triangle Wallpaper Index - updateWallpaperIndexTriangle', () => {
+  it('should be consistent with updateReferenceFrameForSideTriangle for all k=0..7 and all sides', () => {
+    const sides = ['north', 'east', 'south', 'west'];
+    
+    for (let startK = 0; startK < 8; startK++) {
+      for (let ti = -1; ti <= 1; ti++) {
+        for (let tj = -1; tj <= 1; tj++) {
+          const startIndex = { tx: ti, ty: tj, r: startK };
+          const startFrame = indexToFrame(startIndex);
+          
+          for (const side of sides) {
+            const newIndex = updateWallpaperIndexTriangle(side, startIndex);
+            const frameFromIndex = indexToFrame(newIndex);
+            const frameFromSide = updateReferenceFrameForSideTriangle(side, startFrame);
+            
+            expect(Math.abs(frameFromIndex.a - frameFromSide.a)).toBeLessThan(TOLERANCE);
+            expect(Math.abs(frameFromIndex.b - frameFromSide.b)).toBeLessThan(TOLERANCE);
+            expect(Math.abs(frameFromIndex.c - frameFromSide.c)).toBeLessThan(TOLERANCE);
+            expect(Math.abs(frameFromIndex.d - frameFromSide.d)).toBeLessThan(TOLERANCE);
+            expect(Math.abs(frameFromIndex.tx - frameFromSide.tx)).toBeLessThan(TOLERANCE);
+            expect(Math.abs(frameFromIndex.ty - frameFromSide.ty)).toBeLessThan(TOLERANCE);
+          }
+        }
+      }
+    }
+  });
+
+  it('should toggle outer/inner for north crossings', () => {
+    expect(updateWallpaperIndexTriangle('north', { tx: 0, ty: 0, r: 0 }).r).toBe(4);
+    expect(updateWallpaperIndexTriangle('north', { tx: 0, ty: 0, r: 4 }).r).toBe(0);
+    expect(updateWallpaperIndexTriangle('north', { tx: 0, ty: 0, r: 2 }).r).toBe(6);
+    expect(updateWallpaperIndexTriangle('north', { tx: 0, ty: 0, r: 6 }).r).toBe(2);
+  });
+
+  it('should toggle outer/inner for east crossings', () => {
+    expect(updateWallpaperIndexTriangle('east', { tx: 0, ty: 0, r: 1 }).r).toBe(5);
+    expect(updateWallpaperIndexTriangle('east', { tx: 0, ty: 0, r: 5 }).r).toBe(1);
+  });
+
+  it('should match updateWallpaperIndex for south/west with k<4', () => {
+    const sides = ['south', 'west'];
+    for (const side of sides) {
+      for (let k = 0; k < 4; k++) {
+        const idx = { tx: 0, ty: 0, r: k };
+        const triangleResult = updateWallpaperIndexTriangle(side, idx);
+        const squareResult = updateWallpaperIndex(side, idx);
+        expect(triangleResult).toEqual(squareResult);
+      }
+    }
+  });
+
+  it('should not change translation for south/west with k>=4', () => {
+    const sides = ['south', 'west'];
+    for (const side of sides) {
+      for (let k = 4; k < 8; k++) {
+        const idx = { tx: 2, ty: 3, r: k };
+        const result = updateWallpaperIndexTriangle(side, idx);
+        expect(result.tx).toBe(2);
+        expect(result.ty).toBe(3);
+        expect(result.r).toBeGreaterThanOrEqual(4);
+        expect(result.r).toBeLessThan(8);
+      }
     }
   });
 });
