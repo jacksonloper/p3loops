@@ -1061,39 +1061,50 @@ export function computeFundamentalDomains(floatEdges) {
     midpoints.push([Math.cos(midAngle), Math.sin(midAngle)]);
   }
 
-  // 3. Build each fundamental domain region
-  const regions = [];
-
+  // 3. Determine consistent arc direction.
+  // For a valid partition, all boundary arcs must go in the same rotational
+  // direction (all CW or all CCW) so they sum to exactly 360°. We check
+  // which direction makes each arc contain both edge endpoints (a_i and b_i).
+  // The majority vote determines the global direction.
+  let ccwVotes = 0;
   for (let i = 0; i < n; i++) {
     const ai = diskEndpoints[i].a;
-    const bi = diskEndpoints[i].b;
-    const cPrev = midpoints[(i - 1 + n) % n]; // midpoint before edge i
-    const cNext = midpoints[i];                // midpoint after edge i
-
-    const points = [];
-
-    // a. Synthetic chord: cPrev → ai
-    points.push(...sampleChordToScreen(cPrev, ai, FD_CHORD_SAMPLES));
-
-    // b. Original chord: ai → bi
-    points.push(...sampleChordToScreen(ai, bi, FD_CHORD_SAMPLES, true));
-
-    // c. Synthetic chord: bi → cNext
-    points.push(...sampleChordToScreen(bi, cNext, FD_CHORD_SAMPLES, true));
-
-    // d. Boundary arc: cNext → cPrev
-    // Determine direction: go the way that does NOT pass through ai or bi
+    const cPrev = midpoints[(i - 1 + n) % n];
+    const cNext = midpoints[i];
     const angleCNext = Math.atan2(cNext[1], cNext[0]);
     const angleCPrev = Math.atan2(cPrev[1], cPrev[0]);
     const angleAi = Math.atan2(ai[1], ai[0]);
+    if (isAngleInCCWArc(angleAi, angleCNext, angleCPrev)) ccwVotes++;
+  }
+  const globalCCW = ccwVotes > n / 2;
 
-    // Check if going counterclockwise from cNext to cPrev passes through ai
-    const aiInCCW = isAngleInCCWArc(angleAi, angleCNext, angleCPrev);
+  // 4. Build each fundamental domain region as a "pie slice" sector.
+  // Each region is bounded by:
+  //   a) A boundary arc from cNext (m_i) to cPrev (m_{i-1})
+  //   b) A radial chord from cPrev to the disk center (0,0)
+  //   c) A radial chord from the disk center to cNext
+  // This avoids self-intersection entirely and guarantees a perfect partition
+  // (the arcs cover the full boundary, the radial chords partition the interior).
+  const regions = [];
+  const diskCenter = [0, 0];
 
-    // If ai is in the CCW arc, go clockwise instead (and vice versa)
-    const goCounterclockwise = !aiInCCW;
+  for (let i = 0; i < n; i++) {
+    const cPrev = midpoints[(i - 1 + n) % n];
+    const cNext = midpoints[i];
 
-    points.push(...sampleArcToScreen(angleCNext, angleCPrev, goCounterclockwise, FD_ARC_SAMPLES));
+    const angleCNext = Math.atan2(cNext[1], cNext[0]);
+    const angleCPrev = Math.atan2(cPrev[1], cPrev[0]);
+
+    const points = [];
+
+    // a. Boundary arc: cNext → cPrev (in global direction)
+    points.push(...sampleArcToScreen(angleCNext, angleCPrev, globalCCW, FD_ARC_SAMPLES));
+
+    // b. Radial chord: cPrev → center
+    points.push(...sampleChordToScreen(cPrev, diskCenter, FD_CHORD_SAMPLES, true));
+
+    // c. Radial chord: center → cNext
+    points.push(...sampleChordToScreen(diskCenter, cNext, FD_CHORD_SAMPLES, true));
 
     regions.push({ points, edgeIndex: i });
   }
