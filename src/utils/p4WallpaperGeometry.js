@@ -183,6 +183,39 @@ export function updateReferenceFrameForSide(side, currentFrame) {
 }
 
 /**
+ * Update the reference frame when the path crosses a wall, for the triangle
+ * diffeomorphism viewer (P4 NE 180° flip).
+ * 
+ * The triangle diffeomorphism collapses both north and east edges onto the
+ * hypotenuse. In triangle coordinates:
+ *   north(t) → (t/2, t/2) and east(t) → (1−t/2, 1−t/2)
+ * These are reflections about the hypotenuse midpoint (where the NE corner
+ * maps to in the triangle diffeo). So the correct frame update for north/east
+ * crossings is a 180° rotation around the world-space hypotenuse midpoint.
+ * 
+ * For south/west crossings, the triangle diffeo leaves those edges unchanged,
+ * so the standard 90° rotation around SW corner is correct.
+ * 
+ * @param {'north' | 'east' | 'south' | 'west'} side - The wall being crossed
+ * @param {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} currentFrame - Current reference frame
+ * @returns {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} - New reference frame
+ */
+export function updateReferenceFrameForSideTriangle(side, currentFrame) {
+  if (side === 'south' || side === 'west') {
+    // South and west edges are unchanged by the triangle diffeo,
+    // so the standard square-based rotation works correctly.
+    return updateReferenceFrameForSide(side, currentFrame);
+  }
+  
+  // For north/east crossings: 180° rotation around the hypotenuse midpoint.
+  // The hypotenuse midpoint is where the NE corner maps to in the triangle diffeo.
+  const localMidpoint = paperToTriangle(0, 1); // NE corner → hypotenuse midpoint
+  const worldMidpoint = applyReferenceFrame(localMidpoint.x, localMidpoint.y, currentFrame);
+  const rotation = createRotationAroundPoint(Math.PI, worldMidpoint.x, worldMidpoint.y);
+  return composeTransformations(currentFrame, rotation);
+}
+
+/**
  * Convert paper coordinates (unit square) to TRUE square screen coordinates.
  * 
  * Paper coordinates: (southward, eastward) in [0,1]^2
@@ -536,6 +569,52 @@ export function updateWallpaperIndex(side, current) {
         default: throw new Error(`Invalid rotation k: ${k}`);
       }
     
+    default:
+      throw new Error(`Unknown side: ${side}`);
+  }
+}
+
+/**
+ * Update the p4 wallpaper index when crossing through a side, for the triangle
+ * diffeomorphism viewer.
+ * 
+ * Consistent with updateReferenceFrameForSideTriangle:
+ * indexToFrame(updateWallpaperIndexTriangle(side, index)) should equal
+ * updateReferenceFrameForSideTriangle(side, indexToFrame(index))
+ * 
+ * For north/east: 180° rotation around hypotenuse midpoint toggles between
+ * outer (k=0..3) and inner (k=4..7) triangles, with no translation change.
+ * 
+ * For south/west with k<4: same rules as updateWallpaperIndex (standard square).
+ * For south/west with k>=4: rotation within the inner triangle set, no translation change.
+ * 
+ * @param {'north' | 'east' | 'south' | 'west'} side - Side being crossed
+ * @param {P4WallpaperIndex} current - Current wallpaper index (r can be 0..7)
+ * @returns {P4WallpaperIndex} - New wallpaper index
+ */
+export function updateWallpaperIndexTriangle(side, current) {
+  const { tx: i, ty: j, r: k } = current;
+  
+  if (side === 'north' || side === 'east') {
+    // 180° rotation around hypotenuse midpoint — toggles outer/inner
+    return { tx: i, ty: j, r: (k + 4) % 8 };
+  }
+  
+  if (k < 4) {
+    // For outer triangles, south/west use the standard square rules
+    return updateWallpaperIndex(side, current);
+  }
+  
+  // For inner triangles (k>=4), south/west rotate within the inner set
+  // Same rotation pattern as outer, but staying in the k=4..7 range
+  const kBase = k - 4;
+  switch (side) {
+    case 'south':
+      // CCW rotation within inner triangles
+      return { tx: i, ty: j, r: ((kBase + 1) % 4) + 4 };
+    case 'west':
+      // CW rotation within inner triangles
+      return { tx: i, ty: j, r: ((kBase + 3) % 4) + 4 };
     default:
       throw new Error(`Unknown side: ${side}`);
   }

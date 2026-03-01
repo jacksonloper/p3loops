@@ -2,11 +2,11 @@ import { useState, useMemo } from 'react';
 import { 
   createIdentityFrame, 
   applyReferenceFrame,
-  updateReferenceFrameForSide,
+  updateReferenceFrameForSideTriangle,
   pointToTriangleScreenSpace,
   paperToTriangle,
   createIdentityWallpaperIndex,
-  updateWallpaperIndex,
+  updateWallpaperIndexTriangle,
   formatWallpaperIndex,
   indexToFrame,
   NW_CORNER,
@@ -202,8 +202,8 @@ function generateWallpaperData(edges, repeats = 1) {
         }
         
         if (shouldUpdateFrame) {
-          currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
-          currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
+          currentFrame = updateReferenceFrameForSideTriangle(edge.to.side, currentFrame);
+          currentIndex = updateWallpaperIndexTriangle(edge.to.side, currentIndex);
           
           if (!isLastEdgeOfLastRepeat) {
             squareFrames.push({ ...currentFrame });
@@ -332,9 +332,11 @@ function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, onClose }) {
     const keys = new Set();
     for (const index of squareIndices) {
       keys.add(`${index.tx},${index.ty},${index.r}`);
-      // Inner triangle (r+4) is visited when its outer counterpart (r<4) is visited
+      // Also mark the paired triangle (outer↔inner) as visited
       if (index.r < 4) {
         keys.add(`${index.tx},${index.ty},${index.r + 4}`);
+      } else {
+        keys.add(`${index.tx},${index.ty},${index.r - 4}`);
       }
     }
     return keys;
