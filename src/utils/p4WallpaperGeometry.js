@@ -183,6 +183,39 @@ export function updateReferenceFrameForSide(side, currentFrame) {
 }
 
 /**
+ * Update the reference frame when the path crosses a wall, for the triangle
+ * diffeomorphism viewer (P4 NE 180° flip).
+ * 
+ * The triangle diffeomorphism collapses both north and east edges onto the
+ * hypotenuse. In triangle coordinates:
+ *   north(t) → (t/2, t/2) and east(t) → (1−t/2, 1−t/2)
+ * These are reflections about the hypotenuse midpoint (where the NE corner
+ * maps to in the triangle diffeo). So the correct frame update for north/east
+ * crossings is a 180° rotation around the world-space hypotenuse midpoint.
+ * 
+ * For south/west crossings, the triangle diffeo leaves those edges unchanged,
+ * so the standard 90° rotation around SW corner is correct.
+ * 
+ * @param {'north' | 'east' | 'south' | 'west'} side - The wall being crossed
+ * @param {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} currentFrame - Current reference frame
+ * @returns {{ a: number, b: number, c: number, d: number, tx: number, ty: number }} - New reference frame
+ */
+export function updateReferenceFrameForSideTriangle(side, currentFrame) {
+  if (side === 'south' || side === 'west') {
+    // South and west edges are unchanged by the triangle diffeo,
+    // so the standard square-based rotation works correctly.
+    return updateReferenceFrameForSide(side, currentFrame);
+  }
+  
+  // For north/east crossings: 180° rotation around the hypotenuse midpoint.
+  // The hypotenuse midpoint is where the NE corner maps to in the triangle diffeo.
+  const localMidpoint = paperToTriangle(0, 1); // NE corner → hypotenuse midpoint
+  const worldMidpoint = applyReferenceFrame(localMidpoint.x, localMidpoint.y, currentFrame);
+  const rotation = createRotationAroundPoint(Math.PI, worldMidpoint.x, worldMidpoint.y);
+  return composeTransformations(currentFrame, rotation);
+}
+
+/**
  * Convert paper coordinates (unit square) to TRUE square screen coordinates.
  * 
  * Paper coordinates: (southward, eastward) in [0,1]^2

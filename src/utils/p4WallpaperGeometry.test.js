@@ -14,6 +14,7 @@ import {
   createIdentityFrame,
   applyReferenceFrame,
   updateReferenceFrameForSide,
+  updateReferenceFrameForSideTriangle,
   pointToScreenSpace,
   getEntrySide,
   getEntryPoint,
@@ -702,5 +703,103 @@ describe('P4 Triangle - pointToTriangleScreenSpace', () => {
     const result = pointToTriangleScreenSpace(point, frame);
     const expected = paperToTriangle(0.5, 0.5);
     expectPointsClose(result, expected);
+  });
+});
+
+describe('P4 Triangle Wall crossing continuity - updateReferenceFrameForSideTriangle', () => {
+  const sides = ['north', 'east', 'south', 'west'];
+  const tValues = [0.1, 0.25, 0.5, 0.75, 0.9];
+
+  function getIdentifiedSide(side) {
+    switch (side) {
+      case 'north': return 'east';
+      case 'east': return 'north';
+      case 'south': return 'west';
+      case 'west': return 'south';
+      default: throw new Error(`Unknown side: ${side}`);
+    }
+  }
+
+  for (const side of sides) {
+    for (const t of tValues) {
+      it(`should maintain triangle continuity when crossing ${side} wall at t=${t}`, () => {
+        const frame = createIdentityFrame();
+
+        // Exit point in triangle screen space
+        const exitPt = pointToTriangleScreenSpace({ side, t }, frame);
+
+        // New frame using triangle-specific update
+        const newFrame = updateReferenceFrameForSideTriangle(side, frame);
+
+        // Entry point on identified side in new frame
+        const entrySide = getIdentifiedSide(side);
+        const entryPt = pointToTriangleScreenSpace({ side: entrySide, t }, newFrame);
+
+        expectPointsClose(exitPt, entryPt);
+      });
+    }
+  }
+
+  it('should maintain continuity across multiple crossings (north then south)', () => {
+    let frame = createIdentityFrame();
+
+    // Cross north at t=0.5
+    const exitNorth = pointToTriangleScreenSpace({ side: 'north', t: 0.5 }, frame);
+    frame = updateReferenceFrameForSideTriangle('north', frame);
+    const entryEast = pointToTriangleScreenSpace({ side: 'east', t: 0.5 }, frame);
+    expectPointsClose(exitNorth, entryEast);
+
+    // Cross south at t=0.3
+    const exitSouth = pointToTriangleScreenSpace({ side: 'south', t: 0.3 }, frame);
+    frame = updateReferenceFrameForSideTriangle('south', frame);
+    const entryWest = pointToTriangleScreenSpace({ side: 'west', t: 0.3 }, frame);
+    expectPointsClose(exitSouth, entryWest);
+  });
+});
+
+describe('P4 Triangle no-teleport test for reported bug example', () => {
+  const SQUARE_DIAGONAL = SIDE * Math.SQRT2;
+
+  function distance(p1, p2) {
+    return Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+  }
+
+  function getIdentifiedSide(side) {
+    switch (side) {
+      case 'north': return 'east';
+      case 'east': return 'north';
+      case 'south': return 'west';
+      case 'west': return 'south';
+      default: throw new Error(`Unknown side: ${side}`);
+    }
+  }
+
+  it('should not teleport when lifting the reported example path to the triangle wallpaper', () => {
+    // This is the exact path from the bug report
+    const edges = [
+      { from: { side: 'north', t: 0.5 }, to: { side: 'west', t: 0.5 } },
+      { from: { side: 'south', t: 0.5 }, to: { side: 'north', t: 0.8333333333333334 } },
+      { from: { side: 'east', t: 0.8333333333333334 }, to: { side: 'east', t: 0.16666666666666666 } },
+      { from: { side: 'north', t: 0.16666666666666666 }, to: { side: 'north', t: 0.5 } },
+    ];
+
+    let frame = createIdentityFrame();
+
+    for (let i = 0; i < edges.length; i++) {
+      const edge = edges[i];
+      const exitSide = edge.to.side;
+      const exitT = edge.to.t;
+
+      // Check that exit and entry points match across the boundary
+      const exitPt = pointToTriangleScreenSpace(edge.to, frame);
+      const newFrame = updateReferenceFrameForSideTriangle(exitSide, frame);
+      const entrySide = getIdentifiedSide(exitSide);
+      const entryPt = pointToTriangleScreenSpace({ side: entrySide, t: exitT }, newFrame);
+
+      const gap = distance(exitPt, entryPt);
+      expect(gap).toBeLessThan(TOLERANCE);
+
+      frame = newFrame;
+    }
   });
 });

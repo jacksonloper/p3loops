@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { 
   createIdentityFrame, 
   applyReferenceFrame,
-  updateReferenceFrameForSide,
+  updateReferenceFrameForSideTriangle,
   pointToTriangleScreenSpace,
   paperToTriangle,
   createIdentityWallpaperIndex,
@@ -202,7 +202,7 @@ function generateWallpaperData(edges, repeats = 1) {
         }
         
         if (shouldUpdateFrame) {
-          currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+          currentFrame = updateReferenceFrameForSideTriangle(edge.to.side, currentFrame);
           currentIndex = updateWallpaperIndex(edge.to.side, currentIndex);
           
           if (!isLastEdgeOfLastRepeat) {
