@@ -919,3 +919,184 @@ export function getCurvedEdgePathBlended(fromSide, fromT, toSide, toT, weights) 
 
   return { pathD: d, midPoint: midScreen, angle };
 }
+
+// ============================================================================
+// FUNDAMENTAL DOMAIN COMPUTATION
+// ============================================================================
+// Each edge in a closed loop is extended into a region (fundamental domain)
+// such that the regions partition the rhombus. The construction works in the
+// disk space: for each pair of identified boundary points (end of edge i,
+// start of edge i+1), we compute the midpoint of their arc on the unit circle.
+// These midpoints, together with the original chords and synthetic chords
+// from midpoints to edge endpoints, define the region boundaries.
+// ============================================================================
+
+const FD_CHORD_SAMPLES = 30;   // Points per chord segment
+const FD_ARC_SAMPLES = 20;     // Points along boundary arc
+
+/**
+ * Normalize an angle to [0, 2π).
+ */
+function normalizeAngle(a) {
+  a = a % (2 * Math.PI);
+  if (a < 0) a += 2 * Math.PI;
+  return a;
+}
+
+/**
+ * Check if angle θ is in the arc from startAngle to endAngle going counterclockwise.
+ * All angles should be normalized to [0, 2π).
+ */
+function isAngleInCCWArc(theta, startAngle, endAngle) {
+  const s = normalizeAngle(startAngle);
+  const e = normalizeAngle(endAngle);
+  const t = normalizeAngle(theta);
+
+  if (s <= e) {
+    return t >= s && t <= e;
+  } else {
+    // Arc wraps around 0
+    return t >= s || t <= e;
+  }
+}
+
+/**
+ * Sample points along a chord in the unit disk and map to screen coordinates.
+ * @param {number[]} from - [u, v] start point on/near unit circle
+ * @param {number[]} to - [u, v] end point on/near unit circle
+ * @param {number} numSamples - Number of sample points
+ * @param {boolean} skipFirst - Whether to skip the first point (to avoid duplicates)
+ * @returns {Array<{x: number, y: number}>} Screen coordinate points
+ */
+function sampleChordToScreen(from, to, numSamples, skipFirst = false) {
+  const points = [];
+  const start = skipFirst ? 1 : 0;
+  for (let j = start; j <= numSamples; j++) {
+    let t = j / numSamples;
+    t = ENDPOINT_EPSILON + (1 - 2 * ENDPOINT_EPSILON) * t;
+    const u = (1 - t) * from[0] + t * to[0];
+    const v = (1 - t) * from[1] + t * to[1];
+    const [X, Y] = diskToRhombus(u, v);
+    points.push(normalizedToScreen(X, Y));
+  }
+  return points;
+}
+
+/**
+ * Sample points along an arc of the unit circle and map to screen coordinates.
+ * @param {number} startAngle - Starting angle (radians)
+ * @param {number} endAngle - Ending angle (radians)
+ * @param {boolean} ccw - If true, go counterclockwise; if false, clockwise
+ * @param {number} numSamples - Number of sample points
+ * @returns {Array<{x: number, y: number}>} Screen coordinate points
+ */
+function sampleArcToScreen(startAngle, endAngle, ccw, numSamples) {
+  const points = [];
+  const radius = 1 - ENDPOINT_EPSILON;
+
+  let arcSpan;
+  if (ccw) {
+    arcSpan = normalizeAngle(endAngle - startAngle);
+  } else {
+    arcSpan = normalizeAngle(startAngle - endAngle);
+  }
+
+  for (let j = 1; j < numSamples; j++) {
+    const t = j / numSamples;
+    const angle = ccw
+      ? startAngle + arcSpan * t
+      : startAngle - arcSpan * t;
+    const u = radius * Math.cos(angle);
+    const v = radius * Math.sin(angle);
+    const [X, Y] = diskToRhombus(u, v);
+    points.push(normalizedToScreen(X, Y));
+  }
+  return points;
+}
+
+/**
+ * Compute fundamental domain regions for a set of edges forming a closed loop.
+ * Each edge is extended into a region using synthetic chords in the disk space.
+ * The regions form a partition of the rhombus.
+ *
+ * For each edge i, the fundamental domain boundary consists of:
+ * 1. Synthetic chord from midpoint_{i-1} to edge start (a_i)
+ * 2. Original chord from a_i to b_i (the edge itself)
+ * 3. Synthetic chord from b_i to midpoint_i
+ * 4. Boundary arc from midpoint_i back to midpoint_{i-1}
+ *
+ * @param {Array} floatEdges - Array of edge objects with from/to points ({side, t})
+ * @returns {Array<{points: Array<{x: number, y: number}>, edgeIndex: number}>}
+ */
+export function computeFundamentalDomains(floatEdges) {
+  const n = floatEdges.length;
+  if (n === 0) return [];
+
+  // 1. Map all endpoints to the unit circle
+  const diskEndpoints = floatEdges.map(edge => {
+    const fromInfo = sideNameToIndexAndT(edge.from.side, edge.from.t);
+    const toInfo = sideNameToIndexAndT(edge.to.side, edge.to.t);
+    return {
+      a: boundaryToDisk(fromInfo.sideIndex, fromInfo.s),
+      b: boundaryToDisk(toInfo.sideIndex, toInfo.s)
+    };
+  });
+
+  // 2. Compute midpoints of identification arcs.
+  // For each edge i, compute midpoint of arc from b_i to a_{i+1}.
+  const midpoints = [];
+  for (let i = 0; i < n; i++) {
+    const bi = diskEndpoints[i].b;
+    const ai1 = diskEndpoints[(i + 1) % n].a;
+
+    const angleBi = Math.atan2(bi[1], bi[0]);
+    const angleAi1 = Math.atan2(ai1[1], ai1[0]);
+
+    // Compute midpoint of the shorter arc
+    let diff = angleAi1 - angleBi;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    const midAngle = angleBi + diff / 2;
+
+    midpoints.push([Math.cos(midAngle), Math.sin(midAngle)]);
+  }
+
+  // 3. Build each fundamental domain region
+  const regions = [];
+
+  for (let i = 0; i < n; i++) {
+    const ai = diskEndpoints[i].a;
+    const bi = diskEndpoints[i].b;
+    const cPrev = midpoints[(i - 1 + n) % n]; // midpoint before edge i
+    const cNext = midpoints[i];                // midpoint after edge i
+
+    const points = [];
+
+    // a. Synthetic chord: cPrev → ai
+    points.push(...sampleChordToScreen(cPrev, ai, FD_CHORD_SAMPLES));
+
+    // b. Original chord: ai → bi
+    points.push(...sampleChordToScreen(ai, bi, FD_CHORD_SAMPLES, true));
+
+    // c. Synthetic chord: bi → cNext
+    points.push(...sampleChordToScreen(bi, cNext, FD_CHORD_SAMPLES, true));
+
+    // d. Boundary arc: cNext → cPrev
+    // Determine direction: go the way that does NOT pass through ai or bi
+    const angleCNext = Math.atan2(cNext[1], cNext[0]);
+    const angleCPrev = Math.atan2(cPrev[1], cPrev[0]);
+    const angleAi = Math.atan2(ai[1], ai[0]);
+
+    // Check if going counterclockwise from cNext to cPrev passes through ai
+    const aiInCCW = isAngleInCCWArc(angleAi, angleCNext, angleCPrev);
+
+    // If ai is in the CCW arc, go clockwise instead (and vice versa)
+    const goCounterclockwise = !aiInCCW;
+
+    points.push(...sampleArcToScreen(angleCNext, angleCPrev, goCounterclockwise, FD_ARC_SAMPLES));
+
+    regions.push({ points, edgeIndex: i });
+  }
+
+  return regions;
+}

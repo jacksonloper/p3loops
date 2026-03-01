@@ -6,6 +6,7 @@ import P4WallpaperViewer from './P4WallpaperViewer.jsx';
 import P4TriangleWallpaperViewer from './P4TriangleWallpaperViewer.jsx';
 import LoopSelector from './LoopSelector.jsx';
 import EdgeListViewer from './EdgeListViewer.jsx';
+import FundamentalDomainViewer from './FundamentalDomainViewer.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -54,6 +55,7 @@ function CombinatorialApp() {
   const [showP4WallpaperViewer, setShowP4WallpaperViewer] = useState(false);
   const [showP4TriangleWallpaperViewer, setShowP4TriangleWallpaperViewer] = useState(false);
   const [showEdgeList, setShowEdgeList] = useState(false);
+  const [showFundamentalDomain, setShowFundamentalDomain] = useState(false);
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null);
   const [isLoopClosed, setIsLoopClosed] = useState(false);
   const [examplesList, setExamplesList] = useState([]);
@@ -634,6 +636,14 @@ function CombinatorialApp() {
             </button>
             
             <button 
+              onClick={() => setShowFundamentalDomain(true)}
+              disabled={state.edges.length === 0}
+              className="control-btn primary-btn"
+            >
+              Show as Fundamental Domain
+            </button>
+            
+            <button 
               onClick={() => setShowEdgeList(true)}
               disabled={state.edges.length === 0}
               className="control-btn"
@@ -765,6 +775,13 @@ function CombinatorialApp() {
           edges={floatEdges}
           isLoopClosed={isLoopClosed}
           onClose={() => setShowP4TriangleWallpaperViewer(false)}
+        />
+      )}
+
+      {showFundamentalDomain && (
+        <FundamentalDomainViewer 
+          edges={floatEdges}
+          onClose={() => setShowFundamentalDomain(false)}
         />
       )}
 
