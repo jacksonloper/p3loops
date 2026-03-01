@@ -33,6 +33,7 @@ import {
   SE_CORNER,
   SIDE
 } from './p4WallpaperGeometry.js';
+import { getIdentifiedSide } from './geometry.js';
 
 // Tolerance for floating-point comparisons in geometry tests
 const TOLERANCE = 0.01;
@@ -710,16 +711,6 @@ describe('P4 Triangle Wall crossing continuity - updateReferenceFrameForSideTria
   const sides = ['north', 'east', 'south', 'west'];
   const tValues = [0.1, 0.25, 0.5, 0.75, 0.9];
 
-  function getIdentifiedSide(side) {
-    switch (side) {
-      case 'north': return 'east';
-      case 'east': return 'north';
-      case 'south': return 'west';
-      case 'west': return 'south';
-      default: throw new Error(`Unknown side: ${side}`);
-    }
-  }
-
   for (const side of sides) {
     for (const t of tValues) {
       it(`should maintain triangle continuity when crossing ${side} wall at t=${t}`, () => {
@@ -762,16 +753,6 @@ describe('P4 Triangle no-teleport test for reported bug example', () => {
 
   function distance(p1, p2) {
     return Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
-  }
-
-  function getIdentifiedSide(side) {
-    switch (side) {
-      case 'north': return 'east';
-      case 'east': return 'north';
-      case 'south': return 'west';
-      case 'west': return 'south';
-      default: throw new Error(`Unknown side: ${side}`);
-    }
   }
 
   it('should not teleport when lifting the reported example path to the triangle wallpaper', () => {
