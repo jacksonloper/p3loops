@@ -84,7 +84,7 @@ function getSegmentCoords(segment, allPoints, shapeWeights) {
  * @param {{ rhombus: number, square: number, triangle: number }} shapeWeights
  * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  */
-function getCurvedEdgeData(edge, shapeWeights, radialPower = 1) {
+function getCurvedEdgeData(edge, shapeWeights, radialPower = 0) {
   return getCurvedEdgePathBlended(
     edge.from.side, 
     edge.from.t, 
@@ -119,7 +119,7 @@ function CombinatorialRhombus({
   highlightedEdgeIndex = null,
   onSegmentClick = null,
   firstEdgeFromSegment = null,
-  radialPower = 1
+  radialPower = 0
 }) {
   // Zoom and pan state
   const [zoom, setZoom] = useState(1);

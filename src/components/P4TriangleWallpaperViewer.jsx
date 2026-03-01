@@ -23,7 +23,7 @@ const EDGE_SAMPLES = 20;
  * Generate SVG path string for a single edge using diffeomorphism-based curved path,
  * mapped through the triangle diffeomorphism.
  */
-function generateCurvedEdgePath(edge, frame, radialPower = 1) {
+function generateCurvedEdgePath(edge, frame, radialPower = 0) {
   if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
     const samplePoints = getEdgeSamplePointsPaper(
       edge.from.side,
@@ -56,7 +56,7 @@ function generateCurvedEdgePath(edge, frame, radialPower = 1) {
 /**
  * Generate SVG path string for all edges rendered in a given reference frame.
  */
-function generateAllEdgesPathString(edges, frame, radialPower = 1) {
+function generateAllEdgesPathString(edges, frame, radialPower = 0) {
   if (edges.length === 0) return '';
   
   const pathParts = [];
@@ -94,7 +94,7 @@ function isSameSideEdge(edge) {
  * Generate the wallpaper data using triangle diffeomorphism.
  * Computes visited frames and bounding box. Path points use triangle mapping.
  */
-function generateWallpaperData(edges, repeats = 1, radialPower = 1) {
+function generateWallpaperData(edges, repeats = 1, radialPower = 0) {
   if (edges.length === 0) return { pathPoints: [], squareFrames: [], squareIndices: [], vertexIndices: [] };
   
   const pathPoints = [];
@@ -319,7 +319,7 @@ const DEFAULT_CLOSED_LOOP_REPEATS = 2;
  * 45-45-90 triangle fundamental domains with the square-to-triangle diffeomorphism.
  * Shows ghost paths in each triangle copy (no main trajectory tracing).
  */
-function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, radialPower = 1, onClose }) {
+function P4TriangleWallpaperViewer({ edges, isLoopClosed = false, radialPower = 0, onClose }) {
   const [repeats, setRepeats] = useState(isLoopClosed ? DEFAULT_CLOSED_LOOP_REPEATS : 1);
   
   const effectiveRepeats = isLoopClosed ? repeats : 1;

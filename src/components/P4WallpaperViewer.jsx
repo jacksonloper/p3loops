@@ -26,7 +26,7 @@ const EDGE_SAMPLES = 20;
  * @param {Object} frame - Reference frame to transform points into
  * @returns {string} - SVG path string (M followed by L commands for sampled points)
  */
-function generateCurvedEdgePath(edge, frame, radialPower = 1) {
+function generateCurvedEdgePath(edge, frame, radialPower = 0) {
   // For boundary-to-boundary edges, use the diffeomorphism
   if (!isInteriorPoint(edge.from) && !isInteriorPoint(edge.to)) {
     const samplePoints = getEdgeSamplePointsPaper(
@@ -68,7 +68,7 @@ function generateCurvedEdgePath(edge, frame, radialPower = 1) {
  * @param {Object} frame - Reference frame to transform points into
  * @returns {string} - SVG path string
  */
-function generateAllEdgesPathString(edges, frame, radialPower = 1) {
+function generateAllEdgesPathString(edges, frame, radialPower = 0) {
   if (edges.length === 0) return '';
   
   const pathParts = [];
@@ -128,7 +128,7 @@ function isSameSideEdge(edge) {
  * @param {number} repeats - Number of times to repeat the path (for closed loops)
  * @returns {{ pathPoints: Array, squareFrames: Array, squareIndices: Array, vertexIndices: Array }}
  */
-function generateWallpaperData(edges, repeats = 1, radialPower = 1) {
+function generateWallpaperData(edges, repeats = 1, radialPower = 0) {
   if (edges.length === 0) return { pathPoints: [], squareFrames: [], squareIndices: [], vertexIndices: [] };
   
   const pathPoints = [];
@@ -418,7 +418,7 @@ const DEFAULT_CLOSED_LOOP_REPEATS = 2;
  * @param {boolean} isLoopClosed - Whether the loop is closed
  * @param {function} onClose - Callback to close the viewer
  */
-function P4WallpaperViewer({ edges, isLoopClosed = false, radialPower = 1, onClose }) {
+function P4WallpaperViewer({ edges, isLoopClosed = false, radialPower = 0, onClose }) {
   // State for number of repeats (only applies when loop is closed)
   // Note: The viewer is mounted fresh each time it's opened, so initial state
   // correctly reflects the isLoopClosed prop at mount time.

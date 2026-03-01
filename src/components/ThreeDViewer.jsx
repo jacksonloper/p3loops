@@ -16,7 +16,7 @@ const EDGE_SAMPLES_3D = 15;
  * @param {number} radialPower - Power for the radial transform on the disk (default: 1)
  * @param {function} onClose - Callback to close the 3D viewer
  */
-function ThreeDViewer({ edges, radialPower = 1, onClose }) {
+function ThreeDViewer({ edges, radialPower = 0, onClose }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
