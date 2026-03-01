@@ -506,7 +506,7 @@ function diskToRhombus(u, v) {
 function applyRadialPower(u, v, radialPower) {
   if (radialPower === 1) return [u, v];
   const r = Math.hypot(u, v);
-  if (r < 1e-12) return [0, 0];
+  if (r < ENDPOINT_EPSILON) return [0, 0];
   const newR = Math.pow(r, radialPower);
   const scale = newR / r;
   return [u * scale, v * scale];
