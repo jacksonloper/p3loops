@@ -134,13 +134,19 @@ function splitIntoGroups(nodes) {
 /**
  * Compute the midpoint on the unit circle between two boundary nodes.
  * Uses the normalized average of their disk coordinates (short-arc midpoint).
+ * If points are diametrically opposite (average is zero), returns the
+ * perpendicular point on the circle as a reasonable fallback.
  */
 function circleMidpoint(nodeA, nodeB) {
   const [u1, v1] = getBoundaryDiskPoint(nodeA.side, nodeA.t);
   const [u2, v2] = getBoundaryDiskPoint(nodeB.side, nodeB.t);
   const mu = (u1 + u2) / 2;
   const mv = (v1 + v2) / 2;
-  const r = Math.hypot(mu, mv) || 1;
+  const r = Math.hypot(mu, mv);
+  if (r < 1e-12) {
+    // Diametrically opposite: return perpendicular direction on the circle
+    return { u: -v1, v: u1 };
+  }
   return { u: mu / r, v: mv / r };
 }
 
@@ -189,7 +195,9 @@ function sampleStraightLine(diskPtA, diskPtB, numSteps) {
   const pts = [];
   for (let i = 0; i <= steps; i++) {
     const frac = i / steps;
-    // Small epsilon offset at endpoints for numerical stability
+    // Small offset at endpoints avoids placing points exactly on the unit
+    // circle boundary where the disk→rhombus mapping can produce numerical
+    // artifacts (the Jacobian is singular at the boundary).
     const t = Math.max(1e-6, Math.min(1 - 1e-6, frac));
     const u = (1 - t) * diskPtA.u + t * diskPtB.u;
     const v = (1 - t) * diskPtA.v + t * diskPtB.v;
@@ -240,9 +248,13 @@ export function generateParallelRegions(state, numSamples = 40) {
   const ic1 = computeGroupMidpoints(g1);     // k-1 midpoints
   const ic2 = computeGroupMidpoints(g2);     // k-1 midpoints
 
-  // 5. Compute endcap points
-  //    END1: midpoint between last G2 node and first G1 node (adjacent on circle)
-  //    END2: midpoint between last G1 node and first G2 node (adjacent on circle)
+  // 5. Compute endcap points.
+  //    G1 and G2 each occupy one contiguous arc of the circle boundary.
+  //    The two gaps between these arcs are where the END points go:
+  //    END1: midpoint between last G2 node and first G1 node
+  //          (these are adjacent on the circle, spanning the gap before G1)
+  //    END2: midpoint between last G1 node and first G2 node
+  //          (adjacent on the circle, spanning the gap after G1)
   const end1 = circleMidpoint(g2[g2.length - 1], g1[0]);
   const end2 = circleMidpoint(g1[g1.length - 1], g2[0]);
 
