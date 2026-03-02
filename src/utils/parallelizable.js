@@ -10,27 +10,27 @@
  * 1. Remove all nodes with zero edges.
  * 2. Turn each edge into a region that partitions the rhombus.
  *
- * Algorithm (in the disk):
- * - Map boundary points to the unit circle.
- * - Draw chords for edges.
- * - Sort all endpoints by angle.
- * - Between each pair of consecutive endpoints belonging to different chords,
- *   construct an "interchord" (straight line connecting those two boundary points
- *   in the disk).
- * - The interchords divide the disk into regions; each region contains exactly
- *   one original chord.
- * - Endcap regions (where consecutive endpoints belong to the same chord)
- *   are merged with their chord's region.
- * - Map the region boundaries back to the rhombus for display.
+ * Algorithm:
+ * - Walk CCW on the rhombus boundary (West→South→East→North), collecting
+ *   boundary nodes involved in edges and their associated edge indices.
+ * - Stop when hitting a node whose edge has already been seen → G1.
+ * - Remaining nodes form G2. Reverse G2 for edge correspondence.
+ * - Lift all points to the unit disk.
+ * - Create IC1 midpoints between consecutive G1 nodes on the boundary.
+ * - Create IC2 midpoints between consecutive G2 (reversed) nodes.
+ * - Create END endcap points at midpoints between first/last G1 nodes
+ *   and their closest G2 neighbors.
+ * - Build rectangular regions (2 straight lines + 2 arcs) and
+ *   triangular endcap regions (1 straight + 2 arcs).
+ * - Map back to the rhombus for display.
  */
 
 import {
   getBoundaryAngle,
   getBoundaryDiskPoint,
-  diskPointToScreen,
-  getPointOnSide
+  diskPointToScreen
 } from './geometry.js';
-import { getSideGroup, countPointsInGroup, pointToFloat } from './combinatorialPathLogic.js';
+import { pointToFloat } from './combinatorialPathLogic.js';
 
 /**
  * Check whether a path (combinatorial state) is parallelizable.
@@ -67,6 +67,147 @@ export function isParallelizable(state) {
   return { parallelizable: true };
 }
 
+// ---------- CCW Boundary Walk ----------
+
+/**
+ * Compute a "walk position" for CCW traversal of the rhombus boundary.
+ * CCW on the rhombus: West (t↑, NW→SW) → South (t↓, SW→SE) →
+ *                     East (t↑, SE→NE) → North (t↓, NE→NW).
+ * Returns a value in [0, 4) that increases CCW.
+ */
+function getWalkPos(side, t) {
+  switch (side) {
+    case 'west':  return t;          // 0 at NW, 1 at SW
+    case 'south': return 2 - t;      // 1 at SW, 2 at SE
+    case 'east':  return 2 + t;      // 2 at SE, 3 at NE
+    case 'north': return 4 - t;      // 3 at NE, 4 at NW
+    default: return 0;
+  }
+}
+
+/**
+ * Build the list of boundary nodes in CCW order on the rhombus.
+ * Each node records its side, t parameter, and which edge it belongs to.
+ */
+function buildCCWBoundaryNodes(floatEdges) {
+  const nodes = [];
+  for (let i = 0; i < floatEdges.length; i++) {
+    const fe = floatEdges[i];
+    nodes.push({
+      side: fe.from.side, t: fe.from.t,
+      edgeIndex: i, walkPos: getWalkPos(fe.from.side, fe.from.t)
+    });
+    nodes.push({
+      side: fe.to.side, t: fe.to.t,
+      edgeIndex: i, walkPos: getWalkPos(fe.to.side, fe.to.t)
+    });
+  }
+  nodes.sort((a, b) => a.walkPos - b.walkPos);
+  return nodes;
+}
+
+/**
+ * Walk CCW collecting nodes until we hit a repeated edge.
+ * Returns { g1, g2 } where g1 is the first half of the nodes and
+ * g2 is the remainder in reversed order (for edge correspondence).
+ */
+function splitIntoGroups(nodes) {
+  const seenEdges = new Set();
+  const g1 = [];
+  for (const node of nodes) {
+    if (seenEdges.has(node.edgeIndex)) break;
+    seenEdges.add(node.edgeIndex);
+    g1.push(node);
+  }
+
+  // G2: remaining nodes in CCW order, then reversed for edge correspondence.
+  // In the CCW walk, G2 nodes come after G1 and before the wrap-around.
+  const g1WalkSet = new Set(g1.map(n => n.walkPos));
+  const g2ccw = nodes.filter(n => !g1WalkSet.has(n.walkPos));
+  const g2 = [...g2ccw].reverse();
+
+  return { g1, g2 };
+}
+
+// ---------- Disk Midpoint Helpers ----------
+
+/**
+ * Compute the midpoint on the unit circle between two boundary nodes.
+ * Uses the normalized average of their disk coordinates (short-arc midpoint).
+ */
+function circleMidpoint(nodeA, nodeB) {
+  const [u1, v1] = getBoundaryDiskPoint(nodeA.side, nodeA.t);
+  const [u2, v2] = getBoundaryDiskPoint(nodeB.side, nodeB.t);
+  const mu = (u1 + u2) / 2;
+  const mv = (v1 + v2) / 2;
+  const r = Math.hypot(mu, mv) || 1;
+  return { u: mu / r, v: mv / r };
+}
+
+/**
+ * Compute midpoints on the unit circle between consecutive nodes in a group.
+ * Returns k-1 midpoints for k nodes.
+ */
+function computeGroupMidpoints(group) {
+  const mids = [];
+  for (let i = 0; i < group.length - 1; i++) {
+    mids.push(circleMidpoint(group[i], group[i + 1]));
+  }
+  return mids;
+}
+
+// ---------- Arc / Line Sampling ----------
+
+/**
+ * Sample the short arc on the unit circle between two disk points.
+ * Returns an array of screen-coordinate {x, y} points.
+ */
+function sampleShortArc(diskPtA, diskPtB, numSteps) {
+  const angleA = Math.atan2(diskPtA.v, diskPtA.u);
+  let angleB = Math.atan2(diskPtB.v, diskPtB.u);
+
+  // Choose the short arc (less than π)
+  let delta = angleB - angleA;
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+
+  const steps = Math.max(2, numSteps);
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = angleA + delta * (i / steps);
+    pts.push(diskPointToScreen(Math.cos(angle), Math.sin(angle)));
+  }
+  return pts;
+}
+
+/**
+ * Sample a straight line (chord) in the disk between two boundary nodes.
+ * Returns an array of screen-coordinate {x, y} points.
+ */
+function sampleStraightLine(diskPtA, diskPtB, numSteps) {
+  const steps = Math.max(2, numSteps);
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const frac = i / steps;
+    // Small epsilon offset at endpoints for numerical stability
+    const t = Math.max(1e-6, Math.min(1 - 1e-6, frac));
+    const u = (1 - t) * diskPtA.u + t * diskPtB.u;
+    const v = (1 - t) * diskPtA.v + t * diskPtB.v;
+    pts.push(diskPointToScreen(u, v));
+  }
+  return pts;
+}
+
+/**
+ * Get a disk point {u, v} for a boundary node.
+ */
+function nodeToDisk(node) {
+  const [u, v] = getBoundaryDiskPoint(node.side, node.t);
+  return { u, v };
+}
+
+// ---------- Region Construction ----------
+
 /**
  * Generate parallel regions for a parallelizable path.
  *
@@ -74,7 +215,7 @@ export function isParallelizable(state) {
  * an array of screen-coordinate points forming a closed polygon.
  *
  * @param {Object} state  - Combinatorial state { points, edges }
- * @param {number} numSamples - Samples per chord / interchord segment (default 40)
+ * @param {number} numSamples - Samples per segment (default 40)
  * @returns {Array<{ edgeIndex: number, polygon: Array<{x,y}> }>}
  */
 export function generateParallelRegions(state, numSamples = 40) {
@@ -83,244 +224,114 @@ export function generateParallelRegions(state, numSamples = 40) {
     to: pointToFloat(edge.to, state)
   }));
 
-  // 1. Build the list of boundary points with their disk angles and chord index
-  const endpoints = [];
-  for (let i = 0; i < floatEdges.length; i++) {
-    const fe = floatEdges[i];
-    endpoints.push({
-      side: fe.from.side,
-      t: fe.from.t,
-      angle: getBoundaryAngle(fe.from.side, fe.from.t),
-      chordIndex: i,
-      which: 'from'
-    });
-    endpoints.push({
-      side: fe.to.side,
-      t: fe.to.t,
-      angle: getBoundaryAngle(fe.to.side, fe.to.t),
-      chordIndex: i,
-      which: 'to'
-    });
+  // 1. Build CCW-ordered boundary nodes
+  const nodes = buildCCWBoundaryNodes(floatEdges);
+
+  // 2. Split into G1 and G2 (G2 reversed for edge correspondence)
+  const { g1, g2 } = splitIntoGroups(nodes);
+  const k = g1.length; // = number of edges
+
+  // 3. Special case: single edge → region is the entire boundary
+  if (k === 1) {
+    return [{ edgeIndex: g1[0].edgeIndex, polygon: sampleFullBoundary(numSamples) }];
   }
 
-  // 2. Sort by angle (CCW)
-  endpoints.sort((a, b) => a.angle - b.angle);
+  // 4. Compute interchord midpoints on the unit circle
+  const ic1 = computeGroupMidpoints(g1);     // k-1 midpoints
+  const ic2 = computeGroupMidpoints(g2);     // k-1 midpoints
 
-  // 3. Walk around the circle and classify each arc between consecutive endpoints
-  const n = endpoints.length;
-  const arcs = []; // { from: endpoint, to: endpoint, type: 'same'|'inter' }
-  for (let i = 0; i < n; i++) {
-    const cur = endpoints[i];
-    const next = endpoints[(i + 1) % n];
-    arcs.push({
-      fromEp: cur,
-      toEp: next,
-      sameChord: cur.chordIndex === next.chordIndex
-    });
-  }
+  // 5. Compute endcap points
+  //    END1: midpoint between last G2 node and first G1 node (adjacent on circle)
+  //    END2: midpoint between last G1 node and first G2 node (adjacent on circle)
+  const end1 = circleMidpoint(g2[g2.length - 1], g1[0]);
+  const end2 = circleMidpoint(g1[g1.length - 1], g2[0]);
 
-  // 4. Assign each arc to a chord region.
-  //    - Arcs where both endpoints belong to the same chord are assigned to that chord.
-  //    - Arcs between different chords (interchord boundaries) are split: we assign
-  //      the arc to neither chord directly; instead they become boundaries between regions.
+  const arcSteps = Math.max(2, Math.floor(numSamples / 3));
+  const lineSteps = Math.max(2, Math.floor(numSamples / 2));
 
-  // Build region for each chord.  We walk around the circle and accumulate
-  // boundary segments for each region.  A region's boundary consists of:
-  //   • arcs along the disk boundary that "belong" to this chord
-  //   • interchord segments that border this chord
-  //   • the chord itself (optional — we just need the polygon for filling)
-  //
-  // The polygon for chord k is built by walking the boundary:
-  //   Start at chord k's "first" endpoint in CCW order
-  //   Follow the boundary arc if it belongs to chord k
-  //   When hitting an interchord boundary, follow the interchord (straight line in disk)
-  //     to the other side, then continue to chord k's other endpoint
-  //   The chord itself closes the polygon.
-
-  // Find for each chord which arcs it owns and which interchords border it
-  const chordArcIndices = new Map(); // chordIndex -> [arc indices that belong to it]
-  for (let i = 0; i < arcs.length; i++) {
-    if (arcs[i].sameChord) {
-      const ci = arcs[i].fromEp.chordIndex;
-      if (!chordArcIndices.has(ci)) chordArcIndices.set(ci, []);
-      chordArcIndices.get(ci).push(i);
-    }
-  }
-
-  // For each chord, build the closed polygon
+  // 6. Build regions
   const regions = [];
-  for (let ci = 0; ci < floatEdges.length; ci++) {
-    const polygon = buildChordRegionPolygon(
-      ci, endpoints, arcs, floatEdges[ci], numSamples
-    );
-    regions.push({ edgeIndex: ci, polygon });
+
+  // Endcap 1 (first edge): bounded by IC1[0]→IC2[0] straight,
+  //   IC2[0]→END1 arc (short arc through G2 side),
+  //   END1→IC1[0] arc (short arc through G1[0])
+  regions.push({
+    edgeIndex: g1[0].edgeIndex,
+    polygon: buildEndcapPolygon(ic1[0], ic2[0], end1, arcSteps, lineSteps)
+  });
+
+  // Rectangular regions (for edges G1[1] through G1[k-2])
+  for (let i = 0; i < k - 2; i++) {
+    regions.push({
+      edgeIndex: g1[i + 1].edgeIndex,
+      polygon: buildRectPolygon(ic1[i], ic2[i], ic2[i + 1], ic1[i + 1], arcSteps, lineSteps)
+    });
   }
+
+  // Endcap 2 (last edge): bounded by IC1[k-2]→IC2[k-2] straight,
+  //   IC2[k-2]→END2 arc, END2→IC1[k-2] arc
+  regions.push({
+    edgeIndex: g1[k - 1].edgeIndex,
+    polygon: buildEndcapPolygon(ic1[k - 2], ic2[k - 2], end2, arcSteps, lineSteps)
+  });
 
   return regions;
 }
 
 /**
- * Build the polygon for a single chord's region.
- *
- * Strategy: find the two endpoints of this chord in the sorted endpoint list.
- * Between the two endpoints (going one way around the circle) there are arcs.
- * For each direction:
- *   - If arcs belong to the same chord → follow the boundary arc
- *   - If arcs cross to a different chord → follow the interchord (straight line)
- *
- * One of the two "halves" will contain only same-chord arcs or interchord
- * boundaries; the other half is the complement. The chord itself connects
- * the two endpoints and closes the polygon.
- *
- * For non-nested chords the polygon looks like:
- *   boundary arc (endcap) → interchord → chord (back to start)
- *
- * We trace the region by going from endpoint A of the chord around the
- * boundary (following arcs and interchords) to endpoint B, then back along
- * the chord.
+ * Sample the full unit-circle boundary mapped to screen coords.
+ * Used for the single-edge case where the region is the entire rhombus.
  */
-function buildChordRegionPolygon(chordIndex, endpoints, arcs, floatEdge, numSamples) {
-  const n = endpoints.length;
-
-  // Find the two positions of this chord in the sorted endpoint array
-  const positions = [];
-  for (let i = 0; i < n; i++) {
-    if (endpoints[i].chordIndex === chordIndex) {
-      positions.push(i);
-    }
+function sampleFullBoundary(numSamples) {
+  const pts = [];
+  const steps = Math.max(4, numSamples * 2);
+  for (let i = 0; i < steps; i++) {
+    const angle = -Math.PI + (2 * Math.PI * i) / steps;
+    pts.push(diskPointToScreen(Math.cos(angle), Math.sin(angle)));
   }
-
-  // There should be exactly 2 endpoints for each chord
-  const [posA, posB] = positions;
-
-  // We have two paths around the circle from posA to posB:
-  //   path1: posA → posA+1 → ... → posB  (forward / CCW)
-  //   path2: posB → posB+1 → ... → posA  (the rest of the circle)
-  //
-  // One of these paths will be "owned" by this chord's region. Specifically,
-  // the path that does NOT start with the chord's own arc (since the chord
-  // arc is on the OTHER side of the chord from the region interior).
-  //
-  // Actually, for a convex chord in a disk, both directions define a region.
-  // We want the "outer" region — the one that includes the boundary arcs
-  // closest to this chord's endpoints and the interchords to neighboring chords.
-  //
-  // Heuristic: choose the shorter path (fewer arcs) from posA to posB.
-  // If both are equal, pick the one that starts with a same-chord arc (endcap).
-
-  const path1Len = ((posB - posA) % n + n) % n;
-  const path2Len = n - path1Len;
-
-  // Check which path starts with a same-chord arc
-  const arc1Start = arcs[posA];
-  const arc2Start = arcs[posB];
-
-  // Choose the path that has the chord's own arcs (endcaps).
-  // If neither or both, pick the shorter one.
-  let chosenStart, chosenLen;
-  if (arc1Start.sameChord && arc1Start.fromEp.chordIndex === chordIndex) {
-    chosenStart = posA;
-    chosenLen = path1Len;
-  } else if (arc2Start.sameChord && arc2Start.fromEp.chordIndex === chordIndex) {
-    chosenStart = posB;
-    chosenLen = path2Len;
-  } else {
-    // Pick the shorter path
-    if (path1Len <= path2Len) {
-      chosenStart = posA;
-      chosenLen = path1Len;
-    } else {
-      chosenStart = posB;
-      chosenLen = path2Len;
-    }
-  }
-
-  // Trace the boundary from chosenStart going forward chosenLen arcs
-  const points = [];
-  let cur = chosenStart;
-  for (let step = 0; step < chosenLen; step++) {
-    const arcIdx = cur % n;
-    const arc = arcs[arcIdx];
-
-    if (arc.sameChord) {
-      // Follow the boundary arc (sample points along the unit circle)
-      sampleBoundaryArc(arc.fromEp, arc.toEp, numSamples, points);
-    } else {
-      // Interchord: straight line in the disk from arc.fromEp to arc.toEp
-      sampleInterchord(arc.fromEp, arc.toEp, numSamples, points);
-    }
-
-    cur = (cur + 1) % n;
-  }
-
-  // Close with the chord (straight line in disk from the last point back to the first)
-  // The chord goes from the endpoint at the end of the walk back to the start
-  const chordStart = endpoints[cur]; // where we ended up
-  const chordEnd = endpoints[chosenStart]; // where we started
-  sampleChord(chordStart, chordEnd, numSamples, points);
-
-  return points;
+  return pts;
 }
 
 /**
- * Sample points along a boundary arc (on the unit circle) between two endpoints.
- * The arc goes CCW from ep1 to ep2 (short arc in the sorted direction).
+ * Build a triangular endcap polygon.
+ * Boundary: icPt → icPt2 (straight), icPt2 → endPt (arc), endPt → icPt (arc).
+ * "Straight, arc, arc."
  */
-function sampleBoundaryArc(ep1, ep2, numSamples, outPoints) {
-  const angle1 = ep1.angle;
-  let angle2 = ep2.angle;
+function buildEndcapPolygon(icPt1, icPt2, endPt, arcSteps, lineSteps) {
+  const pts = [];
 
-  // Ensure we go CCW (increasing angle)
-  if (angle2 < angle1) {
-    angle2 += 2 * Math.PI;
-  }
+  // 1. Straight line: IC1 → IC2
+  pts.push(...sampleStraightLine(icPt1, icPt2, lineSteps));
 
-  // If the arc is very small, just add the endpoints
-  const arcLen = angle2 - angle1;
-  const steps = Math.max(2, Math.ceil(numSamples * arcLen / (2 * Math.PI)));
+  // 2. Arc: IC2 → END (short arc on circle boundary)
+  pts.push(...sampleShortArc(icPt2, endPt, arcSteps));
 
-  for (let i = 0; i <= steps; i++) {
-    const angle = angle1 + (arcLen * i) / steps;
-    const u = Math.cos(angle);
-    const v = Math.sin(angle);
-    // Points on the unit circle map to the boundary, but we use diskPointToScreen
-    // which handles the full disk→rhombus→screen mapping
-    outPoints.push(diskPointToScreen(u, v));
-  }
+  // 3. Arc: END → IC1 (short arc on circle boundary)
+  pts.push(...sampleShortArc(endPt, icPt1, arcSteps));
+
+  return pts;
 }
 
 /**
- * Sample points along an interchord (straight line in the disk)
- * between two boundary endpoints.
+ * Build a rectangular-ish polygon.
+ * Boundary: ic1a → ic2a (straight), ic2a → ic2b (arc),
+ *           ic2b → ic1b (straight), ic1b → ic1a (arc).
+ * "Two straight lines and two arcs."
  */
-function sampleInterchord(ep1, ep2, numSamples, outPoints) {
-  const [u1, v1] = getBoundaryDiskPoint(ep1.side, ep1.t);
-  const [u2, v2] = getBoundaryDiskPoint(ep2.side, ep2.t);
+function buildRectPolygon(ic1a, ic2a, ic2b, ic1b, arcSteps, lineSteps) {
+  const pts = [];
 
-  // For interchords between consecutive endpoints, a moderate sample count suffices
-  const steps = Math.max(2, Math.floor(numSamples / 2));
-  for (let i = 0; i <= steps; i++) {
-    const frac = i / steps;
-    const u = (1 - frac) * u1 + frac * u2;
-    const v = (1 - frac) * v1 + frac * v2;
-    outPoints.push(diskPointToScreen(u, v));
-  }
-}
+  // 1. Straight: IC1[i] → IC2[i]
+  pts.push(...sampleStraightLine(ic1a, ic2a, lineSteps));
 
-/**
- * Sample points along a chord (straight line in the disk)
- * between two boundary endpoints. This is the edge's chord itself.
- */
-function sampleChord(ep1, ep2, numSamples, outPoints) {
-  const [u1, v1] = getBoundaryDiskPoint(ep1.side, ep1.t);
-  const [u2, v2] = getBoundaryDiskPoint(ep2.side, ep2.t);
+  // 2. Arc: IC2[i] → IC2[i+1] (along G2 boundary)
+  pts.push(...sampleShortArc(ic2a, ic2b, arcSteps));
 
-  for (let i = 0; i <= numSamples; i++) {
-    const frac = i / numSamples;
-    // Small epsilon at endpoints for numerical stability
-    const t = Math.max(1e-6, Math.min(1 - 1e-6, frac));
-    const u = (1 - t) * u1 + t * u2;
-    const v = (1 - t) * v1 + t * v2;
-    outPoints.push(diskPointToScreen(u, v));
-  }
+  // 3. Straight: IC2[i+1] → IC1[i+1]
+  pts.push(...sampleStraightLine(ic2b, ic1b, lineSteps));
+
+  // 4. Arc: IC1[i+1] → IC1[i] (along G1 boundary)
+  pts.push(...sampleShortArc(ic1b, ic1a, arcSteps));
+
+  return pts;
 }
