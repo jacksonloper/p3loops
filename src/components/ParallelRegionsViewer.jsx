@@ -3,11 +3,19 @@ import {
   getSize,
   getShear,
   getCurvedEdgePath,
-  getStraightRhombusPath
+  getStraightRhombusPath,
+  isInteriorPoint,
+  getIdentifiedSide,
+  EPSILON
 } from '../utils/geometry.js';
-import { isParallelizable, generateParallelRegions, generateMergedRegionsPaper } from '../utils/parallelizable.js';
+import { isParallelizable, generateParallelRegions, generateParallelRegionsPaper } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
-import { paperToTrueRhombus } from '../utils/wallpaperGeometry.js';
+import {
+  createIdentityFrame,
+  applyReferenceFrame,
+  updateReferenceFrameForSide,
+  paperToTrueRhombus
+} from '../utils/wallpaperGeometry.js';
 import ParallelRegionsWallpaperViewer from './ParallelRegionsWallpaperViewer.jsx';
 import './ParallelRegionsViewer.css';
 
@@ -57,6 +65,72 @@ function polygonToPath(polygon) {
 }
 
 /**
+ * Check if an edge stays within the same rhombus.
+ */
+function isSameSideEdge(edge) {
+  if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) return false;
+  if (edge.from.side === edge.to.side) return true;
+  if (getIdentifiedSide(edge.from.side) === edge.to.side &&
+      Math.abs(edge.from.t - edge.to.t) < EPSILON) return true;
+  return false;
+}
+
+/**
+ * Compute the wallpaper reference frame for each edge by walking through
+ * the path and tracking boundary crossings, mirroring the logic in
+ * WallpaperViewer's generateWallpaperData / wallpaperGeometry's pathToWallpaperPath.
+ *
+ * @param {Array} floatEdges - Float edges with { from: {side, t}, to: {side, t} }
+ * @returns {Array<Object>} - One frame per edge
+ */
+function computeEdgeFrames(floatEdges) {
+  const frames = [];
+  let currentFrame = createIdentityFrame();
+
+  for (let i = 0; i < floatEdges.length; i++) {
+    // Edge i uses the current frame
+    frames.push({ ...currentFrame });
+
+    const edge = floatEdges[i];
+
+    // Determine if we need to update the frame after this edge
+    if (!isInteriorPoint(edge.to)) {
+      const nextEdge = floatEdges[i + 1];
+      let shouldUpdateFrame = false;
+
+      if (!isSameSideEdge(edge)) {
+        // Edge crosses the rhombus
+        if (nextEdge) {
+          const nextStartsSamePhysicalSide = !isInteriorPoint(nextEdge.from) &&
+            nextEdge.from.side === edge.to.side;
+          const nextIsSameSide = isSameSideEdge(nextEdge);
+          shouldUpdateFrame = !(nextIsSameSide && nextStartsSamePhysicalSide);
+        } else {
+          shouldUpdateFrame = true;
+        }
+      } else if (nextEdge) {
+        // Same-side edge: check if next edge transitions via identification
+        if (!isInteriorPoint(nextEdge.from)) {
+          const endSide = edge.to.side;
+          const nextStartSide = nextEdge.from.side;
+          if (endSide !== nextStartSide &&
+              getIdentifiedSide(endSide) === nextStartSide &&
+              Math.abs(edge.to.t - nextEdge.from.t) < EPSILON) {
+            shouldUpdateFrame = true;
+          }
+        }
+      }
+
+      if (shouldUpdateFrame) {
+        currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+      }
+    }
+  }
+
+  return frames;
+}
+
+/**
  * ParallelRegionsViewer - modal overlay displaying the parallelizable regions
  * of the rhombus partitioned by the path's edges.
  */
@@ -77,31 +151,40 @@ function ParallelRegionsViewer({ state, onClose }) {
     return generateParallelRegions(state);
   }, [state]);
 
-  // Generate the merged fundamental-domain polygon (all regions stitched)
+  // Generate the fundamental domain: each region lifted into wallpaper space
+  // via the per-edge reference frames (path unfolding).
   const fundamentalDomain = useMemo(() => {
-    if (regions.length === 0) return { path: '', viewBox: '0 0 1 1' };
-    const merged = generateMergedRegionsPaper(state, [{ start: 0, end: regions.length - 1 }], 60);
-    if (merged.length === 0 || merged[0].polygon.length === 0) return { path: '', viewBox: '0 0 1 1' };
-    const polygon = merged[0].polygon;
-    const screenPts = polygon.map(pt => paperToTrueRhombus(pt.southward, pt.eastward));
-    // Build path
-    let d = `M ${screenPts[0].x} ${screenPts[0].y}`;
-    for (let i = 1; i < screenPts.length; i++) {
-      d += ` L ${screenPts[i].x} ${screenPts[i].y}`;
-    }
-    d += ' Z';
-    // Compute bounding box
+    if (regions.length === 0) return { paths: [], viewBox: '0 0 1 1' };
+
+    // Get paper-coordinate regions (one per edge)
+    const paperRegions = generateParallelRegionsPaper(state, 60);
+    if (paperRegions.length === 0) return { paths: [], viewBox: '0 0 1 1' };
+
+    // Compute wallpaper frame for each edge
+    const edgeFrames = computeEdgeFrames(floatEdges);
+
+    // Transform each region through its edge's wallpaper frame
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const pt of screenPts) {
-      minX = Math.min(minX, pt.x);
-      minY = Math.min(minY, pt.y);
-      maxX = Math.max(maxX, pt.x);
-      maxY = Math.max(maxY, pt.y);
-    }
-    const pad = 20;
+    const paths = paperRegions.map(region => {
+      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
+      const screenPts = region.polygon.map(pt => {
+        const local = paperToTrueRhombus(pt.southward, pt.eastward);
+        return applyReferenceFrame(local.x, local.y, frame);
+      });
+      // Update bounding box
+      for (const pt of screenPts) {
+        minX = Math.min(minX, pt.x);
+        minY = Math.min(minY, pt.y);
+        maxX = Math.max(maxX, pt.x);
+        maxY = Math.max(maxY, pt.y);
+      }
+      return polygonToPath(screenPts);
+    });
+
+    const pad = 30;
     const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
-    return { path: d, viewBox: vb };
-  }, [state, regions]);
+    return { paths, viewBox: vb };
+  }, [state, regions, floatEdges]);
 
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
@@ -176,17 +259,18 @@ function ParallelRegionsViewer({ state, onClose }) {
               </>
             ) : (
               <>
-                {/* Fundamental domain: single merged polygon, thick white border */}
-                {fundamentalDomain.path && (
+                {/* Fundamental domain: each region lifted into wallpaper space */}
+                {fundamentalDomain.paths.map((pathD, idx) => (
                   <path
-                    d={fundamentalDomain.path}
+                    key={`fd-${idx}`}
+                    d={pathD}
                     fill="rgba(100, 120, 220, 0.35)"
                     stroke="white"
                     strokeWidth="3"
                     strokeLinejoin="round"
                     strokeLinecap="round"
                   />
-                )}
+                ))}
               </>
             )}
           </svg>
