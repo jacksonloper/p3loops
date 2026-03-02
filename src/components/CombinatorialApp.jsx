@@ -6,6 +6,8 @@ import P4WallpaperViewer from './P4WallpaperViewer.jsx';
 import P4TriangleWallpaperViewer from './P4TriangleWallpaperViewer.jsx';
 import LoopSelector from './LoopSelector.jsx';
 import EdgeListViewer from './EdgeListViewer.jsx';
+import ParallelRegionsViewer from './ParallelRegionsViewer.jsx';
+import { isParallelizable } from '../utils/parallelizable.js';
 import {
   createInitialState,
   getAllSegments,
@@ -54,6 +56,7 @@ function CombinatorialApp() {
   const [showP4WallpaperViewer, setShowP4WallpaperViewer] = useState(false);
   const [showP4TriangleWallpaperViewer, setShowP4TriangleWallpaperViewer] = useState(false);
   const [showEdgeList, setShowEdgeList] = useState(false);
+  const [showParallelRegions, setShowParallelRegions] = useState(false);
   const [highlightedEdgeIndex, setHighlightedEdgeIndex] = useState(null);
   const [isLoopClosed, setIsLoopClosed] = useState(false);
   const [examplesList, setExamplesList] = useState([]);
@@ -640,6 +643,21 @@ function CombinatorialApp() {
             >
               Show Edge List
             </button>
+            
+            <button
+              onClick={() => {
+                const check = isParallelizable(state);
+                if (!check.parallelizable) {
+                  setValidationMessage(`Not parallelizable: ${check.reason}`);
+                } else {
+                  setShowParallelRegions(true);
+                }
+              }}
+              disabled={state.edges.length === 0}
+              className="control-btn primary-btn"
+            >
+              Parallel Regions
+            </button>
           </div>
 
           <div className="selectors-row">
@@ -772,6 +790,13 @@ function CombinatorialApp() {
         <EdgeListViewer 
           edges={state.edges}
           onClose={() => setShowEdgeList(false)}
+        />
+      )}
+
+      {showParallelRegions && (
+        <ParallelRegionsViewer
+          state={state}
+          onClose={() => setShowParallelRegions(false)}
         />
       )}
     </div>
