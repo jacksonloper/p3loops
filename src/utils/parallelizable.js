@@ -28,7 +28,8 @@
 import {
   getBoundaryAngle,
   getBoundaryDiskPoint,
-  diskPointToScreen
+  diskPointToScreen,
+  diskPointToPaper
 } from './geometry.js';
 import { pointToFloat } from './combinatorialPathLogic.js';
 
@@ -346,4 +347,123 @@ function buildRectPolygon(ic1a, ic2a, ic2b, ic1b, arcSteps, lineSteps) {
   pts.push(...sampleShortArc(ic1b, ic1a, arcSteps));
 
   return pts;
+}
+
+// ---------- Paper-Coordinate Region Generation ----------
+
+/**
+ * Sample the short arc on the unit circle between two disk points.
+ * Returns an array of paper-coordinate {southward, eastward} points.
+ */
+function sampleShortArcPaper(diskPtA, diskPtB, numSteps) {
+  const angleA = Math.atan2(diskPtA.v, diskPtA.u);
+  let delta = Math.atan2(diskPtB.v, diskPtB.u) - angleA;
+  if (delta > Math.PI) delta -= 2 * Math.PI;
+  if (delta < -Math.PI) delta += 2 * Math.PI;
+
+  const steps = Math.max(2, numSteps);
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = angleA + delta * (i / steps);
+    pts.push(diskPointToPaper(Math.cos(angle), Math.sin(angle)));
+  }
+  return pts;
+}
+
+/**
+ * Sample a straight line (chord) in the disk between two disk points.
+ * Returns an array of paper-coordinate {southward, eastward} points.
+ */
+function sampleStraightLinePaper(diskPtA, diskPtB, numSteps) {
+  const steps = Math.max(2, numSteps);
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const frac = i / steps;
+    const t = Math.max(1e-6, Math.min(1 - 1e-6, frac));
+    const u = (1 - t) * diskPtA.u + t * diskPtB.u;
+    const v = (1 - t) * diskPtA.v + t * diskPtB.v;
+    pts.push(diskPointToPaper(u, v));
+  }
+  return pts;
+}
+
+function buildEndcapPolygonPaper(icPt1, icPt2, endPt, arcSteps, lineSteps) {
+  const pts = [];
+  pts.push(...sampleStraightLinePaper(icPt1, icPt2, lineSteps));
+  pts.push(...sampleShortArcPaper(icPt2, endPt, arcSteps));
+  pts.push(...sampleShortArcPaper(endPt, icPt1, arcSteps));
+  return pts;
+}
+
+function buildRectPolygonPaper(ic1a, ic2a, ic2b, ic1b, arcSteps, lineSteps) {
+  const pts = [];
+  pts.push(...sampleStraightLinePaper(ic1a, ic2a, lineSteps));
+  pts.push(...sampleShortArcPaper(ic2a, ic2b, arcSteps));
+  pts.push(...sampleStraightLinePaper(ic2b, ic1b, lineSteps));
+  pts.push(...sampleShortArcPaper(ic1b, ic1a, arcSteps));
+  return pts;
+}
+
+function sampleFullBoundaryPaper(numSamples) {
+  const pts = [];
+  const steps = Math.max(4, numSamples * 2);
+  for (let i = 0; i < steps; i++) {
+    const angle = -Math.PI + (2 * Math.PI * i) / steps;
+    pts.push(diskPointToPaper(Math.cos(angle), Math.sin(angle)));
+  }
+  return pts;
+}
+
+/**
+ * Generate parallel regions in paper coordinates (southward, eastward).
+ * Same algorithm as generateParallelRegions but outputs paper coords
+ * suitable for wallpaper rendering via paperToTrueRhombus + applyReferenceFrame.
+ *
+ * @param {Object} state  - Combinatorial state { points, edges }
+ * @param {number} numSamples - Samples per segment (default 40)
+ * @returns {Array<{ edgeIndex: number, polygon: Array<{southward,eastward}> }>}
+ */
+export function generateParallelRegionsPaper(state, numSamples = 40) {
+  const floatEdges = state.edges.map(edge => ({
+    from: pointToFloat(edge.from, state),
+    to: pointToFloat(edge.to, state)
+  }));
+
+  const nodes = buildCCWBoundaryNodes(floatEdges);
+  const { g1, g2 } = splitIntoGroups(nodes);
+  const k = g1.length;
+
+  if (k === 1) {
+    return [{ edgeIndex: g1[0].edgeIndex, polygon: sampleFullBoundaryPaper(numSamples) }];
+  }
+
+  const ic1 = computeGroupMidpoints(g1);
+  const ic2 = computeGroupMidpoints(g2);
+
+  const end1 = circleMidpoint(g2[g2.length - 1], g1[0]);
+  const end2 = circleMidpoint(g1[g1.length - 1], g2[0]);
+
+  const arcSteps = Math.max(2, Math.floor(numSamples / 3));
+  const lineSteps = Math.max(2, Math.floor(numSamples / 2));
+
+  const regions = [];
+
+  regions.push({
+    edgeIndex: g1[0].edgeIndex,
+    polygon: buildEndcapPolygonPaper(ic1[0], ic2[0], end1, arcSteps, lineSteps)
+  });
+
+  for (let i = 0; i < k - 2; i++) {
+    regions.push({
+      edgeIndex: g1[i + 1].edgeIndex,
+      polygon: buildRectPolygonPaper(ic1[i], ic2[i], ic2[i + 1], ic1[i + 1], arcSteps, lineSteps)
+    });
+  }
+
+  regions.push({
+    edgeIndex: g1[k - 1].edgeIndex,
+    polygon: buildEndcapPolygonPaper(ic1[k - 2], ic2[k - 2], end2, arcSteps, lineSteps)
+  });
+
+  return regions;
 }

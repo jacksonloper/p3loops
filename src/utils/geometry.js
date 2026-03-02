@@ -958,3 +958,15 @@ export function diskPointToScreen(u, v) {
   const [X, Y] = diskToRhombus(u, v);
   return normalizedToScreen(X, Y);
 }
+
+/**
+ * Map a point from the unit disk to paper coordinates (southward, eastward).
+ * Goes through: disk → square → rhombus (normalized) → paper.
+ * @param {number} u - u coordinate in unit disk
+ * @param {number} v - v coordinate in unit disk
+ * @returns {Object} { southward, eastward } paper coordinates in [0,1]²
+ */
+export function diskPointToPaper(u, v) {
+  const [X, Y] = diskToRhombus(u, v);
+  return normalizedToPaper(X, Y);
+}

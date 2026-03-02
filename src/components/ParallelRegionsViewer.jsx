@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   getSize,
   getShear,
@@ -7,6 +7,7 @@ import {
 } from '../utils/geometry.js';
 import { isParallelizable, generateParallelRegions } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
+import ParallelRegionsWallpaperViewer from './ParallelRegionsWallpaperViewer.jsx';
 import './ParallelRegionsViewer.css';
 
 // Distinct colors for regions
@@ -59,6 +60,7 @@ function polygonToPath(polygon) {
  * of the rhombus partitioned by the path's edges.
  */
 function ParallelRegionsViewer({ state, onClose }) {
+  const [showWallpaper, setShowWallpaper] = useState(false);
   const SIZE = getSize();
   const SHEAR = getShear();
   const HALF_SHEAR = SHEAR / 2;
@@ -138,9 +140,24 @@ function ParallelRegionsViewer({ state, onClose }) {
                 </span>
               ))}
             </div>
+            {regions.length > 0 && (
+              <button
+                className="pr-wallpaper-btn"
+                onClick={() => setShowWallpaper(true)}
+              >
+                View as Wallpaper
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {showWallpaper && (
+        <ParallelRegionsWallpaperViewer
+          state={state}
+          onClose={() => setShowWallpaper(false)}
+        />
+      )}
     </div>
   );
 }
