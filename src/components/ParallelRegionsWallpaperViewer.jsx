@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   applyReferenceFrame,
   paperToTrueRhombus,
@@ -8,13 +8,10 @@ import {
   SW_CORNER
 } from '../utils/wallpaperGeometry.js';
 import { indexToFrame, updateWallpaperIndex } from '../utils/moveTree.js';
-import { generateParallelRegionsPaper } from '../utils/parallelizable.js';
+import { generateParallelRegionsPaper, generateMergedRegionsPaper } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
-import { getEdgeSamplePointsPaper, getIdentifiedSide } from '../utils/geometry.js';
+import { getIdentifiedSide } from '../utils/geometry.js';
 import './ParallelRegionsWallpaperViewer.css';
-
-// Number of sample points per edge for curved rendering
-const EDGE_SAMPLES = 20;
 
 /**
  * Generate a color for a connected component index.
@@ -187,30 +184,6 @@ function paperPolygonToPath(polygon, frame) {
 }
 
 /**
- * Generate SVG path for a single edge in a given reference frame.
- */
-function generateEdgePath(edge, frame) {
-  const samplePoints = getEdgeSamplePointsPaper(
-    edge.from.side, edge.from.t,
-    edge.to.side, edge.to.t,
-    EDGE_SAMPLES
-  );
-  
-  const screenPoints = samplePoints.map(pt => {
-    const localScreen = paperToTrueRhombus(pt.southward, pt.eastward);
-    return applyReferenceFrame(localScreen.x, localScreen.y, frame);
-  });
-  
-  if (screenPoints.length < 2) return '';
-  
-  let path = `M ${screenPoints[0].x} ${screenPoints[0].y}`;
-  for (let i = 1; i < screenPoints.length; i++) {
-    path += ` L ${screenPoints[i].x} ${screenPoints[i].y}`;
-  }
-  return path;
-}
-
-/**
  * Get the rhombus outline path for a given reference frame.
  */
 function getRhombusPathString(frame) {
@@ -240,13 +213,86 @@ function getRhombusCenter(frame) {
 }
 
 /**
+ * Compute region groups for merging within each copy.
+ * Groups consecutive regions that share the same connected component ID.
+ */
+function computeRegionGroups(paperRegions, componentColorMap, copyKey) {
+  const groups = [];
+  let currentGroup = null;
+
+  for (let r = 0; r < paperRegions.length; r++) {
+    const compId = componentColorMap[`${copyKey}:${r}`] ?? -1;
+
+    if (currentGroup && currentGroup.compId === compId) {
+      currentGroup.end = r;
+    } else {
+      if (currentGroup) groups.push(currentGroup);
+      currentGroup = { start: r, end: r, compId };
+    }
+  }
+  if (currentGroup) groups.push(currentGroup);
+
+  return groups;
+}
+
+/**
+ * Build SVG content string for export.
+ * Each connected component is rendered as a single merged polygon.
+ */
+function buildSvgExport(state, copies, paperRegions, componentColorMap, viewBox) {
+  // Group consecutive same-component regions for each copy
+  const allMergedPolygons = [];
+
+  for (const { index, frame } of copies) {
+    const copyKey = `${index.tx},${index.ty},${index.r}`;
+    const groups = computeRegionGroups(paperRegions, componentColorMap, copyKey);
+
+    // Generate merged polygons for this copy's groups
+    const mergeSpecs = groups.map(g => ({ start: g.start, end: g.end }));
+    const mergedPolygons = generateMergedRegionsPaper(state, mergeSpecs, 30);
+
+    for (let i = 0; i < groups.length; i++) {
+      allMergedPolygons.push({
+        compId: groups[i].compId,
+        polygon: mergedPolygons[i].polygon,
+        frame
+      });
+    }
+  }
+
+  // Group by component ID for SVG output
+  const byComponent = new Map();
+  for (const item of allMergedPolygons) {
+    if (!byComponent.has(item.compId)) {
+      byComponent.set(item.compId, []);
+    }
+    byComponent.get(item.compId).push(item);
+  }
+
+  let paths = '';
+  for (const [compId, items] of byComponent) {
+    const color = componentToColor(compId, 0.6);
+    const strokeColor = componentToColor(compId, 0.9);
+    let d = '';
+    for (const { polygon, frame } of items) {
+      d += paperPolygonToPath(polygon, frame) + ' ';
+    }
+    paths += `  <path d="${d.trim()}" fill="${color}" stroke="${strokeColor}" stroke-width="0.5" />\n`;
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" style="background: #1a1a2e">
+${paths}</svg>`;
+}
+
+/**
  * ParallelRegionsWallpaperViewer - renders parallel regions tiled across
  * a P3 wallpaper pattern with 3n² copies, colored by connected component.
  */
 function ParallelRegionsWallpaperViewer({ state, onClose }) {
   const [n, setN] = useState(2);
 
-  // Compute float edges for drawing edge curves
+  // Compute float edges for connected component analysis
   const floatEdges = useMemo(() => allEdgesToFloat(state), [state]);
 
   // Generate paper-coordinate parallel regions (once, shared across all copies)
@@ -280,7 +326,6 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const { frame } of copies) {
       const center = getRhombusCenter(frame);
-      // Use a generous estimate per rhombus
       minX = Math.min(minX, center.x - 350);
       minY = Math.min(minY, center.y - 350);
       maxX = Math.max(maxX, center.x + 350);
@@ -289,6 +334,18 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
     const padding = 40;
     return `${minX - padding} ${minY - padding} ${maxX - minX + 2 * padding} ${maxY - minY + 2 * padding}`;
   }, [copies]);
+
+  // SVG export handler
+  const handleSaveSvg = useCallback(() => {
+    const svgContent = buildSvgExport(state, copies, paperRegions, componentColorMap, viewBox);
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'parallel-regions-wallpaper.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [state, copies, paperRegions, componentColorMap, viewBox]);
 
   return (
     <div className="pr-wallpaper-overlay" onClick={onClose}>
@@ -300,7 +357,7 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
 
         <div className="pr-wallpaper-canvas">
           <svg viewBox={viewBox} className="pr-wallpaper-svg">
-            {/* For each copy, render rhombus outline + filled regions + edges */}
+            {/* For each copy, render rhombus outline + filled regions */}
             {copies.map(({ index, frame }) => {
               const copyKey = `${index.tx},${index.ty},${index.r}`;
 
@@ -327,18 +384,6 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
                       />
                     );
                   })}
-
-                  {/* Edge curves drawn on top */}
-                  {floatEdges.map((edge, eIdx) => (
-                    <path
-                      key={`${copyKey}-e${eIdx}`}
-                      d={generateEdgePath(edge, frame)}
-                      fill="none"
-                      stroke="rgba(255,255,255,0.6)"
-                      strokeWidth="1"
-                      strokeLinecap="round"
-                    />
-                  ))}
                 </g>
               );
             })}
@@ -359,6 +404,9 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
             />
             <span className="pr-wallpaper-n-value">{n}</span>
           </div>
+          <button onClick={handleSaveSvg} className="pr-wallpaper-save-btn">
+            Save SVG
+          </button>
         </div>
       </div>
     </div>

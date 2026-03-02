@@ -252,12 +252,12 @@ export function generateParallelRegions(state, numSamples = 40) {
   // 5. Compute endcap points.
   //    G1 and G2 each occupy one contiguous arc of the circle boundary.
   //    The two gaps between these arcs are where the END points go:
-  //    END1: midpoint between last G2 node and first G1 node
-  //          (these are adjacent on the circle, spanning the gap before G1)
-  //    END2: midpoint between last G1 node and first G2 node
-  //          (adjacent on the circle, spanning the gap after G1)
-  const end1 = circleMidpoint(g2[g2.length - 1], g1[0]);
-  const end2 = circleMidpoint(g1[g1.length - 1], g2[0]);
+  //    END1: midpoint between first G1 node and first G2 node
+  //          (in the gap at the "start" of both groups)
+  //    END2: midpoint between last G1 node and last G2 node
+  //          (in the gap at the "end" of both groups)
+  const end1 = circleMidpoint(g1[0], g2[0]);
+  const end2 = circleMidpoint(g1[g1.length - 1], g2[g2.length - 1]);
 
   const arcSteps = Math.max(2, Math.floor(numSamples / 3));
   const lineSteps = Math.max(2, Math.floor(numSamples / 2));
@@ -440,8 +440,8 @@ export function generateParallelRegionsPaper(state, numSamples = 40) {
   const ic1 = computeGroupMidpoints(g1);
   const ic2 = computeGroupMidpoints(g2);
 
-  const end1 = circleMidpoint(g2[g2.length - 1], g1[0]);
-  const end2 = circleMidpoint(g1[g1.length - 1], g2[0]);
+  const end1 = circleMidpoint(g1[0], g2[0]);
+  const end2 = circleMidpoint(g1[g1.length - 1], g2[g2.length - 1]);
 
   const arcSteps = Math.max(2, Math.floor(numSamples / 3));
   const lineSteps = Math.max(2, Math.floor(numSamples / 2));
@@ -466,4 +466,82 @@ export function generateParallelRegionsPaper(state, numSamples = 40) {
   });
 
   return regions;
+}
+
+/**
+ * Generate merged polygons in paper coordinates for groups of consecutive regions.
+ *
+ * Given a list of region groups (each group is a contiguous range of region
+ * indices to merge), this builds one polygon per group by removing the internal
+ * chords and stitching the boundary arcs together.
+ *
+ * @param {Object} state - Combinatorial state { points, edges }
+ * @param {Array<{ start: number, end: number }>} groups - Ranges of region indices to merge
+ * @param {number} numSamples - Samples per segment (default 40)
+ * @returns {Array<{ polygon: Array<{southward,eastward}> }>}
+ */
+export function generateMergedRegionsPaper(state, groups, numSamples = 40) {
+  const floatEdges = state.edges.map(edge => ({
+    from: pointToFloat(edge.from, state),
+    to: pointToFloat(edge.to, state)
+  }));
+
+  const nodes = buildCCWBoundaryNodes(floatEdges);
+  const { g1, g2 } = splitIntoGroups(nodes);
+  const k = g1.length;
+
+  if (k === 1) {
+    return [{ polygon: sampleFullBoundaryPaper(numSamples) }];
+  }
+
+  const ic1 = computeGroupMidpoints(g1);
+  const ic2 = computeGroupMidpoints(g2);
+
+  const end1 = circleMidpoint(g1[0], g2[0]);
+  const end2 = circleMidpoint(g1[g1.length - 1], g2[g2.length - 1]);
+
+  const arcSteps = Math.max(2, Math.floor(numSamples / 3));
+  const lineSteps = Math.max(2, Math.floor(numSamples / 2));
+
+  const result = [];
+
+  for (const { start: s, end: e } of groups) {
+    const pts = [];
+
+    // Part 1: Start crossing (G2 side → G1 side)
+    if (s === 0) {
+      // Endcap 1: arcs from IC2[0] through END1 to IC1[0]
+      pts.push(...sampleShortArcPaper(ic2[0], end1, arcSteps));
+      pts.push(...sampleShortArcPaper(end1, ic1[0], arcSteps));
+    } else {
+      // Chord from IC2[s-1] to IC1[s-1]
+      pts.push(...sampleStraightLinePaper(ic2[s - 1], ic1[s - 1], lineSteps));
+    }
+
+    // Part 2: G1 boundary arcs
+    const g1Start = (s > 0) ? s - 1 : 0;
+    const g1End = (e < k - 1) ? e : k - 2;
+    for (let j = g1Start; j < g1End; j++) {
+      pts.push(...sampleShortArcPaper(ic1[j], ic1[j + 1], arcSteps));
+    }
+
+    // Part 3: End crossing (G1 side → G2 side)
+    if (e === k - 1) {
+      // Endcap 2: arcs from IC1[k-2] through END2 to IC2[k-2]
+      pts.push(...sampleShortArcPaper(ic1[k - 2], end2, arcSteps));
+      pts.push(...sampleShortArcPaper(end2, ic2[k - 2], arcSteps));
+    } else {
+      // Chord from IC1[e] to IC2[e]
+      pts.push(...sampleStraightLinePaper(ic1[e], ic2[e], lineSteps));
+    }
+
+    // Part 4: G2 boundary arcs (going backward)
+    for (let j = g1End; j > g1Start; j--) {
+      pts.push(...sampleShortArcPaper(ic2[j], ic2[j - 1], arcSteps));
+    }
+
+    result.push({ polygon: pts });
+  }
+
+  return result;
 }
