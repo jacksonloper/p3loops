@@ -20,6 +20,7 @@ import {
   getNextStartPoint,
   importFromFloatEdges,
   canCloseLoop,
+  closeLoop,
   getValidSegments
 } from './combinatorialPathLogic.js';
 
@@ -780,5 +781,81 @@ describe('getValidSegments - same-side touching segment rule', () => {
     // The key point is they are NOT forbidden by the same-side touching rule
     // They may still be filtered by crossing detection
     expect(westTouchingBefore !== undefined || westTouchingAfter !== undefined).toBe(true);
+  });
+});
+
+describe('close loop, open loop, close loop roundtrip', () => {
+  it('should allow closing loop again after opening it (exampleedge.json)', () => {
+    // Reproduce the bug: import exampleedge.json, close loop, open loop, close loop
+    const exampleEdges = [
+      { from: { side: 'north', t: 0.456 }, to: { side: 'west', t: 0.611 } },
+      { from: { side: 'south', t: 0.611 }, to: { side: 'north', t: 0.72 } },
+      { from: { side: 'east', t: 0.72 }, to: { side: 'south', t: 0.375 } },
+      { from: { side: 'west', t: 0.375 }, to: { side: 'north', t: 0.207 } },
+      { from: { side: 'east', t: 0.207 }, to: { side: 'east', t: 0.573 } },
+      { from: { side: 'north', t: 0.573 }, to: { side: 'south', t: 0.8 } },
+      { from: { side: 'west', t: 0.8 }, to: { side: 'north', t: 0.493 } }
+    ];
+
+    const state = importFromFloatEdges(exampleEdges);
+
+    // Step 1: close loop
+    const closeResult1 = canCloseLoop(state);
+    expect(closeResult1.canClose).toBe(true);
+    const { newState: closedState } = closeLoop(state);
+    expect(closedState).not.toBeNull();
+
+    // Step 2: open loop (remove the closing edge)
+    const openedState = removeLastEdge(closedState);
+
+    // The opened state should be identical to the original state
+    expect(openedState.edges.length).toBe(state.edges.length);
+    expect(openedState.points.NE.length).toBe(state.points.NE.length);
+    expect(openedState.points.SW.length).toBe(state.points.SW.length);
+
+    // Step 3: close loop again - this should succeed
+    const closeResult2 = canCloseLoop(openedState);
+    expect(closeResult2.canClose).toBe(true);
+    const { newState: closedState2 } = closeLoop(openedState);
+    expect(closedState2).not.toBeNull();
+  });
+
+  it('should restore exact state after opening a closed loop', () => {
+    // Simpler test with manually constructed state
+    let state = {
+      points: {
+        NE: [
+          { pos: 0, originalSide: 'north' },
+          { pos: 1, originalSide: 'north' }
+        ],
+        SW: [
+          { pos: 0, originalSide: 'south' }
+        ]
+      },
+      edges: [
+        { from: { side: 'north', pos: 0 }, to: { side: 'south', pos: 0 } },
+        { from: { side: 'west', pos: 0 }, to: { side: 'north', pos: 1 } }
+      ]
+    };
+
+    // Close the loop
+    const { newState: closedState } = closeLoop(state);
+    expect(closedState).not.toBeNull();
+    expect(closedState.edges.length).toBe(3);
+
+    // Open the loop
+    const openedState = removeLastEdge(closedState);
+
+    // Should be back to original state
+    expect(openedState.edges.length).toBe(2);
+    expect(openedState.points.NE.length).toBe(2);
+    expect(openedState.points.SW.length).toBe(1);
+    expect(openedState.edges[0].from.pos).toBe(0);
+    expect(openedState.edges[0].to.pos).toBe(0);
+    expect(openedState.edges[1].to.pos).toBe(1);
+
+    // Close again - should work
+    const closeResult = canCloseLoop(openedState);
+    expect(closeResult.canClose).toBe(true);
   });
 });

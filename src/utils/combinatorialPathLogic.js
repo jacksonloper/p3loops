@@ -733,6 +733,22 @@ export function removeLastEdge(state) {
   const toPoint = lastEdge.to;
   const group = getSideGroup(toPoint.side);
   
+  // Check if the toPoint is referenced by any other edge (e.g., closing edges
+  // connect to the first point which is also the 'from' of the first edge).
+  // If so, we should NOT remove the point - just remove the edge.
+  const otherEdges = state.edges.slice(0, -1);
+  const isReferencedElsewhere = otherEdges.some(edge => {
+    return (getSideGroup(edge.from.side) === group && edge.from.pos === toPoint.pos) ||
+           (getSideGroup(edge.to.side) === group && edge.to.pos === toPoint.pos);
+  });
+  
+  if (isReferencedElsewhere) {
+    return {
+      ...state,
+      edges: otherEdges
+    };
+  }
+  
   // Remove the point at toPoint.pos
   const points = [...state.points[group]];
   points.splice(toPoint.pos, 1);
@@ -743,7 +759,7 @@ export function removeLastEdge(state) {
   }
   
   // Adjust all edges' positions that reference this group
-  const adjustedEdges = state.edges.slice(0, -1).map(edge => {
+  const adjustedEdges = otherEdges.map(edge => {
     let newFrom = { ...edge.from };
     let newTo = { ...edge.to };
     
