@@ -259,18 +259,22 @@ function ParallelRegionsViewer({ state, onClose }) {
               </>
             ) : (
               <>
-                {/* Fundamental domain: each region lifted into wallpaper space */}
-                {fundamentalDomain.paths.map((pathD, idx) => (
-                  <path
-                    key={`fd-${idx}`}
-                    d={pathD}
-                    fill="rgba(100, 120, 220, 0.35)"
-                    stroke="white"
-                    strokeWidth="3"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                ))}
+                {/* Fundamental domain: regions stitched into single shape.
+                    paint-order="stroke" draws stroke first, then opaque fill
+                    covers internal strokes; group opacity for transparency. */}
+                {fundamentalDomain.paths.length > 0 && (
+                  <g opacity="0.55">
+                    <path
+                      d={fundamentalDomain.paths.join(' ')}
+                      fill="rgb(100, 120, 220)"
+                      stroke="white"
+                      strokeWidth="5"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      paintOrder="stroke"
+                    />
+                  </g>
+                )}
               </>
             )}
           </svg>
