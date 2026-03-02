@@ -7,25 +7,165 @@ import {
   SE_CORNER,
   SW_CORNER
 } from '../utils/wallpaperGeometry.js';
-import { indexToFrame } from '../utils/moveTree.js';
+import { indexToFrame, updateWallpaperIndex } from '../utils/moveTree.js';
 import { generateParallelRegionsPaper } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
-import { getEdgeSamplePointsPaper } from '../utils/geometry.js';
+import { getEdgeSamplePointsPaper, getIdentifiedSide } from '../utils/geometry.js';
 import './ParallelRegionsWallpaperViewer.css';
 
 // Number of sample points per edge for curved rendering
 const EDGE_SAMPLES = 20;
 
 /**
- * Generate a color for a given (i, j, k) index.
- * Uses a hash-based approach for distinct colors per copy.
+ * Generate a color for a connected component index.
+ * Uses golden angle (≈137.508°) spacing for visually distinct colors.
  */
-function indexToColor(tx, ty, r, alpha = 0.45) {
-  // Simple hash for color generation
-  const h = ((tx * 73 + ty * 137 + r * 53) % 360 + 360) % 360;
-  const s = 55 + (((tx * 31 + ty * 97 + r * 17) % 30) + 30) % 30;
-  const l = 45 + (((tx * 43 + ty * 61 + r * 29) % 20) + 20) % 20;
+function componentToColor(componentId, alpha = 0.45) {
+  const GOLDEN_ANGLE = 137.508;
+  const h = (componentId * GOLDEN_ANGLE) % 360;
+  const s = 55 + (componentId * 17) % 25;
+  const l = 40 + (componentId * 13) % 20;
   return `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
+}
+
+// ---------- Union-Find ----------
+
+function makeUnionFind() {
+  const parent = {};
+  const rank = {};
+
+  function makeSet(key) {
+    parent[key] = key;
+    rank[key] = 0;
+  }
+
+  function find(key) {
+    if (parent[key] !== key) parent[key] = find(parent[key]);
+    return parent[key];
+  }
+
+  function union(a, b) {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA === rootB) return;
+    if (rank[rootA] < rank[rootB]) parent[rootA] = rootB;
+    else if (rank[rootA] > rank[rootB]) parent[rootB] = rootA;
+    else { parent[rootB] = rootA; rank[rootA]++; }
+  }
+
+  return { makeSet, find, union };
+}
+
+/**
+ * Compute connected components for all (copy, region) pairs.
+ *
+ * Two regions (possibly in different copies) are connected if they are
+ * adjacent at a rhombus boundary around a boundary node that is NOT the
+ * beginning or ending of the path.
+ *
+ * Each boundary node is an edge endpoint on some side at position t.
+ * The identified side (north↔east, south↔west) in the adjacent copy
+ * has a corresponding boundary node at the same t if an edge touches
+ * that side there.  When both exist and neither is start/end, the two
+ * regions are connected.
+ */
+function computeConnectedComponents(floatEdges, paperRegions, copies) {
+  if (paperRegions.length === 0 || floatEdges.length === 0) return {};
+
+  // edgeIndex → regionIndex
+  const edgeToRegion = new Map();
+  for (let r = 0; r < paperRegions.length; r++) {
+    edgeToRegion.set(paperRegions[r].edgeIndex, r);
+  }
+
+  // (side, t) → regionIndex
+  const boundaryToRegion = new Map();
+  for (let eIdx = 0; eIdx < floatEdges.length; eIdx++) {
+    const rIdx = edgeToRegion.get(eIdx);
+    if (rIdx === undefined) continue;
+    const edge = floatEdges[eIdx];
+    boundaryToRegion.set(`${edge.from.side}:${edge.from.t}`, rIdx);
+    boundaryToRegion.set(`${edge.to.side}:${edge.to.t}`, rIdx);
+  }
+
+  // Start and end of path
+  const startSide = floatEdges[0].from.side;
+  const startT = floatEdges[0].from.t;
+  const endSide = floatEdges[floatEdges.length - 1].to.side;
+  const endT = floatEdges[floatEdges.length - 1].to.t;
+
+  // Tolerance for floating-point position comparison
+  const POSITION_TOLERANCE = 1e-9;
+
+  function isStartOrEnd(side, t) {
+    if (Math.abs(t - startT) < POSITION_TOLERANCE &&
+        (side === startSide || side === getIdentifiedSide(startSide))) return true;
+    if (Math.abs(t - endT) < POSITION_TOLERANCE &&
+        (side === endSide || side === getIdentifiedSide(endSide))) return true;
+    return false;
+  }
+
+  // Copy lookup set
+  const copySet = new Set(copies.map(c => `${c.index.tx},${c.index.ty},${c.index.r}`));
+
+  // Union-Find
+  const uf = makeUnionFind();
+  for (const { index } of copies) {
+    for (let r = 0; r < paperRegions.length; r++) {
+      uf.makeSet(`${index.tx},${index.ty},${index.r}:${r}`);
+    }
+  }
+
+  // Create connections across copies
+  for (const { index } of copies) {
+    for (let eIdx = 0; eIdx < floatEdges.length; eIdx++) {
+      const edge = floatEdges[eIdx];
+
+      for (const endpoint of [edge.from, edge.to]) {
+        const { side, t } = endpoint;
+
+        // Skip start/end of path — they block connectivity
+        if (isStartOrEnd(side, t)) continue;
+
+        // Region in current copy owning this boundary node
+        const currentRegion = boundaryToRegion.get(`${side}:${t}`);
+        if (currentRegion === undefined) continue;
+
+        // Region in adjacent copy owning the identified node
+        const identifiedSide = getIdentifiedSide(side);
+        const adjacentRegion = boundaryToRegion.get(`${identifiedSide}:${t}`);
+        if (adjacentRegion === undefined) continue;
+
+        // Adjacent copy via wallpaper index update
+        const adjacentIndex = updateWallpaperIndex(side, index);
+        const adjacentKey = `${adjacentIndex.tx},${adjacentIndex.ty},${adjacentIndex.r}`;
+        if (!copySet.has(adjacentKey)) continue;
+
+        uf.union(
+          `${index.tx},${index.ty},${index.r}:${currentRegion}`,
+          `${adjacentKey}:${adjacentRegion}`
+        );
+      }
+    }
+  }
+
+  // Assign a color index to each connected component
+  const componentIds = {};
+  let nextId = 0;
+  const result = {};
+
+  for (const { index } of copies) {
+    for (let r = 0; r < paperRegions.length; r++) {
+      const key = `${index.tx},${index.ty},${index.r}:${r}`;
+      const root = uf.find(key);
+      if (!(root in componentIds)) {
+        componentIds[root] = nextId++;
+      }
+      result[key] = componentIds[root];
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -130,6 +270,11 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
     return result;
   }, [n]);
 
+  // Compute connected components for coloring
+  const componentColorMap = useMemo(() => {
+    return computeConnectedComponents(floatEdges, paperRegions, copies);
+  }, [floatEdges, paperRegions, copies]);
+
   // Compute bounding box from all rhombus corners
   const viewBox = useMemo(() => {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -157,12 +302,10 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
           <svg viewBox={viewBox} className="pr-wallpaper-svg">
             {/* For each copy, render rhombus outline + filled regions + edges */}
             {copies.map(({ index, frame }) => {
-              const key = `${index.tx},${index.ty},${index.r}`;
-              const fillColor = indexToColor(index.tx, index.ty, index.r, 0.45);
-              const strokeColor = indexToColor(index.tx, index.ty, index.r, 0.7);
+              const copyKey = `${index.tx},${index.ty},${index.r}`;
 
               return (
-                <g key={key}>
+                <g key={copyKey}>
                   {/* Rhombus outline */}
                   <path
                     d={getRhombusPathString(frame)}
@@ -171,21 +314,24 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
                     strokeWidth="0.5"
                   />
 
-                  {/* Filled regions colored by copy */}
-                  {paperRegions.map((region, rIdx) => (
-                    <path
-                      key={`${key}-r${rIdx}`}
-                      d={paperPolygonToPath(region.polygon, frame)}
-                      fill={fillColor}
-                      stroke={strokeColor}
-                      strokeWidth="0.5"
-                    />
-                  ))}
+                  {/* Filled regions colored by connected component */}
+                  {paperRegions.map((region, rIdx) => {
+                    const compId = componentColorMap[`${copyKey}:${rIdx}`] ?? 0;
+                    return (
+                      <path
+                        key={`${copyKey}-r${rIdx}`}
+                        d={paperPolygonToPath(region.polygon, frame)}
+                        fill={componentToColor(compId, 0.45)}
+                        stroke={componentToColor(compId, 0.7)}
+                        strokeWidth="0.5"
+                      />
+                    );
+                  })}
 
                   {/* Edge curves drawn on top */}
                   {floatEdges.map((edge, eIdx) => (
                     <path
-                      key={`${key}-e${eIdx}`}
+                      key={`${copyKey}-e${eIdx}`}
                       d={generateEdgePath(edge, frame)}
                       fill="none"
                       stroke="rgba(255,255,255,0.6)"
