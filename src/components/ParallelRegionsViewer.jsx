@@ -151,40 +151,39 @@ function ParallelRegionsViewer({ state, onClose }) {
     return generateParallelRegions(state);
   }, [state]);
 
-  // Generate the fundamental domain: each region lifted into wallpaper space
-  // via the per-edge reference frames (path unfolding).
-  const fundamentalDomain = useMemo(() => {
-    if (regions.length === 0) return { paths: [], viewBox: '0 0 1 1' };
-
-    // Get paper-coordinate regions (one per edge)
+  // Compute fundamental domain polygons (wallpaper-space point arrays),
+  // one per region, lifted into wallpaper space via per-edge frames.
+  const fundamentalDomainPolygons = useMemo(() => {
+    if (regions.length === 0) return [];
     const paperRegions = generateParallelRegionsPaper(state, 60);
-    if (paperRegions.length === 0) return { paths: [], viewBox: '0 0 1 1' };
-
-    // Compute wallpaper frame for each edge
+    if (paperRegions.length === 0) return [];
     const edgeFrames = computeEdgeFrames(floatEdges);
-
-    // Transform each region through its edge's wallpaper frame
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const paths = paperRegions.map(region => {
+    return paperRegions.map(region => {
       const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
-      const screenPts = region.polygon.map(pt => {
+      return region.polygon.map(pt => {
         const local = paperToTrueRhombus(pt.southward, pt.eastward);
         return applyReferenceFrame(local.x, local.y, frame);
       });
-      // Update bounding box
-      for (const pt of screenPts) {
+    });
+  }, [state, regions, floatEdges]);
+
+  // Derive SVG paths and viewBox from the polygons.
+  const fundamentalDomain = useMemo(() => {
+    if (fundamentalDomainPolygons.length === 0) return { paths: [], viewBox: '0 0 1 1' };
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const paths = fundamentalDomainPolygons.map(pts => {
+      for (const pt of pts) {
         minX = Math.min(minX, pt.x);
         minY = Math.min(minY, pt.y);
         maxX = Math.max(maxX, pt.x);
         maxY = Math.max(maxY, pt.y);
       }
-      return polygonToPath(screenPts);
+      return polygonToPath(pts);
     });
-
     const pad = 30;
     const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
     return { paths, viewBox: vb };
-  }, [state, regions, floatEdges]);
+  }, [fundamentalDomainPolygons]);
 
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
@@ -306,7 +305,7 @@ function ParallelRegionsViewer({ state, onClose }) {
 
       {showWallpaper && (
         <ParallelRegionsWallpaperViewer
-          state={state}
+          fundamentalDomainPolygons={fundamentalDomainPolygons}
           onClose={() => setShowWallpaper(false)}
         />
       )}

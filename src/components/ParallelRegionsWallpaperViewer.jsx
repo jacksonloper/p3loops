@@ -1,343 +1,80 @@
 import { useState, useMemo, useCallback } from 'react';
-import {
-  applyReferenceFrame,
-  paperToTrueRhombus,
-  NE_CORNER,
-  NW_CORNER,
-  SE_CORNER,
-  SW_CORNER
-} from '../utils/wallpaperGeometry.js';
-import { indexToFrame, updateWallpaperIndex } from '../utils/moveTree.js';
-import { generateParallelRegionsPaper, generateMergedRegionsPaper } from '../utils/parallelizable.js';
-import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
-import { getIdentifiedSide } from '../utils/geometry.js';
+import { applyReferenceFrame } from '../utils/wallpaperGeometry.js';
+import { indexToFrame } from '../utils/moveTree.js';
 import './ParallelRegionsWallpaperViewer.css';
 
 /**
- * Generate a color for a connected component index.
- * Uses golden angle (≈137.508°) spacing for visually distinct colors.
+ * Convert a polygon (array of {x, y} points) to an SVG path string.
  */
-function componentToColor(componentId, alpha = 0.45) {
-  const GOLDEN_ANGLE = 137.508;
-  const h = (componentId * GOLDEN_ANGLE) % 360;
-  const s = 55 + (componentId * 17) % 25;
-  const l = 40 + (componentId * 13) % 20;
-  return `hsla(${h}, ${s}%, ${l}%, ${alpha})`;
-}
-
-// ---------- Union-Find ----------
-
-function makeUnionFind() {
-  const parent = {};
-  const rank = {};
-
-  function makeSet(key) {
-    parent[key] = key;
-    rank[key] = 0;
-  }
-
-  function find(key) {
-    if (parent[key] !== key) parent[key] = find(parent[key]);
-    return parent[key];
-  }
-
-  function union(a, b) {
-    const rootA = find(a);
-    const rootB = find(b);
-    if (rootA === rootB) return;
-    if (rank[rootA] < rank[rootB]) parent[rootA] = rootB;
-    else if (rank[rootA] > rank[rootB]) parent[rootB] = rootA;
-    else { parent[rootB] = rootA; rank[rootA]++; }
-  }
-
-  return { makeSet, find, union };
-}
-
-/**
- * Compute connected components for all (copy, region) pairs.
- *
- * Two regions (possibly in different copies) are connected if they are
- * adjacent at a rhombus boundary around a boundary node that is NOT the
- * beginning or ending of the path.
- *
- * Each boundary node is an edge endpoint on some side at position t.
- * The identified side (north↔east, south↔west) in the adjacent copy
- * has a corresponding boundary node at the same t if an edge touches
- * that side there.  When both exist and neither is start/end, the two
- * regions are connected.
- */
-function computeConnectedComponents(floatEdges, paperRegions, copies) {
-  if (paperRegions.length === 0 || floatEdges.length === 0) return {};
-
-  // edgeIndex → regionIndex
-  const edgeToRegion = new Map();
-  for (let r = 0; r < paperRegions.length; r++) {
-    edgeToRegion.set(paperRegions[r].edgeIndex, r);
-  }
-
-  // (side, t) → regionIndex
-  const boundaryToRegion = new Map();
-  for (let eIdx = 0; eIdx < floatEdges.length; eIdx++) {
-    const rIdx = edgeToRegion.get(eIdx);
-    if (rIdx === undefined) continue;
-    const edge = floatEdges[eIdx];
-    boundaryToRegion.set(`${edge.from.side}:${edge.from.t}`, rIdx);
-    boundaryToRegion.set(`${edge.to.side}:${edge.to.t}`, rIdx);
-  }
-
-  // Start and end of path
-  const startSide = floatEdges[0].from.side;
-  const startT = floatEdges[0].from.t;
-  const endSide = floatEdges[floatEdges.length - 1].to.side;
-  const endT = floatEdges[floatEdges.length - 1].to.t;
-
-  // Tolerance for floating-point position comparison
-  const POSITION_TOLERANCE = 1e-9;
-
-  function isStartOrEnd(side, t) {
-    if (Math.abs(t - startT) < POSITION_TOLERANCE &&
-        (side === startSide || side === getIdentifiedSide(startSide))) return true;
-    if (Math.abs(t - endT) < POSITION_TOLERANCE &&
-        (side === endSide || side === getIdentifiedSide(endSide))) return true;
-    return false;
-  }
-
-  // Copy lookup set
-  const copySet = new Set(copies.map(c => `${c.index.tx},${c.index.ty},${c.index.r}`));
-
-  // Union-Find
-  const uf = makeUnionFind();
-  for (const { index } of copies) {
-    for (let r = 0; r < paperRegions.length; r++) {
-      uf.makeSet(`${index.tx},${index.ty},${index.r}:${r}`);
-    }
-  }
-
-  // Create connections across copies
-  for (const { index } of copies) {
-    for (let eIdx = 0; eIdx < floatEdges.length; eIdx++) {
-      const edge = floatEdges[eIdx];
-
-      for (const endpoint of [edge.from, edge.to]) {
-        const { side, t } = endpoint;
-
-        // Skip start/end of path — they block connectivity
-        if (isStartOrEnd(side, t)) continue;
-
-        // Region in current copy owning this boundary node
-        const currentRegion = boundaryToRegion.get(`${side}:${t}`);
-        if (currentRegion === undefined) continue;
-
-        // Region in adjacent copy owning the identified node
-        const identifiedSide = getIdentifiedSide(side);
-        const adjacentRegion = boundaryToRegion.get(`${identifiedSide}:${t}`);
-        if (adjacentRegion === undefined) continue;
-
-        // Adjacent copy via wallpaper index update
-        const adjacentIndex = updateWallpaperIndex(side, index);
-        const adjacentKey = `${adjacentIndex.tx},${adjacentIndex.ty},${adjacentIndex.r}`;
-        if (!copySet.has(adjacentKey)) continue;
-
-        uf.union(
-          `${index.tx},${index.ty},${index.r}:${currentRegion}`,
-          `${adjacentKey}:${adjacentRegion}`
-        );
-      }
-    }
-  }
-
-  // Assign a color index to each connected component
-  const componentIds = {};
-  let nextId = 0;
-  const result = {};
-
-  for (const { index } of copies) {
-    for (let r = 0; r < paperRegions.length; r++) {
-      const key = `${index.tx},${index.ty},${index.r}:${r}`;
-      const root = uf.find(key);
-      if (!(root in componentIds)) {
-        componentIds[root] = nextId++;
-      }
-      result[key] = componentIds[root];
-    }
-  }
-
-  return result;
-}
-
-/**
- * Convert a paper-coordinate polygon to a screen-space SVG path string
- * by transforming each point through paperToTrueRhombus and applyReferenceFrame.
- */
-function paperPolygonToPath(polygon, frame) {
+function polygonToPath(polygon) {
   if (polygon.length === 0) return '';
-  const screenPts = polygon.map(pt => {
-    const local = paperToTrueRhombus(pt.southward, pt.eastward);
-    return applyReferenceFrame(local.x, local.y, frame);
-  });
-  let d = `M ${screenPts[0].x} ${screenPts[0].y}`;
-  for (let i = 1; i < screenPts.length; i++) {
-    d += ` L ${screenPts[i].x} ${screenPts[i].y}`;
+  let d = `M ${polygon[0].x} ${polygon[0].y}`;
+  for (let i = 1; i < polygon.length; i++) {
+    d += ` L ${polygon[i].x} ${polygon[i].y}`;
   }
   d += ' Z';
   return d;
 }
 
 /**
- * Get the rhombus outline path for a given reference frame.
+ * ParallelRegionsWallpaperViewer - tiles the stitched fundamental domain
+ * across a P3 wallpaper pattern using 3n² copies (3 rotations around the
+ * NE cone point × n² lattice translations).
  */
-function getRhombusPathString(frame) {
-  const corners = {
-    ne: applyReferenceFrame(NE_CORNER.x, NE_CORNER.y, frame),
-    nw: applyReferenceFrame(NW_CORNER.x, NW_CORNER.y, frame),
-    se: applyReferenceFrame(SE_CORNER.x, SE_CORNER.y, frame),
-    sw: applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame)
-  };
-  return `M ${corners.nw.x} ${corners.nw.y} L ${corners.ne.x} ${corners.ne.y} L ${corners.se.x} ${corners.se.y} L ${corners.sw.x} ${corners.sw.y} Z`;
-}
-
-/**
- * Get the center of a rhombus in a given frame.
- */
-function getRhombusCenter(frame) {
-  const corners = [
-    applyReferenceFrame(NE_CORNER.x, NE_CORNER.y, frame),
-    applyReferenceFrame(NW_CORNER.x, NW_CORNER.y, frame),
-    applyReferenceFrame(SE_CORNER.x, SE_CORNER.y, frame),
-    applyReferenceFrame(SW_CORNER.x, SW_CORNER.y, frame)
-  ];
-  return {
-    x: (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4,
-    y: (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4
-  };
-}
-
-/**
- * Compute region groups for merging within each copy.
- * Groups consecutive regions that share the same connected component ID.
- */
-function computeRegionGroups(paperRegions, componentColorMap, copyKey) {
-  const groups = [];
-  let currentGroup = null;
-
-  for (let r = 0; r < paperRegions.length; r++) {
-    const compId = componentColorMap[`${copyKey}:${r}`] ?? -1;
-
-    if (currentGroup && currentGroup.compId === compId) {
-      currentGroup.end = r;
-    } else {
-      if (currentGroup) groups.push(currentGroup);
-      currentGroup = { start: r, end: r, compId };
-    }
-  }
-  if (currentGroup) groups.push(currentGroup);
-
-  return groups;
-}
-
-/**
- * Build SVG content string for export.
- * Each connected component is rendered as a single merged polygon.
- */
-function buildSvgExport(state, copies, paperRegions, componentColorMap, viewBox) {
-  // Group consecutive same-component regions for each copy
-  const allMergedPolygons = [];
-
-  for (const { index, frame } of copies) {
-    const copyKey = `${index.tx},${index.ty},${index.r}`;
-    const groups = computeRegionGroups(paperRegions, componentColorMap, copyKey);
-
-    // Generate merged polygons for this copy's groups
-    const mergeSpecs = groups.map(g => ({ start: g.start, end: g.end }));
-    const mergedPolygons = generateMergedRegionsPaper(state, mergeSpecs, 30);
-
-    for (let i = 0; i < groups.length; i++) {
-      allMergedPolygons.push({
-        compId: groups[i].compId,
-        polygon: mergedPolygons[i].polygon,
-        frame
-      });
-    }
-  }
-
-  // Group by component ID for SVG output
-  const byComponent = new Map();
-  for (const item of allMergedPolygons) {
-    if (!byComponent.has(item.compId)) {
-      byComponent.set(item.compId, []);
-    }
-    byComponent.get(item.compId).push(item);
-  }
-
-  let paths = '';
-  for (const [compId, items] of byComponent) {
-    const color = componentToColor(compId, 0.6);
-    const strokeColor = componentToColor(compId, 0.9);
-    let d = '';
-    for (const { polygon, frame } of items) {
-      d += paperPolygonToPath(polygon, frame) + ' ';
-    }
-    paths += `  <path d="${d.trim()}" fill="${color}" stroke="${strokeColor}" stroke-width="0.5" />\n`;
-  }
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" style="background: #1a1a2e">
-${paths}</svg>`;
-}
-
-/**
- * ParallelRegionsWallpaperViewer - renders parallel regions tiled across
- * a P3 wallpaper pattern with 3n² copies, colored by connected component.
- */
-function ParallelRegionsWallpaperViewer({ state, onClose }) {
+function ParallelRegionsWallpaperViewer({ fundamentalDomainPolygons, onClose }) {
   const [n, setN] = useState(2);
 
-  // Compute float edges for connected component analysis
-  const floatEdges = useMemo(() => allEdgesToFloat(state), [state]);
-
-  // Generate paper-coordinate parallel regions (once, shared across all copies)
-  const paperRegions = useMemo(() => {
-    return generateParallelRegionsPaper(state, 30);
-  }, [state]);
-
-  // Generate all 3n² rhombus copies (n × n grid × 3 rotations)
+  // Generate 3n² copies (3 rotations × n² translations)
   const copies = useMemo(() => {
     const result = [];
     const half = Math.floor(n / 2);
     for (let i = -half; i < -half + n; i++) {
       for (let j = -half; j < -half + n; j++) {
         for (let k = 0; k < 3; k++) {
-          const index = { tx: i, ty: j, r: k };
-          const frame = indexToFrame(index);
-          result.push({ index, frame });
+          result.push(indexToFrame({ tx: i, ty: j, r: k }));
         }
       }
     }
     return result;
   }, [n]);
 
-  // Compute connected components for coloring
-  const componentColorMap = useMemo(() => {
-    return computeConnectedComponents(floatEdges, paperRegions, copies);
-  }, [floatEdges, paperRegions, copies]);
-
-  // Compute bounding box from all rhombus corners
-  const viewBox = useMemo(() => {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const { frame } of copies) {
-      const center = getRhombusCenter(frame);
-      minX = Math.min(minX, center.x - 350);
-      minY = Math.min(minY, center.y - 350);
-      maxX = Math.max(maxX, center.x + 350);
-      maxY = Math.max(maxY, center.y + 350);
+  // Transform fundamental domain polygons for each copy
+  const { viewBox, copyPaths } = useMemo(() => {
+    if (fundamentalDomainPolygons.length === 0) {
+      return { viewBox: '0 0 1 1', copyPaths: [] };
     }
-    const padding = 40;
-    return `${minX - padding} ${minY - padding} ${maxX - minX + 2 * padding} ${maxY - minY + 2 * padding}`;
-  }, [copies]);
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    const copyPaths = copies.map(frame => {
+      const pathParts = fundamentalDomainPolygons.map(poly => {
+        const transformed = poly.map(pt => {
+          const tp = applyReferenceFrame(pt.x, pt.y, frame);
+          minX = Math.min(minX, tp.x);
+          minY = Math.min(minY, tp.y);
+          maxX = Math.max(maxX, tp.x);
+          maxY = Math.max(maxY, tp.y);
+          return tp;
+        });
+        return polygonToPath(transformed);
+      });
+      return pathParts.join(' ');
+    });
+
+    const pad = 40;
+    const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
+    return { viewBox: vb, copyPaths };
+  }, [copies, fundamentalDomainPolygons]);
 
   // SVG export handler
   const handleSaveSvg = useCallback(() => {
-    const svgContent = buildSvgExport(state, copies, paperRegions, componentColorMap, viewBox);
+    let paths = '';
+    for (const pathD of copyPaths) {
+      paths += `  <path d="${pathD}" fill="rgb(100, 120, 220)" stroke="white" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />\n`;
+    }
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" style="background: #1a1a2e">
+${paths}</svg>`;
     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -345,7 +82,7 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
     a.download = 'parallel-regions-wallpaper.svg';
     a.click();
     URL.revokeObjectURL(url);
-  }, [state, copies, paperRegions, componentColorMap, viewBox]);
+  }, [copyPaths, viewBox]);
 
   return (
     <div className="pr-wallpaper-overlay" onClick={onClose}>
@@ -357,41 +94,24 @@ function ParallelRegionsWallpaperViewer({ state, onClose }) {
 
         <div className="pr-wallpaper-canvas">
           <svg viewBox={viewBox} className="pr-wallpaper-svg">
-            {/* For each copy, render rhombus outline + filled regions */}
-            {copies.map(({ index, frame }) => {
-              const copyKey = `${index.tx},${index.ty},${index.r}`;
-
-              return (
-                <g key={copyKey}>
-                  {/* Rhombus outline */}
-                  <path
-                    d={getRhombusPathString(frame)}
-                    fill="none"
-                    stroke="rgba(255,255,255,0.08)"
-                    strokeWidth="0.5"
-                  />
-
-                  {/* Filled regions colored by connected component */}
-                  {paperRegions.map((region, rIdx) => {
-                    const compId = componentColorMap[`${copyKey}:${rIdx}`] ?? 0;
-                    return (
-                      <path
-                        key={`${copyKey}-r${rIdx}`}
-                        d={paperPolygonToPath(region.polygon, frame)}
-                        fill={componentToColor(compId, 0.45)}
-                        stroke={componentToColor(compId, 0.7)}
-                        strokeWidth="0.5"
-                      />
-                    );
-                  })}
-                </g>
-              );
-            })}
+            {copyPaths.map((pathD, idx) => (
+              <g key={idx} opacity="0.55">
+                <path
+                  d={pathD}
+                  fill="rgb(100, 120, 220)"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  paintOrder="stroke"
+                />
+              </g>
+            ))}
           </svg>
         </div>
 
         <div className="pr-wallpaper-controls">
-          <p>{copies.length} copies (3n², n={n})</p>
+          <p>{copies.length} copies (3×{n}² = {copies.length})</p>
           <div className="pr-wallpaper-slider">
             <label htmlFor="n-slider">Grid size (n):</label>
             <input
