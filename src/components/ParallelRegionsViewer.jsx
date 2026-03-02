@@ -5,8 +5,9 @@ import {
   getCurvedEdgePath,
   getStraightRhombusPath
 } from '../utils/geometry.js';
-import { isParallelizable, generateParallelRegions } from '../utils/parallelizable.js';
+import { isParallelizable, generateParallelRegions, generateMergedRegionsPaper } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
+import { paperToTrueRhombus } from '../utils/wallpaperGeometry.js';
 import ParallelRegionsWallpaperViewer from './ParallelRegionsWallpaperViewer.jsx';
 import './ParallelRegionsViewer.css';
 
@@ -61,6 +62,7 @@ function polygonToPath(polygon) {
  */
 function ParallelRegionsViewer({ state, onClose }) {
   const [showWallpaper, setShowWallpaper] = useState(false);
+  const [viewMode, setViewMode] = useState('regions'); // 'regions' | 'domain'
   const SIZE = getSize();
   const SHEAR = getShear();
   const HALF_SHEAR = SHEAR / 2;
@@ -75,9 +77,36 @@ function ParallelRegionsViewer({ state, onClose }) {
     return generateParallelRegions(state);
   }, [state]);
 
-  // SVG viewBox with padding
+  // Generate the merged fundamental-domain polygon (all regions stitched)
+  const fundamentalDomain = useMemo(() => {
+    if (regions.length === 0) return { path: '', viewBox: '0 0 1 1' };
+    const merged = generateMergedRegionsPaper(state, [{ start: 0, end: regions.length - 1 }], 60);
+    if (merged.length === 0 || merged[0].polygon.length === 0) return { path: '', viewBox: '0 0 1 1' };
+    const polygon = merged[0].polygon;
+    const screenPts = polygon.map(pt => paperToTrueRhombus(pt.southward, pt.eastward));
+    // Build path
+    let d = `M ${screenPts[0].x} ${screenPts[0].y}`;
+    for (let i = 1; i < screenPts.length; i++) {
+      d += ` L ${screenPts[i].x} ${screenPts[i].y}`;
+    }
+    d += ' Z';
+    // Compute bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pt of screenPts) {
+      minX = Math.min(minX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxX = Math.max(maxX, pt.x);
+      maxY = Math.max(maxY, pt.y);
+    }
+    const pad = 20;
+    const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
+    return { path: d, viewBox: vb };
+  }, [state, regions]);
+
+  // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
-  const viewBox = `${-HALF_SHEAR - padding} ${-padding} ${SIZE + SHEAR + 2 * padding} ${SIZE + 2 * padding}`;
+  const regionsViewBox = `${-HALF_SHEAR - padding} ${-padding} ${SIZE + SHEAR + 2 * padding} ${SIZE + 2 * padding}`;
+  const activeViewBox = viewMode === 'domain' ? fundamentalDomain.viewBox : regionsViewBox;
 
   return (
     <div className="parallel-regions-overlay" onClick={onClose}>
@@ -88,43 +117,78 @@ function ParallelRegionsViewer({ state, onClose }) {
         </div>
 
         <div className="parallel-regions-content">
-          <svg viewBox={viewBox} className="parallel-regions-svg">
-            {/* Rhombus outline */}
-            <path
-              d={getStraightRhombusPath()}
-              fill="rgba(30, 30, 50, 0.8)"
-              stroke="#555"
-              strokeWidth="1"
-            />
+          {regions.length > 0 && (
+            <div className="pr-view-toggle">
+              <button
+                className={`pr-toggle-btn ${viewMode === 'regions' ? 'active' : ''}`}
+                onClick={() => setViewMode('regions')}
+              >
+                Regions
+              </button>
+              <button
+                className={`pr-toggle-btn ${viewMode === 'domain' ? 'active' : ''}`}
+                onClick={() => setViewMode('domain')}
+              >
+                Fundamental Domain
+              </button>
+            </div>
+          )}
 
-            {/* Filled regions */}
-            {regions.map((region, idx) => (
-              <path
-                key={`region-${idx}`}
-                d={polygonToPath(region.polygon)}
-                fill={REGION_COLORS[idx % REGION_COLORS.length]}
-                stroke={REGION_STROKE_COLORS[idx % REGION_STROKE_COLORS.length]}
-                strokeWidth="1.5"
-              />
-            ))}
-
-            {/* Edge curves drawn on top */}
-            {floatEdges.map((edge, idx) => {
-              const edgeData = getCurvedEdgePath(
-                edge.from.side, edge.from.t,
-                edge.to.side, edge.to.t
-              );
-              return (
+          <svg viewBox={activeViewBox} className="parallel-regions-svg">
+            {viewMode === 'regions' ? (
+              <>
+                {/* Rhombus outline */}
                 <path
-                  key={`edge-${idx}`}
-                  d={edgeData.pathD}
-                  fill="none"
-                  stroke="#fff"
-                  strokeWidth="2"
-                  strokeLinecap="round"
+                  d={getStraightRhombusPath()}
+                  fill="rgba(30, 30, 50, 0.8)"
+                  stroke="#555"
+                  strokeWidth="1"
                 />
-              );
-            })}
+
+                {/* Filled regions */}
+                {regions.map((region, idx) => (
+                  <path
+                    key={`region-${idx}`}
+                    d={polygonToPath(region.polygon)}
+                    fill={REGION_COLORS[idx % REGION_COLORS.length]}
+                    stroke={REGION_STROKE_COLORS[idx % REGION_STROKE_COLORS.length]}
+                    strokeWidth="1.5"
+                  />
+                ))}
+
+                {/* Edge curves drawn on top */}
+                {floatEdges.map((edge, idx) => {
+                  const edgeData = getCurvedEdgePath(
+                    edge.from.side, edge.from.t,
+                    edge.to.side, edge.to.t
+                  );
+                  return (
+                    <path
+                      key={`edge-${idx}`}
+                      d={edgeData.pathD}
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                {/* Fundamental domain: single merged polygon, thick white border */}
+                {fundamentalDomain.path && (
+                  <path
+                    d={fundamentalDomain.path}
+                    fill="rgba(100, 120, 220, 0.35)"
+                    stroke="white"
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                )}
+              </>
+            )}
           </svg>
 
           <div className="parallel-regions-legend">

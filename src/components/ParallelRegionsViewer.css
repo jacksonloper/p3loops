@@ -150,3 +150,32 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
+
+.pr-view-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.pr-toggle-btn {
+  padding: 0.4rem 1rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: #a0a0a0;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pr-toggle-btn.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  font-weight: 600;
+}
+
+.pr-toggle-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #d0d0d0;
+}
