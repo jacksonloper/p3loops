@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { applyReferenceFrame } from '../utils/wallpaperGeometry.js';
 import { indexToFrame } from '../utils/moveTree.js';
+import { mecApprox } from '../utils/mecApprox.js';
 import './ParallelRegionsWallpaperViewer.css';
 
 /**
@@ -44,16 +45,13 @@ function ParallelRegionsWallpaperViewer({ fundamentalDomainPolygons, onClose }) 
       return { viewBox: '0 0 1 1', copyPaths: [] };
     }
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const allPoints = [];
 
     const copyPaths = copies.map(frame => {
       const pathParts = fundamentalDomainPolygons.map(poly => {
         const transformed = poly.map(pt => {
           const tp = applyReferenceFrame(pt.x, pt.y, frame);
-          minX = Math.min(minX, tp.x);
-          minY = Math.min(minY, tp.y);
-          maxX = Math.max(maxX, tp.x);
-          maxY = Math.max(maxY, tp.y);
+          allPoints.push(tp);
           return tp;
         });
         return polygonToPath(transformed);
@@ -61,8 +59,10 @@ function ParallelRegionsWallpaperViewer({ fundamentalDomainPolygons, onClose }) 
       return pathParts.join(' ');
     });
 
+    const { c, r } = mecApprox(allPoints);
     const pad = 40;
-    const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
+    const side = r + pad;
+    const vb = `${c.x - side} ${c.y - side} ${2 * side} ${2 * side}`;
     return { viewBox: vb, copyPaths };
   }, [copies, fundamentalDomainPolygons]);
 
