@@ -8,7 +8,7 @@ import {
   getIdentifiedSide,
   EPSILON
 } from '../utils/geometry.js';
-import { isParallelizable, generateParallelRegions, generateMergedBoundarySegmentsPaper } from '../utils/parallelizable.js';
+import { isParallelizable, generateParallelRegions, generateParallelRegionsPaper } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
 import {
   createIdentityFrame,
@@ -151,44 +151,39 @@ function ParallelRegionsViewer({ state, onClose }) {
     return generateParallelRegions(state);
   }, [state]);
 
-  // Compute a single merged boundary polygon in wallpaper space by
-  // building annotated boundary segments in paper coordinates and
-  // transforming each segment with its edge's reference frame.
-  const mergedBoundaryPolygon = useMemo(() => {
+  // Compute fundamental domain polygons (wallpaper-space point arrays),
+  // one per region, lifted into wallpaper space via per-edge frames.
+  const fundamentalDomainPolygons = useMemo(() => {
     if (regions.length === 0) return [];
-    const segments = generateMergedBoundarySegmentsPaper(state, 60);
-    if (segments.length === 0) return [];
+    const paperRegions = generateParallelRegionsPaper(state, 60);
+    if (paperRegions.length === 0) return [];
     const edgeFrames = computeEdgeFrames(floatEdges);
-
-    const points = [];
-    for (let s = 0; s < segments.length; s++) {
-      const seg = segments[s];
-      const frame = edgeFrames[seg.edgeIndex] || createIdentityFrame();
-      // Skip first point of subsequent segments to avoid duplicates
-      const startIdx = (s === 0) ? 0 : 1;
-      for (let i = startIdx; i < seg.points.length; i++) {
-        const pt = seg.points[i];
+    return paperRegions.map(region => {
+      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
+      return region.polygon.map(pt => {
         const local = paperToTrueRhombus(pt.southward, pt.eastward);
-        points.push(applyReferenceFrame(local.x, local.y, frame));
-      }
-    }
-    return points;
+        return applyReferenceFrame(local.x, local.y, frame);
+      });
+    });
   }, [state, regions, floatEdges]);
 
-  // Derive SVG path and viewBox from the merged boundary polygon.
+  // Derive SVG paths and viewBox from the polygons.
   const fundamentalDomain = useMemo(() => {
-    if (mergedBoundaryPolygon.length === 0) return { path: '', viewBox: '0 0 1 1' };
+    if (fundamentalDomainPolygons.length === 0) return { paths: [], viewBox: '0 0 1 1' };
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const pt of mergedBoundaryPolygon) {
-      minX = Math.min(minX, pt.x);
-      minY = Math.min(minY, pt.y);
-      maxX = Math.max(maxX, pt.x);
-      maxY = Math.max(maxY, pt.y);
-    }
+    const paths = fundamentalDomainPolygons.map(pts => {
+      for (const pt of pts) {
+        minX = Math.min(minX, pt.x);
+        minY = Math.min(minY, pt.y);
+        maxX = Math.max(maxX, pt.x);
+        maxY = Math.max(maxY, pt.y);
+      }
+      return polygonToPath(pts);
+    });
     const pad = 30;
     const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
-    return { path: polygonToPath(mergedBoundaryPolygon), viewBox: vb };
-  }, [mergedBoundaryPolygon]);
+    return { paths, viewBox: vb };
+  }, [fundamentalDomainPolygons]);
 
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
@@ -197,10 +192,11 @@ function ParallelRegionsViewer({ state, onClose }) {
 
   // SVG export handler for fundamental domain
   const handleSaveDomainSvg = useCallback(() => {
-    if (!fundamentalDomain.path) return;
+    if (fundamentalDomain.paths.length === 0) return;
+    const compoundPath = fundamentalDomain.paths.join(' ');
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${fundamentalDomain.viewBox}">
-  <path d="${fundamentalDomain.path}" fill="rgb(100, 120, 220)" stroke="white" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />
+  <path d="${compoundPath}" fill="rgb(100, 120, 220)" stroke="white" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />
 </svg>`;
     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
@@ -279,13 +275,13 @@ function ParallelRegionsViewer({ state, onClose }) {
               </>
             ) : (
               <>
-                {/* Fundamental domain: single merged boundary path.
+                {/* Fundamental domain: regions stitched into single shape.
                     paint-order="stroke" draws stroke first, then opaque fill
                     covers internal strokes; group opacity for transparency. */}
-                {fundamentalDomain.path && (
+                {fundamentalDomain.paths.length > 0 && (
                   <g opacity="0.55">
                     <path
-                      d={fundamentalDomain.path}
+                      d={fundamentalDomain.paths.join(' ')}
                       fill="rgb(100, 120, 220)"
                       stroke="white"
                       strokeWidth="5"
@@ -320,7 +316,7 @@ function ParallelRegionsViewer({ state, onClose }) {
                 View as Wallpaper
               </button>
             )}
-            {viewMode === 'domain' && fundamentalDomain.path && (
+            {viewMode === 'domain' && fundamentalDomain.paths.length > 0 && (
               <button
                 className="pr-wallpaper-btn"
                 onClick={handleSaveDomainSvg}
@@ -334,7 +330,7 @@ function ParallelRegionsViewer({ state, onClose }) {
 
       {showWallpaper && (
         <ParallelRegionsWallpaperViewer
-          fundamentalDomainPolygons={mergedBoundaryPolygon.length > 0 ? [mergedBoundaryPolygon] : []}
+          fundamentalDomainPolygons={fundamentalDomainPolygons}
           onClose={() => setShowWallpaper(false)}
         />
       )}
