@@ -191,6 +191,7 @@ function ParallelRegionsViewer({ state, onClose }) {
   // tiled by lattice translations and 120° rotations, it reproduces the
   // pattern.  Using the rhombus guarantees a single simply-connected closed
   // path suitable for laser cutting services like Ponoko.
+  // Depends on `regions` only for the early-return guard (the corners are static).
   const mergedOutline = useMemo(() => {
     if (regions.length === 0) return { points: [], viewBox: '0 0 1 1' };
     // True rhombus corners (from wallpaperGeometry.js) in CCW order
