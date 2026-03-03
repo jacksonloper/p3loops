@@ -158,7 +158,7 @@ describe('generateMergedBoundarySegmentsPaper', () => {
     }
   });
 
-  it('should return multiple segments for a two-edge path with no internal chords', () => {
+  it('should return multiple arc segments for a two-edge path', () => {
     let state = buildOneEdgePath('north', 'south');
     const nextStart = getNextStartPoint(state);
     const allSegs = getAllSegments(state);
