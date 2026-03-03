@@ -17,6 +17,33 @@ function polygonToPath(polygon) {
   return d;
 }
 
+// P3 lattice vectors (must match moveTree.js)
+const SIDE = 300;
+const SQRT3 = Math.sqrt(3);
+const T1 = { x: 1.5 * SIDE, y: (SQRT3 / 2) * SIDE };
+const T2 = { x: 0, y: SQRT3 * SIDE };
+const T_DET = T1.x * T2.y - T2.x * T1.y;
+const ANGLE_120 = 2 * Math.PI / 3;
+
+/**
+ * For rotation index k, find the integer translate (tx,ty) that brings
+ * the rotated region center closest to the r=0 region center.
+ */
+function bestTranslateForRotation(center, k) {
+  const angle = k * ANGLE_120;
+  const cosK = Math.cos(angle);
+  const sinK = Math.sin(angle);
+  // rotated center
+  const rx = cosK * center.x - sinK * center.y;
+  const ry = sinK * center.x + cosK * center.y;
+  // solve: tx*T1 + ty*T2 ≈ center - rotatedCenter
+  const dx = center.x - rx;
+  const dy = center.y - ry;
+  const tx = Math.round((dx * T2.y - dy * T2.x) / T_DET);
+  const ty = Math.round((T1.x * dy - T1.y * dx) / T_DET);
+  return { tx, ty };
+}
+
 /**
  * ParallelRegionsWallpaperViewer - tiles the stitched fundamental domain
  * across a P3 wallpaper pattern using 3n² copies (3 rotations around the
@@ -25,19 +52,36 @@ function polygonToPath(polygon) {
 function ParallelRegionsWallpaperViewer({ fundamentalDomainPolygons, onClose }) {
   const [n, setN] = useState(2);
 
-  // Generate 3n² copies (3 rotations × n² translations)
+  // Build 3 base frames whose centers are close together, then tile n² times
   const copies = useMemo(() => {
+    // Find center of the fundamental domain region
+    const allPts = fundamentalDomainPolygons.flat();
+    const center = allPts.length > 0 ? mecApprox(allPts).c : { x: 0, y: 0 };
+
+    // For each rotation k, pick the integer translate that keeps it near r=0
+    const baseFrames = [0, 1, 2].map(k => {
+      const { tx, ty } = bestTranslateForRotation(center, k);
+      return indexToFrame({ tx, ty, r: k });
+    });
+
+    // Tile the trio n² times with pure lattice translations
     const result = [];
     const half = Math.floor(n / 2);
     for (let i = -half; i < -half + n; i++) {
       for (let j = -half; j < -half + n; j++) {
-        for (let k = 0; k < 3; k++) {
-          result.push(indexToFrame({ tx: i, ty: j, r: k }));
+        const offX = i * T1.x + j * T2.x;
+        const offY = i * T1.y + j * T2.y;
+        for (const base of baseFrames) {
+          result.push({
+            ...base,
+            tx: base.tx + offX,
+            ty: base.ty + offY
+          });
         }
       }
     }
     return result;
-  }, [n]);
+  }, [n, fundamentalDomainPolygons]);
 
   // Transform fundamental domain polygons for each copy
   const { viewBox, copyPaths } = useMemo(() => {
