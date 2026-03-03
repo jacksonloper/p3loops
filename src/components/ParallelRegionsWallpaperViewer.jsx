@@ -4,6 +4,13 @@ import { indexToFrame } from '../utils/moveTree.js';
 import { mecApprox } from '../utils/mecApprox.js';
 import './ParallelRegionsWallpaperViewer.css';
 
+// Three colors, one per rotation index (k = 0, 1, 2)
+const ROTATION_COLORS = [
+  'rgb(100, 120, 220)',  // blue  (k=0)
+  'rgb(220, 100, 120)',  // red   (k=1)
+  'rgb(100, 200, 130)',  // green (k=2)
+];
+
 /**
  * Convert a polygon (array of {x, y} points) to an SVG path string.
  */
@@ -113,8 +120,9 @@ function ParallelRegionsWallpaperViewer({ fundamentalDomainPolygons, onClose }) 
   // SVG export handler
   const handleSaveSvg = useCallback(() => {
     let paths = '';
-    for (const pathD of copyPaths) {
-      paths += `  <path d="${pathD}" fill="rgb(100, 120, 220)" stroke="white" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />\n`;
+    for (let i = 0; i < copyPaths.length; i++) {
+      const color = ROTATION_COLORS[i % 3];
+      paths += `  <path d="${copyPaths[i]}" fill="${color}" stroke="white" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />\n`;
     }
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" style="background: #1a1a2e">
@@ -142,7 +150,7 @@ ${paths}</svg>`;
               <g key={idx} opacity="0.55">
                 <path
                   d={pathD}
-                  fill="rgb(100, 120, 220)"
+                  fill={ROTATION_COLORS[idx % 3]}
                   stroke="white"
                   strokeWidth="3"
                   strokeLinejoin="round"
