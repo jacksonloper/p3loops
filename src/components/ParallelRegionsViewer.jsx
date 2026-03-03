@@ -14,7 +14,8 @@ import {
   createIdentityFrame,
   applyReferenceFrame,
   updateReferenceFrameForSide,
-  paperToTrueRhombus
+  paperToTrueRhombus,
+  NE_CORNER, NW_CORNER, SE_CORNER, SW_CORNER
 } from '../utils/wallpaperGeometry.js';
 import ParallelRegionsWallpaperViewer from './ParallelRegionsWallpaperViewer.jsx';
 import './ParallelRegionsViewer.css';
@@ -185,18 +186,39 @@ function ParallelRegionsViewer({ state, onClose }) {
     return { paths, viewBox: vb };
   }, [fundamentalDomainPolygons]);
 
+  // Compute a single rhombus outline for SVG export (unit cell in true rhombus
+  // coordinates).  The rhombus is the natural tile for p3 wallpaper — when
+  // tiled by lattice translations and 120° rotations, it reproduces the
+  // pattern.  Using the rhombus guarantees a single simply-connected closed
+  // path suitable for laser cutting services like Ponoko.
+  const mergedOutline = useMemo(() => {
+    if (regions.length === 0) return { points: [], viewBox: '0 0 1 1' };
+    // True rhombus corners (from wallpaperGeometry.js) in CCW order
+    const points = [NE_CORNER, NW_CORNER, SW_CORNER, SE_CORNER];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pt of points) {
+      minX = Math.min(minX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxX = Math.max(maxX, pt.x);
+      maxY = Math.max(maxY, pt.y);
+    }
+    const pad = 30;
+    const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
+    return { points, viewBox: vb };
+  }, [regions]);
+
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
   const regionsViewBox = `${-HALF_SHEAR - padding} ${-padding} ${SIZE + SHEAR + 2 * padding} ${SIZE + 2 * padding}`;
   const activeViewBox = viewMode === 'domain' ? fundamentalDomain.viewBox : regionsViewBox;
 
-  // SVG export handler for fundamental domain
+  // SVG export handler for fundamental domain — single closed outline
   const handleSaveDomainSvg = useCallback(() => {
-    if (fundamentalDomain.paths.length === 0) return;
-    const compoundPath = fundamentalDomain.paths.join(' ');
+    if (mergedOutline.points.length === 0) return;
+    const pathD = polygonToPath(mergedOutline.points);
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fundamentalDomain.viewBox}">
-  <path d="${compoundPath}" fill="rgb(100, 120, 220)" stroke="white" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${mergedOutline.viewBox}">
+  <path d="${pathD}" fill="none" stroke="red" stroke-width="1" />
 </svg>`;
     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
@@ -205,7 +227,7 @@ function ParallelRegionsViewer({ state, onClose }) {
     a.download = 'fundamental-domain.svg';
     a.click();
     URL.revokeObjectURL(url);
-  }, [fundamentalDomain]);
+  }, [mergedOutline]);
 
   return (
     <div className="parallel-regions-overlay" onClick={onClose}>
@@ -316,7 +338,7 @@ function ParallelRegionsViewer({ state, onClose }) {
                 View as Wallpaper
               </button>
             )}
-            {viewMode === 'domain' && fundamentalDomain.paths.length > 0 && (
+            {viewMode === 'domain' && mergedOutline.points.length > 0 && (
               <button
                 className="pr-wallpaper-btn"
                 onClick={handleSaveDomainSvg}
