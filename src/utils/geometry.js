@@ -919,3 +919,54 @@ export function getCurvedEdgePathBlended(fromSide, fromT, toSide, toT, weights) 
 
   return { pathD: d, midPoint: midScreen, angle };
 }
+
+// ============================================================================
+// EXPORTS FOR PARALLELIZABLE REGION GENERATION
+// ============================================================================
+
+/**
+ * Get the angle on the unit circle for a boundary point.
+ * @param {string} side - Side name ('north', 'east', 'south', 'west')
+ * @param {number} t - Parameter (0 to 1) along the side
+ * @returns {number} Angle in radians (-π to π)
+ */
+export function getBoundaryAngle(side, t) {
+  const { sideIndex, s } = sideNameToIndexAndT(side, t);
+  const [u, v] = boundaryToDisk(sideIndex, s);
+  return Math.atan2(v, u);
+}
+
+/**
+ * Get the disk coordinates [u, v] for a boundary point on the unit circle.
+ * @param {string} side - Side name ('north', 'east', 'south', 'west')
+ * @param {number} t - Parameter (0 to 1) along the side
+ * @returns {number[]} [u, v] on unit circle
+ */
+export function getBoundaryDiskPoint(side, t) {
+  const { sideIndex, s } = sideNameToIndexAndT(side, t);
+  return boundaryToDisk(sideIndex, s);
+}
+
+/**
+ * Map a point from the unit disk to screen coordinates.
+ * Goes through: disk → square → rhombus (normalized) → screen.
+ * @param {number} u - u coordinate in unit disk
+ * @param {number} v - v coordinate in unit disk
+ * @returns {Object} { x, y } screen coordinates
+ */
+export function diskPointToScreen(u, v) {
+  const [X, Y] = diskToRhombus(u, v);
+  return normalizedToScreen(X, Y);
+}
+
+/**
+ * Map a point from the unit disk to paper coordinates (southward, eastward).
+ * Goes through: disk → square → rhombus (normalized) → paper.
+ * @param {number} u - u coordinate in unit disk
+ * @param {number} v - v coordinate in unit disk
+ * @returns {Object} { southward, eastward } paper coordinates in [0,1]²
+ */
+export function diskPointToPaper(u, v) {
+  const [X, Y] = diskToRhombus(u, v);
+  return normalizedToPaper(X, Y);
+}

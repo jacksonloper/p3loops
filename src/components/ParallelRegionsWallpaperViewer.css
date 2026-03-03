@@ -1,0 +1,141 @@
+.pr-wallpaper-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.pr-wallpaper-container {
+  width: 95vw;
+  max-width: 1000px;
+  height: 90vh;
+  background: #1a1a2e;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.pr-wallpaper-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pr-wallpaper-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #e0e0e0;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.pr-wallpaper-close-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
+  padding-bottom: 2px;
+}
+
+.pr-wallpaper-close-btn:hover {
+  background: rgba(220, 53, 69, 0.6);
+  color: white;
+}
+
+.pr-wallpaper-canvas {
+  flex: 1;
+  position: relative;
+  background: #0d0d1a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.pr-wallpaper-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.pr-wallpaper-controls {
+  padding: 0.75rem 1rem;
+  background: rgba(74, 144, 217, 0.1);
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pr-wallpaper-controls p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.pr-wallpaper-slider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.pr-wallpaper-slider label {
+  font-size: 0.85rem;
+  color: #a0a0a0;
+}
+
+.pr-wallpaper-slider input[type="range"] {
+  width: 150px;
+  accent-color: #667eea;
+}
+
+.pr-wallpaper-n-value {
+  font-size: 0.85rem;
+  color: #667eea;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.pr-wallpaper-save-btn {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.pr-wallpaper-save-btn:hover {
+  opacity: 0.85;
+}
