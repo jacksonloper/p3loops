@@ -32,6 +32,7 @@ import {
   diskPointToPaper
 } from './geometry.js';
 import { pointToFloat } from './combinatorialPathLogic.js';
+import polygonClipping from 'polygon-clipping';
 
 /**
  * Check whether a path (combinatorial state) is parallelizable.
@@ -544,4 +545,32 @@ export function generateMergedRegionsPaper(state, groups, numSamples = 40) {
   }
 
   return result;
+}
+
+// ---------- Polygon Union ----------
+
+/**
+ * Union an array of polygons (each an array of {x, y} points) into a single
+ * connected polygon using the polygon-clipping library.
+ *
+ * @param {Array<Array<{x: number, y: number}>>} polygons - Input polygons
+ * @returns {Array<Array<{x: number, y: number}>>} - Array of result polygons
+ *   (typically length 1 when input polygons are adjacent/overlapping)
+ */
+export function unionPolygons(polygons) {
+  if (polygons.length === 0) return [];
+  if (polygons.length === 1) return [polygons[0]];
+
+  // Convert {x,y} polygons to polygon-clipping format: [[[x,y], ...]]
+  const toRing = poly => poly.map(pt => [pt.x, pt.y]);
+  const clipPolygons = polygons.map(poly => [toRing(poly)]);
+
+  // Perform incremental union
+  let result = clipPolygons[0];
+  for (let i = 1; i < clipPolygons.length; i++) {
+    result = polygonClipping.union(result, clipPolygons[i]);
+  }
+
+  // Convert back to {x,y} arrays — one output polygon per result ring
+  return result.map(poly => poly[0].map(([x, y]) => ({ x, y })));
 }
