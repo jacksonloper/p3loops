@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   getSize,
   getShear,
@@ -8,7 +8,7 @@ import {
   getIdentifiedSide,
   EPSILON
 } from '../utils/geometry.js';
-import { isParallelizable, generateParallelRegions, generateParallelRegionsPaper } from '../utils/parallelizable.js';
+import { isParallelizable, generateParallelRegions, generateMergedBoundarySegmentsPaper } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
 import {
   createIdentityFrame,
@@ -151,44 +151,65 @@ function ParallelRegionsViewer({ state, onClose }) {
     return generateParallelRegions(state);
   }, [state]);
 
-  // Compute fundamental domain polygons (wallpaper-space point arrays),
-  // one per region, lifted into wallpaper space via per-edge frames.
-  const fundamentalDomainPolygons = useMemo(() => {
+  // Compute a single merged boundary polygon in wallpaper space by
+  // building annotated boundary segments in paper coordinates and
+  // transforming each segment with its edge's reference frame.
+  const mergedBoundaryPolygon = useMemo(() => {
     if (regions.length === 0) return [];
-    const paperRegions = generateParallelRegionsPaper(state, 60);
-    if (paperRegions.length === 0) return [];
+    const segments = generateMergedBoundarySegmentsPaper(state, 60);
+    if (segments.length === 0) return [];
     const edgeFrames = computeEdgeFrames(floatEdges);
-    return paperRegions.map(region => {
-      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
-      return region.polygon.map(pt => {
+
+    const points = [];
+    for (let s = 0; s < segments.length; s++) {
+      const seg = segments[s];
+      const frame = edgeFrames[seg.edgeIndex] || createIdentityFrame();
+      // Skip first point of subsequent segments to avoid duplicates
+      const startIdx = (s === 0) ? 0 : 1;
+      for (let i = startIdx; i < seg.points.length; i++) {
+        const pt = seg.points[i];
         const local = paperToTrueRhombus(pt.southward, pt.eastward);
-        return applyReferenceFrame(local.x, local.y, frame);
-      });
-    });
+        points.push(applyReferenceFrame(local.x, local.y, frame));
+      }
+    }
+    return points;
   }, [state, regions, floatEdges]);
 
-  // Derive SVG paths and viewBox from the polygons.
+  // Derive SVG path and viewBox from the merged boundary polygon.
   const fundamentalDomain = useMemo(() => {
-    if (fundamentalDomainPolygons.length === 0) return { paths: [], viewBox: '0 0 1 1' };
+    if (mergedBoundaryPolygon.length === 0) return { path: '', viewBox: '0 0 1 1' };
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const paths = fundamentalDomainPolygons.map(pts => {
-      for (const pt of pts) {
-        minX = Math.min(minX, pt.x);
-        minY = Math.min(minY, pt.y);
-        maxX = Math.max(maxX, pt.x);
-        maxY = Math.max(maxY, pt.y);
-      }
-      return polygonToPath(pts);
-    });
+    for (const pt of mergedBoundaryPolygon) {
+      minX = Math.min(minX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxX = Math.max(maxX, pt.x);
+      maxY = Math.max(maxY, pt.y);
+    }
     const pad = 30;
     const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
-    return { paths, viewBox: vb };
-  }, [fundamentalDomainPolygons]);
+    return { path: polygonToPath(mergedBoundaryPolygon), viewBox: vb };
+  }, [mergedBoundaryPolygon]);
 
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
   const regionsViewBox = `${-HALF_SHEAR - padding} ${-padding} ${SIZE + SHEAR + 2 * padding} ${SIZE + 2 * padding}`;
   const activeViewBox = viewMode === 'domain' ? fundamentalDomain.viewBox : regionsViewBox;
+
+  // SVG export handler for fundamental domain
+  const handleSaveDomainSvg = useCallback(() => {
+    if (!fundamentalDomain.path) return;
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fundamentalDomain.viewBox}">
+  <path d="${fundamentalDomain.path}" fill="rgb(100, 120, 220)" stroke="white" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />
+</svg>`;
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fundamental-domain.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [fundamentalDomain]);
 
   return (
     <div className="parallel-regions-overlay" onClick={onClose}>
@@ -258,13 +279,13 @@ function ParallelRegionsViewer({ state, onClose }) {
               </>
             ) : (
               <>
-                {/* Fundamental domain: regions stitched into single shape.
+                {/* Fundamental domain: single merged boundary path.
                     paint-order="stroke" draws stroke first, then opaque fill
                     covers internal strokes; group opacity for transparency. */}
-                {fundamentalDomain.paths.length > 0 && (
+                {fundamentalDomain.path && (
                   <g opacity="0.55">
                     <path
-                      d={fundamentalDomain.paths.join(' ')}
+                      d={fundamentalDomain.path}
                       fill="rgb(100, 120, 220)"
                       stroke="white"
                       strokeWidth="5"
@@ -299,13 +320,21 @@ function ParallelRegionsViewer({ state, onClose }) {
                 View as Wallpaper
               </button>
             )}
+            {viewMode === 'domain' && fundamentalDomain.path && (
+              <button
+                className="pr-wallpaper-btn"
+                onClick={handleSaveDomainSvg}
+              >
+                Save SVG
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {showWallpaper && (
         <ParallelRegionsWallpaperViewer
-          fundamentalDomainPolygons={fundamentalDomainPolygons}
+          fundamentalDomainPolygons={mergedBoundaryPolygon.length > 0 ? [mergedBoundaryPolygon] : []}
           onClose={() => setShowWallpaper(false)}
         />
       )}

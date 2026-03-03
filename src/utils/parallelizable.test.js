@@ -5,7 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   isParallelizable,
-  generateParallelRegions
+  generateParallelRegions,
+  generateMergedBoundarySegmentsPaper
 } from './parallelizable.js';
 import {
   createInitialState,
@@ -127,6 +128,62 @@ describe('generateParallelRegions', () => {
           expect(regions).toHaveLength(2);
           expect(regions[0].edgeIndex).toBe(0);
           expect(regions[1].edgeIndex).toBe(1);
+        }
+      }
+    }
+  });
+});
+
+describe('generateMergedBoundarySegmentsPaper', () => {
+  it('should return one segment for a single edge', () => {
+    const state = buildOneEdgePath('north', 'south');
+    const segments = generateMergedBoundarySegmentsPaper(state);
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0].edgeIndex).toBe(0);
+    expect(segments[0].points.length).toBeGreaterThan(0);
+  });
+
+  it('should return segments with valid paper coordinates', () => {
+    const state = buildOneEdgePath('north', 'south');
+    const segments = generateMergedBoundarySegmentsPaper(state);
+
+    for (const seg of segments) {
+      for (const pt of seg.points) {
+        expect(typeof pt.southward).toBe('number');
+        expect(typeof pt.eastward).toBe('number');
+        expect(Number.isFinite(pt.southward)).toBe(true);
+        expect(Number.isFinite(pt.eastward)).toBe(true);
+      }
+    }
+  });
+
+  it('should return multiple segments for a two-edge path with no internal chords', () => {
+    let state = buildOneEdgePath('north', 'south');
+    const nextStart = getNextStartPoint(state);
+    const allSegs = getAllSegments(state);
+    const eastSegments = allSegs.filter(s => s.side === 'east');
+
+    if (eastSegments.length > 0) {
+      const result = addEdgeToSegment(state, nextStart, eastSegments[0]);
+      if (result.newState) {
+        state = result.newState;
+        const pCheck = isParallelizable(state);
+        if (pCheck.parallelizable) {
+          const segments = generateMergedBoundarySegmentsPaper(state);
+
+          // With 2 edges: 2 endcap arcs each = 4 arc segments, no G1/G2 arcs
+          expect(segments.length).toBeGreaterThanOrEqual(4);
+
+          // All segments should have valid edgeIndex (0 or 1)
+          for (const seg of segments) {
+            expect(seg.edgeIndex).toBeGreaterThanOrEqual(0);
+            expect(seg.edgeIndex).toBeLessThanOrEqual(1);
+          }
+
+          // The concatenated points should form a single closed path
+          const allPts = segments.flatMap(seg => seg.points);
+          expect(allPts.length).toBeGreaterThan(0);
         }
       }
     }

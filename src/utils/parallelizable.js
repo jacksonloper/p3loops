@@ -469,6 +469,64 @@ export function generateParallelRegionsPaper(state, numSamples = 40) {
 }
 
 /**
+ * Generate the outer boundary of all merged parallel regions as annotated
+ * segments in paper coordinates. Each segment includes the edge index so
+ * the caller can apply the correct wallpaper reference frame.
+ *
+ * The returned segments, concatenated in order, trace a single closed loop
+ * around the fundamental domain boundary (no internal chords).
+ *
+ * @param {Object} state - Combinatorial state { points, edges }
+ * @param {number} numSamples - Samples per segment (default 40)
+ * @returns {Array<{ points: Array<{southward,eastward}>, edgeIndex: number }>}
+ */
+export function generateMergedBoundarySegmentsPaper(state, numSamples = 40) {
+  const floatEdges = state.edges.map(edge => ({
+    from: pointToFloat(edge.from, state),
+    to: pointToFloat(edge.to, state)
+  }));
+
+  const nodes = buildCCWBoundaryNodes(floatEdges);
+  const { g1, g2 } = splitIntoGroups(nodes);
+  const k = g1.length;
+
+  if (k === 0) return [];
+
+  // Single edge: the boundary is the entire unit circle
+  if (k === 1) {
+    return [{ points: sampleFullBoundaryPaper(numSamples), edgeIndex: g1[0].edgeIndex }];
+  }
+
+  const ic1 = computeGroupMidpoints(g1);
+  const ic2 = computeGroupMidpoints(g2);
+  const end1 = circleMidpoint(g1[0], g2[0]);
+  const end2 = circleMidpoint(g1[g1.length - 1], g2[g2.length - 1]);
+  const arcSteps = Math.max(2, Math.floor(numSamples / 3));
+
+  const segments = [];
+
+  // Endcap 1 arcs (region 0)
+  segments.push({ points: sampleShortArcPaper(ic2[0], end1, arcSteps), edgeIndex: g1[0].edgeIndex });
+  segments.push({ points: sampleShortArcPaper(end1, ic1[0], arcSteps), edgeIndex: g1[0].edgeIndex });
+
+  // G1 boundary arcs (regions 1..k-2)
+  for (let j = 0; j < k - 2; j++) {
+    segments.push({ points: sampleShortArcPaper(ic1[j], ic1[j + 1], arcSteps), edgeIndex: g1[j + 1].edgeIndex });
+  }
+
+  // Endcap 2 arcs (region k-1)
+  segments.push({ points: sampleShortArcPaper(ic1[k - 2], end2, arcSteps), edgeIndex: g1[k - 1].edgeIndex });
+  segments.push({ points: sampleShortArcPaper(end2, ic2[k - 2], arcSteps), edgeIndex: g1[k - 1].edgeIndex });
+
+  // G2 boundary arcs backward (regions k-2..1)
+  for (let j = k - 2; j > 0; j--) {
+    segments.push({ points: sampleShortArcPaper(ic2[j], ic2[j - 1], arcSteps), edgeIndex: g1[j].edgeIndex });
+  }
+
+  return segments;
+}
+
+/**
  * Generate merged polygons in paper coordinates for groups of consecutive regions.
  *
  * Given a list of region groups (each group is a contiguous range of region
