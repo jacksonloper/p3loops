@@ -196,8 +196,8 @@ function ParallelRegionsViewer({ state, onClose }) {
     const pathD = fundamentalDomain.paths.join(' ');
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${fundamentalDomain.viewBox}" style="background: #1a1a2e">
-  <g opacity="0.55">
-    <path d="${pathD}" fill="rgb(100, 120, 220)" stroke="white" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" />
+  <g opacity="0.75">
+    <path d="${pathD}" fill="none" stroke="rgb(100, 120, 220)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
   </g>
 </svg>`;
     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
@@ -277,19 +277,17 @@ function ParallelRegionsViewer({ state, onClose }) {
               </>
             ) : (
               <>
-                {/* Fundamental domain: regions stitched into single shape.
-                    paint-order="stroke" draws stroke first, then opaque fill
-                    covers internal strokes; group opacity for transparency. */}
+                {/* Fundamental domain: show the path outline (no fill) so that
+                    self-intersections are visible rather than hidden by fill rule. */}
                 {fundamentalDomain.paths.length > 0 && (
-                  <g opacity="0.55">
+                  <g opacity="0.75">
                     <path
                       d={fundamentalDomain.paths.join(' ')}
-                      fill="rgb(100, 120, 220)"
-                      stroke="white"
-                      strokeWidth="5"
+                      fill="none"
+                      stroke="rgb(100, 120, 220)"
+                      strokeWidth="3"
                       strokeLinejoin="round"
                       strokeLinecap="round"
-                      paintOrder="stroke"
                     />
                   </g>
                 )}

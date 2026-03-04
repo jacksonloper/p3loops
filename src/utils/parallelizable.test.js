@@ -276,4 +276,33 @@ describe('unionPolygons', () => {
       expect(simplified.length, `Subregion ${i} splits into ${simplified.length} parts after simplification`).toBe(1);
     }
   });
+
+  it('final unioned polygon should be non-self-intersecting', () => {
+    // Load the simple loop example
+    const examplePath = path.resolve(__dirname, '../../public/examples/exampleedge.json');
+    const exampleEdges = JSON.parse(fs.readFileSync(examplePath, 'utf-8'));
+    const state = importFromFloatEdges(exampleEdges);
+
+    const check = isParallelizable(state);
+    expect(check.parallelizable).toBe(true);
+
+    const paperRegions = generateParallelRegionsPaper(state, 60);
+    const floatEdges = allEdgesToFloat(state);
+    const edgeFrames = computeEdgeFrames(floatEdges);
+
+    const fundamentalDomainPolygons = paperRegions.map(region => {
+      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
+      return region.polygon.map(pt => {
+        const local = paperToTrueRhombus(pt.southward, pt.eastward);
+        return applyReferenceFrame(local.x, local.y, frame);
+      });
+    });
+
+    const unioned = unionPolygons(fundamentalDomainPolygons);
+    expect(unioned).toHaveLength(1);
+
+    // The final unioned polygon should also be simple (non-self-intersecting)
+    const simple = isSimplePolygon(unioned[0]);
+    expect(simple, 'Final unioned polygon is self-intersecting').toBe(true);
+  });
 });
