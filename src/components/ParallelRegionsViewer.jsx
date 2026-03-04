@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   getSize,
   getShear,
@@ -185,6 +185,25 @@ function ParallelRegionsViewer({ state, onClose }) {
     return { paths, viewBox: vb };
   }, [fundamentalDomainPolygons]);
 
+  // SVG export handler for the fundamental domain view
+  const handleSaveSvg = useCallback(() => {
+    let paths = '';
+    for (let i = 0; i < fundamentalDomain.paths.length; i++) {
+      const color = REGION_STROKE_COLORS[i % REGION_STROKE_COLORS.length];
+      paths += `  <path d="${fundamentalDomain.paths[i]}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />\n`;
+    }
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fundamentalDomain.viewBox}" style="background: #12121e">
+${paths}</svg>`;
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fundamental-domain.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [fundamentalDomain]);
+
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
   const regionsViewBox = `${-HALF_SHEAR - padding} ${-padding} ${SIZE + SHEAR + 2 * padding} ${SIZE + 2 * padding}`;
@@ -258,22 +277,20 @@ function ParallelRegionsViewer({ state, onClose }) {
               </>
             ) : (
               <>
-                {/* Fundamental domain: regions stitched into single shape.
-                    paint-order="stroke" draws stroke first, then opaque fill
-                    covers internal strokes; group opacity for transparency. */}
-                {fundamentalDomain.paths.length > 0 && (
-                  <g opacity="0.55">
-                    <path
-                      d={fundamentalDomain.paths.join(' ')}
-                      fill="rgb(100, 120, 220)"
-                      stroke="white"
-                      strokeWidth="5"
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                      paintOrder="stroke"
-                    />
-                  </g>
-                )}
+                {/* Fundamental domain: show outlines (strokes) of each region
+                    polygon instead of fills, to avoid Chrome's fill rule
+                    occluding the actual shape. */}
+                {fundamentalDomain.paths.map((pathD, idx) => (
+                  <path
+                    key={`fd-${idx}`}
+                    d={pathD}
+                    fill="none"
+                    stroke={REGION_STROKE_COLORS[idx % REGION_STROKE_COLORS.length]}
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                ))}
               </>
             )}
           </svg>
@@ -297,6 +314,14 @@ function ParallelRegionsViewer({ state, onClose }) {
                 onClick={() => setShowWallpaper(true)}
               >
                 View as Wallpaper
+              </button>
+            )}
+            {regions.length > 0 && viewMode === 'domain' && (
+              <button
+                className="pr-wallpaper-btn"
+                onClick={handleSaveSvg}
+              >
+                Save SVG
               </button>
             )}
           </div>
