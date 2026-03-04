@@ -598,30 +598,49 @@ export function simplifyPolygon(polygon) {
 }
 
 /**
- * Check whether a polygon is simple (non-self-intersecting) by running it
- * through clipper's SimplifyPolygon and verifying the result is a single
- * polygon with the same vertex count.
+ * Check whether a polygon is strictly simple (no self-intersections and no
+ * self-tangencies) by running it through Clipper's union with StrictlySimple
+ * enabled and verifying the result is a single polygon.
  *
  * @param {Array<{x: number, y: number}>} polygon
  * @returns {boolean}
  */
 export function isSimplePolygon(polygon) {
   const cp = toClipperPath(polygon);
-  const simplified = ClipperLib.Clipper.SimplifyPolygon(cp, ClipperLib.PolyFillType.pftNonZero);
+
+  const cpr = new ClipperLib.Clipper();
+  cpr.StrictlySimple = true;
+  cpr.AddPath(cp, ClipperLib.PolyType.ptSubject, true);
+  const solution = new ClipperLib.Paths();
+  cpr.Execute(
+    ClipperLib.ClipType.ctUnion,
+    solution,
+    ClipperLib.PolyFillType.pftNonZero,
+    ClipperLib.PolyFillType.pftNonZero
+  );
 
   const minArea = CLIPPER_SCALE * CLIPPER_SCALE * 1e-4;
-  const significant = simplified.filter(
+  const significant = solution.filter(
     p => p.length >= 3 && Math.abs(ClipperLib.Clipper.Area(p)) > minArea
   );
   return significant.length === 1;
 }
 
+// Offset delta in real-coord units.  A small dilation before union ensures
+// that polygons sharing an edge overlap slightly, preventing the union from
+// producing self-touching (non-strictly-simple) output.  The deflation
+// afterwards restores the original geometry.
+const OFFSET_DELTA = 0.5;
+
 /**
  * Union an array of polygons (each an array of {x, y} points) into a single
  * connected polygon using clipper-lib.
  *
- * Each input polygon is first simplified (self-intersections resolved) before
- * the union is performed.
+ * Uses the "offset trick": dilate each polygon by a small delta, union, then
+ * deflate by the same delta.  This avoids self-touching boundaries that the
+ * plain union can produce when input polygons share edges.  The Clipper
+ * instance is run with StrictlySimple = true so the result is guaranteed to
+ * have no self-intersections or self-tangencies.
  *
  * @param {Array<Array<{x: number, y: number}>>} polygons - Input polygons
  * @returns {Array<Array<{x: number, y: number}>>} - Array of result polygons
@@ -631,37 +650,42 @@ export function unionPolygons(polygons) {
   if (polygons.length === 0) return [];
   if (polygons.length === 1) return [polygons[0]];
 
-  // Simplify each input polygon individually to resolve any
-  // self-intersections before attempting the union.
-  const simplifiedPaths = [];
+  const delta = OFFSET_DELTA * CLIPPER_SCALE;
+
+  // 1. Convert & simplify each input polygon, then dilate by +delta so that
+  //    adjacent polygons overlap slightly.
+  const co = new ClipperLib.ClipperOffset();
   for (const poly of polygons) {
     const cp = toClipperPath(poly);
     const parts = ClipperLib.Clipper.SimplifyPolygon(cp, ClipperLib.PolyFillType.pftNonZero);
     for (const part of parts) {
       if (part.length >= 3) {
-        simplifiedPaths.push(part);
+        if (!ClipperLib.Clipper.Orientation(part)) part.reverse();
+        co.AddPath(part, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon);
       }
     }
   }
+  const dilated = new ClipperLib.Paths();
+  co.Execute(dilated, delta);
 
-  // Ensure all paths have the same orientation (positive / CCW)
-  // so that pftNonZero union merges them correctly.
-  for (const path of simplifiedPaths) {
-    if (!ClipperLib.Clipper.Orientation(path)) {
-      path.reverse();
-    }
-  }
-
+  // 2. Union the dilated paths with StrictlySimple enabled.
   const cpr = new ClipperLib.Clipper();
-  cpr.AddPaths(simplifiedPaths, ClipperLib.PolyType.ptSubject, true);
+  cpr.StrictlySimple = true;
+  cpr.AddPaths(dilated, ClipperLib.PolyType.ptSubject, true);
 
-  const solution = new ClipperLib.Paths();
+  const unionResult = new ClipperLib.Paths();
   cpr.Execute(
     ClipperLib.ClipType.ctUnion,
-    solution,
+    unionResult,
     ClipperLib.PolyFillType.pftNonZero,
     ClipperLib.PolyFillType.pftNonZero
   );
+
+  // 3. Deflate by -delta to restore the original geometry.
+  const co2 = new ClipperLib.ClipperOffset();
+  co2.AddPaths(unionResult, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon);
+  const deflated = new ClipperLib.Paths();
+  co2.Execute(deflated, -delta);
 
   // Clean near-degenerate vertices and filter out sliver polygons that can
   // appear at shared edges due to floating-point→integer rounding.
@@ -670,8 +694,8 @@ export function unionPolygons(polygons) {
   // Minimum polygon area: discard polygons smaller than 1e-4 real-coord
   // square units (negligible compared to actual region areas of ~10³).
   const minArea = CLIPPER_SCALE * CLIPPER_SCALE * 1e-4;
-  ClipperLib.Clipper.CleanPolygons(solution, cleanDist);
-  const filtered = solution.filter(
+  ClipperLib.Clipper.CleanPolygons(deflated, cleanDist);
+  const filtered = deflated.filter(
     path => path.length >= 3 && Math.abs(ClipperLib.Clipper.Area(path)) > minArea
   );
 
