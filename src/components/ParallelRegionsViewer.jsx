@@ -169,7 +169,7 @@ function ParallelRegionsViewer({ state, onClose }) {
 
   // Union the per-edge polygons into a single connected polygon and derive SVG path + viewBox.
   const fundamentalDomain = useMemo(() => {
-    if (fundamentalDomainPolygons.length === 0) return { paths: [], viewBox: '0 0 1 1' };
+    if (fundamentalDomainPolygons.length === 0) return { polygons: [], paths: [], viewBox: '0 0 1 1' };
     const unioned = unionPolygons(fundamentalDomainPolygons);
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     const paths = unioned.map(pts => {
@@ -183,7 +183,7 @@ function ParallelRegionsViewer({ state, onClose }) {
     });
     const pad = 30;
     const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
-    return { paths, viewBox: vb };
+    return { polygons: unioned, paths, viewBox: vb };
   }, [fundamentalDomainPolygons]);
 
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
@@ -330,7 +330,7 @@ function ParallelRegionsViewer({ state, onClose }) {
 
       {showWallpaper && (
         <ParallelRegionsWallpaperViewer
-          fundamentalDomainPolygons={fundamentalDomainPolygons}
+          fundamentalDomainPolygons={fundamentalDomain.polygons}
           onClose={() => setShowWallpaper(false)}
         />
       )}
