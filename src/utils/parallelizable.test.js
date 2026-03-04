@@ -132,3 +132,177 @@ describe('generateParallelRegions', () => {
     }
   });
 });
+
+// ---------- unionPolygons tests ----------
+
+import {
+  generateParallelRegionsPaper,
+  unionPolygons,
+  isSimplePolygon,
+  simplifyPolygon
+} from './parallelizable.js';
+import { importFromFloatEdges, allEdgesToFloat } from './combinatorialPathLogic.js';
+import {
+  createIdentityFrame,
+  applyReferenceFrame,
+  updateReferenceFrameForSide,
+  paperToTrueRhombus
+} from './wallpaperGeometry.js';
+import { isInteriorPoint, getIdentifiedSide, EPSILON } from './geometry.js';
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * Replicate the computeEdgeFrames logic from ParallelRegionsViewer for tests.
+ */
+function isSameSideEdgeTest(edge) {
+  if (isInteriorPoint(edge.from) || isInteriorPoint(edge.to)) return false;
+  if (edge.from.side === edge.to.side) return true;
+  if (getIdentifiedSide(edge.from.side) === edge.to.side &&
+      Math.abs(edge.from.t - edge.to.t) < EPSILON) return true;
+  return false;
+}
+
+function computeEdgeFrames(floatEdges) {
+  const frames = [];
+  let currentFrame = createIdentityFrame();
+  for (let i = 0; i < floatEdges.length; i++) {
+    frames.push({ ...currentFrame });
+    const edge = floatEdges[i];
+    if (!isInteriorPoint(edge.to)) {
+      const nextEdge = floatEdges[i + 1];
+      let shouldUpdateFrame = false;
+      if (!isSameSideEdgeTest(edge)) {
+        if (nextEdge) {
+          const nextStartsSamePhysicalSide = !isInteriorPoint(nextEdge.from) &&
+            nextEdge.from.side === edge.to.side;
+          const nextIsSameSide = isSameSideEdgeTest(nextEdge);
+          shouldUpdateFrame = !(nextIsSameSide && nextStartsSamePhysicalSide);
+        } else {
+          shouldUpdateFrame = true;
+        }
+      } else if (nextEdge) {
+        if (!isInteriorPoint(nextEdge.from)) {
+          const endSide = edge.to.side;
+          const nextStartSide = nextEdge.from.side;
+          if (endSide !== nextStartSide &&
+              getIdentifiedSide(endSide) === nextStartSide &&
+              Math.abs(edge.to.t - nextEdge.from.t) < EPSILON) {
+            shouldUpdateFrame = true;
+          }
+        }
+      }
+      if (shouldUpdateFrame) {
+        currentFrame = updateReferenceFrameForSide(edge.to.side, currentFrame);
+      }
+    }
+  }
+  return frames;
+}
+
+describe('unionPolygons', () => {
+  it('should union the simple loop example into a single polygon', () => {
+    // Load the simple loop example
+    const examplePath = path.resolve(__dirname, '../../public/examples/exampleedge.json');
+    const exampleEdges = JSON.parse(fs.readFileSync(examplePath, 'utf-8'));
+    const state = importFromFloatEdges(exampleEdges);
+
+    // Verify it is parallelizable
+    const check = isParallelizable(state);
+    expect(check.parallelizable).toBe(true);
+
+    // Generate paper regions and lift to wallpaper space (same as ParallelRegionsViewer)
+    const paperRegions = generateParallelRegionsPaper(state, 60);
+    expect(paperRegions.length).toBeGreaterThan(1);
+
+    const floatEdges = allEdgesToFloat(state);
+    const edgeFrames = computeEdgeFrames(floatEdges);
+
+    const fundamentalDomainPolygons = paperRegions.map(region => {
+      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
+      return region.polygon.map(pt => {
+        const local = paperToTrueRhombus(pt.southward, pt.eastward);
+        return applyReferenceFrame(local.x, local.y, frame);
+      });
+    });
+
+    // Union should produce exactly one polygon
+    const unioned = unionPolygons(fundamentalDomainPolygons);
+    expect(unioned).toHaveLength(1);
+    expect(unioned[0].length).toBeGreaterThan(0);
+
+    // Every point should have finite coordinates
+    for (const pt of unioned[0]) {
+      expect(Number.isFinite(pt.x)).toBe(true);
+      expect(Number.isFinite(pt.y)).toBe(true);
+    }
+  });
+
+  it('each individual subregion should be non-self-intersecting', () => {
+    // Load the simple loop example
+    const examplePath = path.resolve(__dirname, '../../public/examples/exampleedge.json');
+    const exampleEdges = JSON.parse(fs.readFileSync(examplePath, 'utf-8'));
+    const state = importFromFloatEdges(exampleEdges);
+
+    // Verify it is parallelizable
+    const check = isParallelizable(state);
+    expect(check.parallelizable).toBe(true);
+
+    // Generate paper regions and lift to wallpaper space
+    const paperRegions = generateParallelRegionsPaper(state, 60);
+    expect(paperRegions.length).toBeGreaterThan(1);
+
+    const floatEdges = allEdgesToFloat(state);
+    const edgeFrames = computeEdgeFrames(floatEdges);
+
+    const fundamentalDomainPolygons = paperRegions.map(region => {
+      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
+      return region.polygon.map(pt => {
+        const local = paperToTrueRhombus(pt.southward, pt.eastward);
+        return applyReferenceFrame(local.x, local.y, frame);
+      });
+    });
+
+    // Each individual polygon should be simple (non-self-intersecting)
+    for (let i = 0; i < fundamentalDomainPolygons.length; i++) {
+      const poly = fundamentalDomainPolygons[i];
+      expect(poly.length).toBeGreaterThanOrEqual(3);
+
+      const simple = isSimplePolygon(poly);
+      expect(simple, `Subregion ${i} (edge ${paperRegions[i].edgeIndex}) is self-intersecting`).toBe(true);
+
+      // simplifyPolygon should return exactly one polygon for a clean input
+      const simplified = simplifyPolygon(poly);
+      expect(simplified.length, `Subregion ${i} splits into ${simplified.length} parts after simplification`).toBe(1);
+    }
+  });
+
+  it('final unioned polygon should be non-self-intersecting', () => {
+    // Load the simple loop example
+    const examplePath = path.resolve(__dirname, '../../public/examples/exampleedge.json');
+    const exampleEdges = JSON.parse(fs.readFileSync(examplePath, 'utf-8'));
+    const state = importFromFloatEdges(exampleEdges);
+
+    const check = isParallelizable(state);
+    expect(check.parallelizable).toBe(true);
+
+    const paperRegions = generateParallelRegionsPaper(state, 60);
+    const floatEdges = allEdgesToFloat(state);
+    const edgeFrames = computeEdgeFrames(floatEdges);
+
+    const fundamentalDomainPolygons = paperRegions.map(region => {
+      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
+      return region.polygon.map(pt => {
+        const local = paperToTrueRhombus(pt.southward, pt.eastward);
+        return applyReferenceFrame(local.x, local.y, frame);
+      });
+    });
+
+    const unioned = unionPolygons(fundamentalDomainPolygons);
+    expect(unioned).toHaveLength(1);
+
+    // The final unioned polygon should also be simple (non-self-intersecting)
+    const simple = isSimplePolygon(unioned[0]);
+    expect(simple, 'Final unioned polygon is self-intersecting').toBe(true);
+  });
+});

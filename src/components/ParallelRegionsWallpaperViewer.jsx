@@ -122,7 +122,7 @@ function ParallelRegionsWallpaperViewer({ fundamentalDomainPolygons, onClose }) 
     let paths = '';
     for (let i = 0; i < copyPaths.length; i++) {
       const color = ROTATION_COLORS[i % 3];
-      paths += `  <path d="${copyPaths[i]}" fill="${color}" stroke="white" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" paint-order="stroke" opacity="0.55" />\n`;
+      paths += `  <path d="${copyPaths[i]}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity="0.75" />\n`;
     }
     const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" style="background: #1a1a2e">
@@ -147,15 +147,14 @@ ${paths}</svg>`;
         <div className="pr-wallpaper-canvas">
           <svg viewBox={viewBox} className="pr-wallpaper-svg">
             {copyPaths.map((pathD, idx) => (
-              <g key={idx} opacity="0.55">
+              <g key={idx} opacity="0.75">
                 <path
                   d={pathD}
-                  fill={ROTATION_COLORS[idx % 3]}
-                  stroke="white"
-                  strokeWidth="3"
+                  fill="none"
+                  stroke={ROTATION_COLORS[idx % 3]}
+                  strokeWidth="2"
                   strokeLinejoin="round"
                   strokeLinecap="round"
-                  paintOrder="stroke"
                 />
               </g>
             ))}

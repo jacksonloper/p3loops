@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   getSize,
   getShear,
@@ -8,7 +8,7 @@ import {
   getIdentifiedSide,
   EPSILON
 } from '../utils/geometry.js';
-import { isParallelizable, generateParallelRegions, generateParallelRegionsPaper } from '../utils/parallelizable.js';
+import { isParallelizable, generateParallelRegions, generateParallelRegionsPaper, unionPolygons } from '../utils/parallelizable.js';
 import { allEdgesToFloat } from '../utils/combinatorialPathLogic.js';
 import {
   createIdentityFrame,
@@ -167,11 +167,12 @@ function ParallelRegionsViewer({ state, onClose }) {
     });
   }, [state, regions, floatEdges]);
 
-  // Derive SVG paths and viewBox from the polygons.
+  // Union the per-edge polygons into a single connected polygon and derive SVG path + viewBox.
   const fundamentalDomain = useMemo(() => {
-    if (fundamentalDomainPolygons.length === 0) return { paths: [], viewBox: '0 0 1 1' };
+    if (fundamentalDomainPolygons.length === 0) return { polygons: [], paths: [], viewBox: '0 0 1 1' };
+    const unioned = unionPolygons(fundamentalDomainPolygons);
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const paths = fundamentalDomainPolygons.map(pts => {
+    const paths = unioned.map(pts => {
       for (const pt of pts) {
         minX = Math.min(minX, pt.x);
         minY = Math.min(minY, pt.y);
@@ -182,13 +183,31 @@ function ParallelRegionsViewer({ state, onClose }) {
     });
     const pad = 30;
     const vb = `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
-    return { paths, viewBox: vb };
+    return { polygons: unioned, paths, viewBox: vb };
   }, [fundamentalDomainPolygons]);
 
   // SVG viewBox: use computed bounds in domain mode, sheared editor in regions mode
   const padding = 40;
   const regionsViewBox = `${-HALF_SHEAR - padding} ${-padding} ${SIZE + SHEAR + 2 * padding} ${SIZE + 2 * padding}`;
   const activeViewBox = viewMode === 'domain' ? fundamentalDomain.viewBox : regionsViewBox;
+
+  // Download SVG handler for the fundamental domain view
+  const handleSaveDomainSvg = useCallback(() => {
+    const pathD = fundamentalDomain.paths.join(' ');
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fundamentalDomain.viewBox}" style="background: #1a1a2e">
+  <g opacity="0.75">
+    <path d="${pathD}" fill="none" stroke="rgb(100, 120, 220)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+  </g>
+</svg>`;
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fundamental-domain.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [fundamentalDomain]);
 
   return (
     <div className="parallel-regions-overlay" onClick={onClose}>
@@ -258,19 +277,17 @@ function ParallelRegionsViewer({ state, onClose }) {
               </>
             ) : (
               <>
-                {/* Fundamental domain: regions stitched into single shape.
-                    paint-order="stroke" draws stroke first, then opaque fill
-                    covers internal strokes; group opacity for transparency. */}
+                {/* Fundamental domain: show the path outline (no fill) so that
+                    self-intersections are visible rather than hidden by fill rule. */}
                 {fundamentalDomain.paths.length > 0 && (
-                  <g opacity="0.55">
+                  <g opacity="0.75">
                     <path
                       d={fundamentalDomain.paths.join(' ')}
-                      fill="rgb(100, 120, 220)"
-                      stroke="white"
-                      strokeWidth="5"
+                      fill="none"
+                      stroke="rgb(100, 120, 220)"
+                      strokeWidth="3"
                       strokeLinejoin="round"
                       strokeLinecap="round"
-                      paintOrder="stroke"
                     />
                   </g>
                 )}
@@ -299,13 +316,21 @@ function ParallelRegionsViewer({ state, onClose }) {
                 View as Wallpaper
               </button>
             )}
+            {viewMode === 'domain' && fundamentalDomain.paths.length > 0 && (
+              <button
+                className="pr-wallpaper-btn"
+                onClick={handleSaveDomainSvg}
+              >
+                Download SVG
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {showWallpaper && (
         <ParallelRegionsWallpaperViewer
-          fundamentalDomainPolygons={fundamentalDomainPolygons}
+          fundamentalDomainPolygons={fundamentalDomain.polygons}
           onClose={() => setShowWallpaper(false)}
         />
       )}
