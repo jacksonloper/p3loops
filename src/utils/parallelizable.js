@@ -32,7 +32,7 @@ import {
   diskPointToPaper
 } from './geometry.js';
 import { pointToFloat } from './combinatorialPathLogic.js';
-import polygonClipping from 'polygon-clipping';
+import ClipperLib from 'clipper-lib';
 
 /**
  * Check whether a path (combinatorial state) is parallelizable.
@@ -549,9 +549,13 @@ export function generateMergedRegionsPaper(state, groups, numSamples = 40) {
 
 // ---------- Polygon Union ----------
 
+// clipper-lib works with integer coordinates; we scale floating-point values
+// up before clipping and back down afterwards to preserve precision.
+const CLIPPER_SCALE = 1e8;
+
 /**
  * Union an array of polygons (each an array of {x, y} points) into a single
- * connected polygon using the polygon-clipping library.
+ * connected polygon using clipper-lib.
  *
  * @param {Array<Array<{x: number, y: number}>>} polygons - Input polygons
  * @returns {Array<Array<{x: number, y: number}>>} - Array of result polygons
@@ -561,16 +565,44 @@ export function unionPolygons(polygons) {
   if (polygons.length === 0) return [];
   if (polygons.length === 1) return [polygons[0]];
 
-  // Convert {x,y} polygons to polygon-clipping format: [[[x,y], ...]]
-  const toRing = poly => poly.map(pt => [pt.x, pt.y]);
-  const clipPolygons = polygons.map(poly => [toRing(poly)]);
+  // Convert {x,y} polygons to clipper-lib format (scaled integer {X,Y})
+  const clipperPaths = polygons.map(poly =>
+    poly.map(pt => ({ X: Math.round(pt.x * CLIPPER_SCALE), Y: Math.round(pt.y * CLIPPER_SCALE) }))
+  );
 
-  // Perform incremental union
-  let result = clipPolygons[0];
-  for (let i = 1; i < clipPolygons.length; i++) {
-    result = polygonClipping.union(result, clipPolygons[i]);
+  // Ensure all input polygons have the same orientation (positive / CCW)
+  // so that pftNonZero union merges them correctly.
+  for (const path of clipperPaths) {
+    if (!ClipperLib.Clipper.Orientation(path)) {
+      path.reverse();
+    }
   }
 
-  // Convert back to {x,y} arrays — one output polygon per result ring
-  return result.map(poly => poly[0].map(([x, y]) => ({ x, y })));
+  const cpr = new ClipperLib.Clipper();
+  cpr.AddPaths(clipperPaths, ClipperLib.PolyType.ptSubject, true);
+
+  const solution = new ClipperLib.Paths();
+  cpr.Execute(
+    ClipperLib.ClipType.ctUnion,
+    solution,
+    ClipperLib.PolyFillType.pftNonZero,
+    ClipperLib.PolyFillType.pftNonZero
+  );
+
+  // Clean near-degenerate vertices and filter out sliver polygons that can
+  // appear at shared edges due to floating-point→integer rounding.
+  // Cleaning distance: merge vertices closer than 1e-6 real-coord units.
+  const cleanDist = CLIPPER_SCALE * 1e-6;
+  // Minimum polygon area: discard polygons smaller than 1e-4 real-coord
+  // square units (negligible compared to actual region areas of ~10³).
+  const minArea = CLIPPER_SCALE * CLIPPER_SCALE * 1e-4;
+  ClipperLib.Clipper.CleanPolygons(solution, cleanDist);
+  const filtered = solution.filter(
+    path => path.length >= 3 && Math.abs(ClipperLib.Clipper.Area(path)) > minArea
+  );
+
+  // Convert back to {x,y} floating-point arrays
+  return filtered.map(path =>
+    path.map(pt => ({ x: pt.X / CLIPPER_SCALE, y: pt.Y / CLIPPER_SCALE }))
+  );
 }
