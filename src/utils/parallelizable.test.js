@@ -137,7 +137,9 @@ describe('generateParallelRegions', () => {
 
 import {
   generateParallelRegionsPaper,
-  unionPolygons
+  unionPolygons,
+  isSimplePolygon,
+  simplifyPolygon
 } from './parallelizable.js';
 import { importFromFloatEdges, allEdgesToFloat } from './combinatorialPathLogic.js';
 import {
@@ -233,6 +235,45 @@ describe('unionPolygons', () => {
     for (const pt of unioned[0]) {
       expect(Number.isFinite(pt.x)).toBe(true);
       expect(Number.isFinite(pt.y)).toBe(true);
+    }
+  });
+
+  it('each individual subregion should be non-self-intersecting', () => {
+    // Load the simple loop example
+    const examplePath = path.resolve(__dirname, '../../public/examples/exampleedge.json');
+    const exampleEdges = JSON.parse(fs.readFileSync(examplePath, 'utf-8'));
+    const state = importFromFloatEdges(exampleEdges);
+
+    // Verify it is parallelizable
+    const check = isParallelizable(state);
+    expect(check.parallelizable).toBe(true);
+
+    // Generate paper regions and lift to wallpaper space
+    const paperRegions = generateParallelRegionsPaper(state, 60);
+    expect(paperRegions.length).toBeGreaterThan(1);
+
+    const floatEdges = allEdgesToFloat(state);
+    const edgeFrames = computeEdgeFrames(floatEdges);
+
+    const fundamentalDomainPolygons = paperRegions.map(region => {
+      const frame = edgeFrames[region.edgeIndex] || createIdentityFrame();
+      return region.polygon.map(pt => {
+        const local = paperToTrueRhombus(pt.southward, pt.eastward);
+        return applyReferenceFrame(local.x, local.y, frame);
+      });
+    });
+
+    // Each individual polygon should be simple (non-self-intersecting)
+    for (let i = 0; i < fundamentalDomainPolygons.length; i++) {
+      const poly = fundamentalDomainPolygons[i];
+      expect(poly.length).toBeGreaterThanOrEqual(3);
+
+      const simple = isSimplePolygon(poly);
+      expect(simple, `Subregion ${i} (edge ${paperRegions[i].edgeIndex}) is self-intersecting`).toBe(true);
+
+      // simplifyPolygon should return exactly one polygon for a clean input
+      const simplified = simplifyPolygon(poly);
+      expect(simplified.length, `Subregion ${i} splits into ${simplified.length} parts after simplification`).toBe(1);
     }
   });
 });

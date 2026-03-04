@@ -554,8 +554,74 @@ export function generateMergedRegionsPaper(state, groups, numSamples = 40) {
 const CLIPPER_SCALE = 1e8;
 
 /**
+ * Convert an {x,y} polygon to clipper-lib scaled integer format.
+ * @param {Array<{x: number, y: number}>} poly
+ * @returns {Array<{X: number, Y: number}>}
+ */
+function toClipperPath(poly) {
+  return poly.map(pt => ({
+    X: Math.round(pt.x * CLIPPER_SCALE),
+    Y: Math.round(pt.y * CLIPPER_SCALE)
+  }));
+}
+
+/**
+ * Convert a clipper-lib path back to {x,y} floating-point format.
+ * @param {Array<{X: number, Y: number}>} path
+ * @returns {Array<{x: number, y: number}>}
+ */
+function fromClipperPath(path) {
+  return path.map(pt => ({ x: pt.X / CLIPPER_SCALE, y: pt.Y / CLIPPER_SCALE }));
+}
+
+/**
+ * Use clipper-lib to simplify a single polygon, resolving any
+ * self-intersections. Returns an array of simple (non-self-intersecting)
+ * polygons whose union equals the original.
+ *
+ * @param {Array<{x: number, y: number}>} polygon
+ * @returns {Array<Array<{x: number, y: number}>>}
+ */
+export function simplifyPolygon(polygon) {
+  const cp = toClipperPath(polygon);
+  const simplified = ClipperLib.Clipper.SimplifyPolygon(cp, ClipperLib.PolyFillType.pftNonZero);
+
+  // Merge vertices closer than 1e-6 real-coord units (numerical noise)
+  const cleanDist = CLIPPER_SCALE * 1e-6;
+  // Discard polygons < 1e-4 real-coord area units (degenerate slivers)
+  const minArea = CLIPPER_SCALE * CLIPPER_SCALE * 1e-4;
+  ClipperLib.Clipper.CleanPolygons(simplified, cleanDist);
+
+  return simplified
+    .filter(p => p.length >= 3 && Math.abs(ClipperLib.Clipper.Area(p)) > minArea)
+    .map(fromClipperPath);
+}
+
+/**
+ * Check whether a polygon is simple (non-self-intersecting) by running it
+ * through clipper's SimplifyPolygon and verifying the result is a single
+ * polygon with the same vertex count.
+ *
+ * @param {Array<{x: number, y: number}>} polygon
+ * @returns {boolean}
+ */
+export function isSimplePolygon(polygon) {
+  const cp = toClipperPath(polygon);
+  const simplified = ClipperLib.Clipper.SimplifyPolygon(cp, ClipperLib.PolyFillType.pftNonZero);
+
+  const minArea = CLIPPER_SCALE * CLIPPER_SCALE * 1e-4;
+  const significant = simplified.filter(
+    p => p.length >= 3 && Math.abs(ClipperLib.Clipper.Area(p)) > minArea
+  );
+  return significant.length === 1;
+}
+
+/**
  * Union an array of polygons (each an array of {x, y} points) into a single
  * connected polygon using clipper-lib.
+ *
+ * Each input polygon is first simplified (self-intersections resolved) before
+ * the union is performed.
  *
  * @param {Array<Array<{x: number, y: number}>>} polygons - Input polygons
  * @returns {Array<Array<{x: number, y: number}>>} - Array of result polygons
@@ -565,21 +631,29 @@ export function unionPolygons(polygons) {
   if (polygons.length === 0) return [];
   if (polygons.length === 1) return [polygons[0]];
 
-  // Convert {x,y} polygons to clipper-lib format (scaled integer {X,Y})
-  const clipperPaths = polygons.map(poly =>
-    poly.map(pt => ({ X: Math.round(pt.x * CLIPPER_SCALE), Y: Math.round(pt.y * CLIPPER_SCALE) }))
-  );
+  // Simplify each input polygon individually to resolve any
+  // self-intersections before attempting the union.
+  const simplifiedPaths = [];
+  for (const poly of polygons) {
+    const cp = toClipperPath(poly);
+    const parts = ClipperLib.Clipper.SimplifyPolygon(cp, ClipperLib.PolyFillType.pftNonZero);
+    for (const part of parts) {
+      if (part.length >= 3) {
+        simplifiedPaths.push(part);
+      }
+    }
+  }
 
-  // Ensure all input polygons have the same orientation (positive / CCW)
+  // Ensure all paths have the same orientation (positive / CCW)
   // so that pftNonZero union merges them correctly.
-  for (const path of clipperPaths) {
+  for (const path of simplifiedPaths) {
     if (!ClipperLib.Clipper.Orientation(path)) {
       path.reverse();
     }
   }
 
   const cpr = new ClipperLib.Clipper();
-  cpr.AddPaths(clipperPaths, ClipperLib.PolyType.ptSubject, true);
+  cpr.AddPaths(simplifiedPaths, ClipperLib.PolyType.ptSubject, true);
 
   const solution = new ClipperLib.Paths();
   cpr.Execute(
@@ -602,7 +676,5 @@ export function unionPolygons(polygons) {
   );
 
   // Convert back to {x,y} floating-point arrays
-  return filtered.map(path =>
-    path.map(pt => ({ x: pt.X / CLIPPER_SCALE, y: pt.Y / CLIPPER_SCALE }))
-  );
+  return filtered.map(fromClipperPath);
 }
