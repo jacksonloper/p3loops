@@ -223,53 +223,14 @@ export function segmentToString(segment) {
 // segments intersect. This correctly handles the identified sides.
 // ============================================================================
 
-/**
- * Hexagon vertex positions (matching hexGeometry.js).
- * Regular hexagon, center at (150,150), radius 140.
- */
-const HEX_SIZE = 300;
-const HEX_CX = HEX_SIZE / 2;
-const HEX_CY = HEX_SIZE / 2;
-const HEX_R = HEX_SIZE / 2 - 10;
-
-function hexVertex(index) {
-  const angle = (90 - index * 60) * Math.PI / 180;
-  return {
-    x: HEX_CX + HEX_R * Math.cos(angle),
-    y: HEX_CY - HEX_R * Math.sin(angle)
-  };
-}
-
-const HEX_VERTICES = {
-  A: hexVertex(0), X: hexVertex(1), B: hexVertex(2),
-  Y: hexVertex(3), C: hexVertex(4), Z: hexVertex(5)
-};
-
-const SIDE_ENDPOINTS = {
-  AX: ['A', 'X'], AZ: ['A', 'Z'],
-  BX: ['B', 'X'], BY: ['B', 'Y'],
-  CY: ['C', 'Y'], CZ: ['C', 'Z']
-};
-
-/**
- * Get screen coordinates for a point on a side at parameter t.
- */
-function sidePointXY(side, t) {
-  const [fromName, toName] = SIDE_ENDPOINTS[side];
-  const from = HEX_VERTICES[fromName];
-  const to = HEX_VERTICES[toName];
-  return {
-    x: from.x + t * (to.x - from.x),
-    y: from.y + t * (to.y - from.y)
-  };
-}
+import { getPointOnSide } from './hexGeometry.js';
 
 /**
  * Convert a combinatorial point to screen coordinates for crossing detection.
  */
 function pointToXY(point, state) {
   const floatPt = pointToFloatInternal(point, state);
-  return sidePointXY(floatPt.side, floatPt.t);
+  return getPointOnSide(floatPt.side, floatPt.t);
 }
 
 /**
