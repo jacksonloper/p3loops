@@ -2,7 +2,7 @@ import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import {
   getOutlinePath,
   getSideSegmentPath,
-  getCurvedEdgePath,
+  getStraightEdgePath,
   getSize,
   getPointOnSide,
   getVertices
@@ -72,10 +72,10 @@ function getSegmentCoords(segment, allPoints) {
 }
 
 /**
- * Get curved edge path data for a float edge.
+ * Get straight edge path data for a float edge.
  */
-function getCurvedEdgeData(edge) {
-  return getCurvedEdgePath(
+function getStraightEdgeData(edge) {
+  return getStraightEdgePath(
     edge.from.side,
     edge.from.t,
     edge.to.side,
@@ -354,7 +354,7 @@ function HexHexagon({
 
         {/* Edges */}
         {floatEdges.map((edge, index) => {
-          const edgeData = getCurvedEdgeData(edge);
+          const edgeData = getStraightEdgeData(edge);
           const isHighlighted = highlightedEdgeIndex === index;
 
           return (

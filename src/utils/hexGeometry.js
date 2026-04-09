@@ -123,233 +123,27 @@ export function getSideSegmentPath(side, t0, t1) {
 }
 
 // ============================================================================
-// DIFFEOMORPHISM-BASED EDGE RENDERING
+// STRAIGHT LINE EDGE RENDERING
 // ============================================================================
-// Uses hex-to-disk mapping for guaranteed non-intersection.
-// 1. Map boundary points to unit circle
-// 2. Draw straight chords in disk
-// 3. Map back to hexagon
+// Since the path always starts at X and no edge goes from a side to itself,
+// straight lines between boundary points suffice for non-crossing rendering.
 // ============================================================================
 
-const EDGE_PATH_SAMPLES = 80;
-const EDGE_PATH_KNOT_STEP = 8;
-const ENDPOINT_EPSILON = 1e-6;
-
 /**
- * Get the angle on the unit circle for a point on a side at parameter t.
- * Maps the hexagon perimeter to a circle, maintaining clockwise order.
- *
- * Perimeter order: A(top) → X(upper-right) → B(lower-right) → Y(bottom) → C(lower-left) → Z(upper-left) → A
- * Each side spans 60° of the perimeter (since it's regular).
- * Starting angle: A is at angle 90° (top), going clockwise (decreasing angle).
- *
- * Side parameterization:
- *   AX: A→X, same as perimeter → angle goes from 90° to 30°
- *   BX: B→X, reversed from perimeter (perimeter is X→B) → t=0 at B(330°), t=1 at X(30°)
- *   BY: B→Y, same as perimeter → angle goes from 330° to 270°
- *   CY: C→Y, reversed from perimeter (perimeter is Y→C) → t=0 at C(210°), t=1 at Y(270°)
- *   CZ: C→Z, same as perimeter → angle goes from 210° to 150°
- *   AZ: A→Z, reversed from perimeter (perimeter is Z→A) → t=0 at A(90°), t=1 at Z(150°)
+ * Get a straight edge path between two side-parameterized points.
+ * Returns the SVG path, midpoint, and angle for the direction arrow.
  */
-function sideToCircleAngle(side, t) {
-  const deg = Math.PI / 180;
-  // Each side is parameterized from cone point (t=0) to identified vertex (t=1).
-  // We map to angles on a circle where the perimeter goes clockwise from A at 90°.
-  //
-  // Perimeter (clockwise): A(90°) → X(30°) → B(-30°) → Y(-90°) → C(-150°) → Z(150°) → A
-  //
-  // AX: A→X, same as perimeter direction → angle = 90° - t*60°
-  // BX: B→X, reverse of perimeter (X→B) → perimeter fraction (1-t) from X
-  //     angle = 30° - (1-t)*60° = -30° + t*60°
-  // BY: B→Y, same as perimeter direction → angle = -30° - t*60°
-  // CY: C→Y, reverse of perimeter (Y→C) → perimeter fraction (1-t) from Y
-  //     angle = -90° - (1-t)*60° = -150° + t*60°
-  // CZ: C→Z, same as perimeter direction → angle = -150° - t*60°
-  // AZ: A→Z, reverse of perimeter (Z→A) → perimeter fraction (1-t) from Z
-  //     angle = 150° - (1-t)*60° = 90° + t*60°
-  switch (side) {
-    case 'AX': return (90 - t * 60) * deg;
-    case 'BX': return (-30 + t * 60) * deg;
-    case 'BY': return (-30 - t * 60) * deg;
-    case 'CY': return (-150 + t * 60) * deg;
-    case 'CZ': return (-150 - t * 60) * deg;
-    case 'AZ': return (90 + t * 60) * deg;
-    default: throw new Error(`Unknown side: ${side}`);
-  }
-}
+export function getStraightEdgePath(fromSide, fromT, toSide, toT) {
+  const from = getPointOnSide(fromSide, fromT);
+  const to = getPointOnSide(toSide, toT);
 
-/**
- * Map a point on a hexagon side to a unit circle point.
- */
-function sideToDisk(side, t) {
-  const angle = sideToCircleAngle(side, t);
-  return [Math.cos(angle), Math.sin(angle)];
-}
-
-/**
- * Map a point from hexagon local coordinates to screen coordinates.
- * Local coords: origin at center, unit radius.
- */
-function localToScreen(x, y) {
-  return {
-    x: CENTER_X + x * RADIUS,
-    y: CENTER_Y - y * RADIUS
-  };
-}
-
-/**
- * Map a point from the unit disk back to the hexagon interior.
- * Uses a simple radial mapping: for a point at angle θ and radius r in the disk,
- * find the hexagon boundary point at angle θ, then scale by r.
- */
-function diskToHex(u, v) {
-  const r = Math.hypot(u, v);
-  if (r < 1e-10) return [0, 0];
-
-  const angle = Math.atan2(v, u);
-
-  // Find which edge of the hexagon this angle intersects.
-  // Vertices in decreasing angle order (clockwise):
-  // 150° → 90° → 30° → -30° → -90° → -150°
-  const sortedAngles = [150, 90, 30, -30, -90, -150].map(d => d * Math.PI / 180);
-
-  let boundaryR = 1; // fallback
-
-  for (let i = 0; i < 6; i++) {
-    const a1 = sortedAngles[i];
-    const a2 = sortedAngles[(i + 1) % 6];
-
-    // Check if angle is between a2 and a1 (a1 > a2 except for wrap)
-    let inSector;
-    if (i < 5) {
-      inSector = angle <= a1 && angle >= a2;
-    } else {
-      // Wrap-around: the sector from -150° to 150° crosses the ±180° boundary,
-      // so we use OR instead of AND (angle is in sector if it's beyond either edge)
-      inSector = angle <= a2 || angle >= a1;
-    }
-
-    if (inSector) {
-      // Hex vertex positions (unit radius)
-      const v1x = Math.cos(a1), v1y = Math.sin(a1);
-      const v2x = Math.cos(a2), v2y = Math.sin(a2);
-
-      // Find where the ray from origin at `angle` intersects the line segment v1→v2
-      const dx = Math.cos(angle), dy = Math.sin(angle);
-      // Parametric: origin + t*(dx,dy) = v1 + s*(v2-v1)
-      // t*dx = v1x + s*(v2x-v1x)
-      // t*dy = v1y + s*(v2y-v1y)
-      const denom = dx * (v2y - v1y) - dy * (v2x - v1x);
-      if (Math.abs(denom) > 1e-12) {
-        const t = (v1x * (v2y - v1y) - v1y * (v2x - v1x)) / denom;
-        boundaryR = Math.max(t, 0);
-      }
-      break;
-    }
-  }
-
-  // Scale the disk point to hex coordinates
-  const scale = boundaryR; // at the boundary, r=1 maps to boundaryR
-  return [u * scale, v * scale];
-}
-
-/**
- * Sample points along a chord in the disk and map back to hex.
- */
-function chordImagePoints(fromSide, fromT, toSide, toT, nSamples) {
-  const [u1, v1] = sideToDisk(fromSide, fromT);
-  const [u2, v2] = sideToDisk(toSide, toT);
-
-  const pts = [];
-  for (let i = 0; i < nSamples; i++) {
-    let t = i / (nSamples - 1);
-    if (i === 0) t = ENDPOINT_EPSILON;
-    if (i === nSamples - 1) t = 1 - ENDPOINT_EPSILON;
-
-    const u = (1 - t) * u1 + t * u2;
-    const v = (1 - t) * v1 + t * v2;
-    pts.push(diskToHex(u, v));
-  }
-  return pts;
-}
-
-/**
- * Convert a sequence of points to cubic Bézier segments using Catmull-Rom.
- */
-function catmullRomToBeziers(P) {
-  if (P.length < 2) return [];
-
-  const Pm1 = [2 * P[0][0] - P[1][0], 2 * P[0][1] - P[1][1]];
-  const Pp1 = [2 * P[P.length - 1][0] - P[P.length - 2][0], 2 * P[P.length - 1][1] - P[P.length - 2][1]];
-  const Q = [Pm1, ...P, Pp1];
-
-  const segs = [];
-  for (let i = 1; i < P.length; i++) {
-    const p0 = Q[i - 1], p1 = Q[i], p2 = Q[i + 1], p3 = Q[i + 2];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    segs.push({ p1, c1, c2, p2 });
-  }
-  return segs;
-}
-
-/**
- * Get a curved edge path between two side-parameterized points.
- */
-export function getCurvedEdgePath(fromSide, fromT, toSide, toT) {
-  const pts = chordImagePoints(fromSide, fromT, toSide, toT, EDGE_PATH_SAMPLES);
-
-  // Select knots for spline
-  const knots = [];
-  for (let i = 0; i < pts.length; i += EDGE_PATH_KNOT_STEP) {
-    knots.push(pts[i]);
-  }
-  const lastPt = pts[pts.length - 1];
-  const lastKnot = knots[knots.length - 1];
-  if (!lastKnot || lastKnot[0] !== lastPt[0] || lastKnot[1] !== lastPt[1]) {
-    knots.push(lastPt);
-  }
-
-  const segs = catmullRomToBeziers(knots);
-
-  if (segs.length === 0) {
-    const from = localToScreen(pts[0][0], pts[0][1]);
-    const to = localToScreen(pts[pts.length - 1][0], pts[pts.length - 1][1]);
-    const midX = (from.x + to.x) / 2;
-    const midY = (from.y + to.y) / 2;
-    const angle = Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI);
-    return {
-      pathD: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
-      midPoint: { x: midX, y: midY },
-      angle
-    };
-  }
-
-  // Build SVG path in screen coordinates
-  const firstScreen = localToScreen(segs[0].p1[0], segs[0].p1[1]);
-  let d = `M ${firstScreen.x} ${firstScreen.y}`;
-
-  for (const seg of segs) {
-    const c1 = localToScreen(seg.c1[0], seg.c1[1]);
-    const c2 = localToScreen(seg.c2[0], seg.c2[1]);
-    const p2 = localToScreen(seg.p2[0], seg.p2[1]);
-    d += ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${p2.x} ${p2.y}`;
-  }
-
-  // Calculate midpoint
-  const midIdx = Math.floor(pts.length / 2);
-  const midScreen = localToScreen(pts[midIdx][0], pts[midIdx][1]);
-
-  // Calculate angle at midpoint
-  const prevIdx = Math.max(0, midIdx - 1);
-  const nextIdx = Math.min(pts.length - 1, midIdx + 1);
-  const prev = localToScreen(pts[prevIdx][0], pts[prevIdx][1]);
-  const next = localToScreen(pts[nextIdx][0], pts[nextIdx][1]);
-  const angle = Math.atan2(next.y - prev.y, next.x - prev.x) * (180 / Math.PI);
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const angle = Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI);
 
   return {
-    pathD: d,
-    midPoint: { x: midScreen.x, y: midScreen.y },
+    pathD: `M ${from.x} ${from.y} L ${to.x} ${to.y}`,
+    midPoint: { x: midX, y: midY },
     angle
   };
 }

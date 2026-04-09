@@ -215,81 +215,109 @@ export function segmentToString(segment) {
 }
 
 // ============================================================================
-// PERIMETER ORDERING AND CROSSING DETECTION
+// GEOMETRIC CROSSING DETECTION
+// ============================================================================
+// Uses actual line segment intersection in the hexagon coordinate space.
+// Each edge is a straight line from its "from" point to its "to" point.
+// We convert combinatorial points to screen coordinates and check if
+// segments intersect. This correctly handles the identified sides.
 // ============================================================================
 
 /**
- * Perimeter key: map each point to a unique integer in cyclic perimeter order.
- *
- * The perimeter walk (clockwise from A):
- *   AX, BX, BY, CY, CZ, AZ
- *
- * Each group contributes its points twice on the perimeter (once per side).
- *
- * Side parameterization direction vs perimeter direction:
- *   AX: param A→X, perimeter A→X → forward (pos 0,1,...,k-1)
- *   BX: param B→X, perimeter X→B → reversed (pos k-1,...,1,0)
- *   BY: param B→Y, perimeter B→Y → forward (pos 0,1,...,k-1)
- *   CY: param C→Y, perimeter Y→C → reversed (pos k-1,...,1,0)
- *   CZ: param C→Z, perimeter C→Z → forward (pos 0,1,...,k-1)
- *   AZ: param A→Z, perimeter Z→A → reversed (pos k-1,...,1,0)
+ * Hexagon vertex positions (matching hexGeometry.js).
+ * Regular hexagon, center at (150,150), radius 140.
  */
-function perimeterKey(point, groupCounts) {
-  const { side, pos } = point;
-  const nA = groupCounts.AX_AZ;
-  const nB = groupCounts.BX_BY;
-  const nC = groupCounts.CY_CZ;
+const HEX_SIZE = 300;
+const HEX_CX = HEX_SIZE / 2;
+const HEX_CY = HEX_SIZE / 2;
+const HEX_R = HEX_SIZE / 2 - 10;
 
-  // Offsets for each side in perimeter order: AX, BX, BY, CY, CZ, AZ
-  switch (side) {
-    case 'AX': return pos;                                    // forward
-    case 'BX': return nA + (nB - 1 - pos);                   // reversed
-    case 'BY': return nA + nB + pos;                          // forward
-    case 'CY': return nA + 2 * nB + (nC - 1 - pos);         // reversed
-    case 'CZ': return nA + 2 * nB + nC + pos;                // forward
-    case 'AZ': return nA + 2 * nB + 2 * nC + (nA - 1 - pos); // reversed
-    default: throw new Error(`Unknown side: ${side}`);
-  }
-}
-
-function getGroupCounts(state) {
+function hexVertex(index) {
+  const angle = (90 - index * 60) * Math.PI / 180;
   return {
-    AX_AZ: countPointsInGroup(state, 'AX_AZ'),
-    BX_BY: countPointsInGroup(state, 'BX_BY'),
-    CY_CZ: countPointsInGroup(state, 'CY_CZ')
+    x: HEX_CX + HEX_R * Math.cos(angle),
+    y: HEX_CY - HEX_R * Math.sin(angle)
   };
 }
 
-function mod(x, P) {
-  return ((x % P) + P) % P;
-}
+const HEX_VERTICES = {
+  A: hexVertex(0), X: hexVertex(1), B: hexVertex(2),
+  Y: hexVertex(3), C: hexVertex(4), Z: hexVertex(5)
+};
 
-function betweenCCW(a, b, x, P) {
-  const ab = mod(b - a, P);
-  const ax = mod(x - a, P);
-  return ax > 0 && ax < ab;
+const SIDE_ENDPOINTS = {
+  AX: ['A', 'X'], AZ: ['A', 'Z'],
+  BX: ['B', 'X'], BY: ['B', 'Y'],
+  CY: ['C', 'Y'], CZ: ['C', 'Z']
+};
+
+/**
+ * Get screen coordinates for a point on a side at parameter t.
+ */
+function sidePointXY(side, t) {
+  const [fromName, toName] = SIDE_ENDPOINTS[side];
+  const from = HEX_VERTICES[fromName];
+  const to = HEX_VERTICES[toName];
+  return {
+    x: from.x + t * (to.x - from.x),
+    y: from.y + t * (to.y - from.y)
+  };
 }
 
 /**
- * Check if two edges cross on the perimeter.
+ * Convert a combinatorial point to screen coordinates for crossing detection.
+ */
+function pointToXY(point, state) {
+  const floatPt = pointToFloatInternal(point, state);
+  return sidePointXY(floatPt.side, floatPt.t);
+}
+
+/**
+ * Internal float conversion (same as pointToFloat but avoids circular dep).
+ */
+function pointToFloatInternal(point, state) {
+  const group = getSideGroup(point.side);
+  const numPoints = countPointsInGroup(state, group);
+  let t;
+  if (numPoints === 0) {
+    t = 0.5;
+  } else if (REVERSED_SIDES.has(point.side)) {
+    t = (numPoints - 1 - point.pos + 0.5) / numPoints;
+  } else {
+    t = (point.pos + 0.5) / numPoints;
+  }
+  return { side: point.side, t };
+}
+
+/**
+ * Check if two line segments (p1→p2) and (p3→p4) intersect.
+ * Returns true if they cross (not just touch at endpoints).
+ */
+function segmentsIntersect(p1, p2, p3, p4) {
+  const d1x = p2.x - p1.x, d1y = p2.y - p1.y;
+  const d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+  const det = d1x * d2y - d1y * d2x;
+
+  if (Math.abs(det) < 1e-10) return false; // parallel
+
+  const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / det;
+  const u = ((p3.x - p1.x) * d1y - (p3.y - p1.y) * d1x) / det;
+
+  // Strict interior intersection (not at endpoints)
+  const eps = 1e-9;
+  return t > eps && t < 1 - eps && u > eps && u < 1 - eps;
+}
+
+/**
+ * Check if two edges cross geometrically (straight lines in the hexagon).
  */
 export function edgesCross(edge1, edge2, state) {
-  const gc = getGroupCounts(state);
-  const P = 2 * (gc.AX_AZ + gc.BX_BY + gc.CY_CZ);
+  const p1 = pointToXY(edge1.from, state);
+  const p2 = pointToXY(edge1.to, state);
+  const p3 = pointToXY(edge2.from, state);
+  const p4 = pointToXY(edge2.to, state);
 
-  if (P < 4) return false;
-
-  const a = perimeterKey(edge1.from, gc);
-  const b = perimeterKey(edge1.to, gc);
-  const c = perimeterKey(edge2.from, gc);
-  const d = perimeterKey(edge2.to, gc);
-
-  if (a === c || a === d || b === c || b === d) return false;
-
-  const cBetween = betweenCCW(a, b, c, P);
-  const dBetween = betweenCCW(a, b, d, P);
-
-  return cBetween !== dBetween;
+  return segmentsIntersect(p1, p2, p3, p4);
 }
 
 /**
