@@ -61,14 +61,16 @@ const SIDE_GROUPS = {
 export const GROUPS = ['AX_AZ', 'BX_BY', 'CY_CZ'];
 
 /**
- * Sides with reversed parameterization relative to the "first" side.
- * For these sides, pos i maps to t = (numPoints - 1 - i + 0.5) / numPoints.
+ * Sides whose parameterization direction opposes the clockwise perimeter.
+ * Clockwise perimeter: A→X→B→Y→C→Z→A
+ * AZ: param A→Z, perimeter Z→A (reversed)
+ * BX: param B→X, perimeter X→B (reversed)
+ * CY: param C→Y, perimeter Y→C (reversed)
  *
- * Within each group the two sides share the same positions, but they run in
- * opposite directions around the perimeter. We call the first side "forward"
- * and the second "reversed."
+ * Note: This does NOT affect the pos→t mapping (which is the same for all
+ * sides). It only describes the geometric relationship to the perimeter.
  */
-export const REVERSED_SIDES = new Set(['AZ', 'BX', 'CY']);
+export const PERIMETER_REVERSED_SIDES = new Set(['AZ', 'BX', 'CY']);
 
 /**
  * Get the group for a side.
