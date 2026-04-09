@@ -7,7 +7,7 @@ import {
   getPointOnSide,
   getVertices
 } from '../utils/hexGeometry.js';
-import { getSideGroup, REVERSED_SIDES } from '../utils/hexPathLogic.js';
+import { getSideGroup } from '../utils/hexPathLogic.js';
 import './CombinatorialRhombus.css'; // reuse existing styles
 
 const MIN_ZOOM = 1;
@@ -17,11 +17,12 @@ const TAP_MAX_DISTANCE = 10;
 
 /**
  * Calculate segment coordinates for display/interaction.
+ * Both sides use the same parameterization (t increases from cone point),
+ * so no reversed-side special casing is needed.
  */
 function getSegmentCoords(segment, allPoints) {
   const side = segment.side;
   const group = getSideGroup(side);
-  const isReversed = REVERSED_SIDES.has(side);
 
   const sidePoints = allPoints.filter(p => p.group === group && p.side === side);
 
@@ -31,22 +32,12 @@ function getSegmentCoords(segment, allPoints) {
     endT = 1;
   } else if (segment.startPos === null) {
     const endPoint = sidePoints.find(p => p.pos === segment.endPos);
-    if (isReversed) {
-      startT = endPoint?.t ?? 1;
-      endT = 1;
-    } else {
-      startT = 0;
-      endT = endPoint?.t ?? 0;
-    }
+    startT = 0;
+    endT = endPoint?.t ?? 0;
   } else if (segment.endPos === null) {
     const startPoint = sidePoints.find(p => p.pos === segment.startPos);
-    if (isReversed) {
-      startT = 0;
-      endT = startPoint?.t ?? 0;
-    } else {
-      startT = startPoint?.t ?? 1;
-      endT = 1;
-    }
+    startT = startPoint?.t ?? 1;
+    endT = 1;
   } else {
     const startPoint = sidePoints.find(p => p.pos === segment.startPos);
     const endPoint = sidePoints.find(p => p.pos === segment.endPos);

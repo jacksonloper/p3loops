@@ -27,9 +27,10 @@
  * rendering — straight lines suffice for non-crossing.
  *
  * Groups store points with integer positions. Both sides in a group share
- * the same position indices. Parameterization:
- *   "Forward" sides (AX, BY, CZ): t = (pos + 0.5) / numPoints
- *   "Reversed" sides (AZ, BX, CY): t = (numPoints - 1 - pos + 0.5) / numPoints
+ * the same position indices. Position 0 is nearest the cone point on both sides.
+ * Parameterization for ALL sides: t = (pos + 0.5) / numPoints
+ * This ensures the identification (same pos = same physical point) is correct,
+ * since both sides go from cone point (t=0) to identified vertex (t=1).
  *
  * Points are stored as { side: string, pos: number }
  * Edges are stored as { from: point, to: point }
@@ -239,14 +240,7 @@ function pointToXY(point, state) {
 function pointToFloatInternal(point, state) {
   const group = getSideGroup(point.side);
   const numPoints = countPointsInGroup(state, group);
-  let t;
-  if (numPoints === 0) {
-    t = 0.5;
-  } else if (REVERSED_SIDES.has(point.side)) {
-    t = (numPoints - 1 - point.pos + 0.5) / numPoints;
-  } else {
-    t = (point.pos + 0.5) / numPoints;
-  }
+  const t = numPoints === 0 ? 0.5 : (point.pos + 0.5) / numPoints;
   return { side: point.side, t };
 }
 
@@ -538,20 +532,14 @@ export function addFirstEdge(state, fromSegment, toSegment) {
 
 /**
  * Convert a point to float for visualization.
- * For "forward" sides: t = (pos + 0.5) / numPoints
- * For "reversed" sides: t = (numPoints - 1 - pos + 0.5) / numPoints
+ * Both sides in a group use the same formula: t = (pos + 0.5) / numPoints.
+ * This ensures the identification (same pos on identified sides) maps to
+ * the same distance from the shared cone point.
  */
 export function pointToFloat(point, state) {
   const group = getSideGroup(point.side);
   const numPoints = countPointsInGroup(state, group);
-  let t;
-  if (numPoints === 0) {
-    t = 0.5;
-  } else if (REVERSED_SIDES.has(point.side)) {
-    t = (numPoints - 1 - point.pos + 0.5) / numPoints;
-  } else {
-    t = (point.pos + 0.5) / numPoints;
-  }
+  const t = numPoints === 0 ? 0.5 : (point.pos + 0.5) / numPoints;
   return { side: point.side, t };
 }
 
@@ -696,7 +684,8 @@ export function closeLoop(state) {
 
 /**
  * Get all points for display.
- * Each point appears on both identified sides.
+ * Each point appears on both identified sides at the same t value
+ * (same distance from their shared cone point).
  */
 export function getAllPointsForDisplay(state) {
   const result = [];
@@ -707,11 +696,10 @@ export function getAllPointsForDisplay(state) {
     const [side1, side2] = group.split('_');
 
     for (const point of points) {
-      const t1 = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
-      const t2 = numPoints > 0 ? (numPoints - 1 - point.pos + 0.5) / numPoints : 0.5;
+      const t = numPoints > 0 ? (point.pos + 0.5) / numPoints : 0.5;
 
-      result.push({ side: side1, pos: point.pos, group, t: t1 });
-      result.push({ side: side2, pos: point.pos, group, t: t2 });
+      result.push({ side: side1, pos: point.pos, group, t });
+      result.push({ side: side2, pos: point.pos, group, t });
     }
   }
 
