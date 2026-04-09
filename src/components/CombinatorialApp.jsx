@@ -383,6 +383,8 @@ function CombinatorialApp() {
         </p>
         <p className="subtitle">
           <a href="/p2" style={{ color: '#667eea', textDecoration: 'none' }}>→ Try the P2 Editor</a>
+          {' | '}
+          <a href="/hex" style={{ color: '#667eea', textDecoration: 'none' }}>→ Hexagonal Orbifold</a>
         </p>
       </header>
 
