@@ -614,8 +614,9 @@ export function removeLastEdge(state) {
 
 /**
  * Check if the loop can be closed.
- * The first edge's from and last edge's to must be in the same group
- * and adjacent (positions differ by 1).
+ * The closing edge goes from the identified partner of the last edge's endpoint
+ * back to the first edge's start point, across the hex (not on the same side).
+ * This enforces the "no same-side edges" rule uniformly.
  */
 export function canCloseLoop(state) {
   if (state.edges.length < 2) {
@@ -630,13 +631,9 @@ export function canCloseLoop(state) {
     pos: lastTo.pos
   };
 
-  if (getSideGroup(firstFrom.side) !== getSideGroup(identifiedLastTo.side)) {
-    return { canClose: false, error: 'Start and end are not on the same group' };
-  }
-
-  const posDiff = Math.abs(firstFrom.pos - identifiedLastTo.pos);
-  if (posDiff !== 1) {
-    return { canClose: false, error: `Start and end positions differ by ${posDiff}, need exactly 1` };
+  // No same-side edges — closing edge must cross the hex
+  if (identifiedLastTo.side === firstFrom.side) {
+    return { canClose: false, error: 'Closing edge would be on the same side (not allowed)' };
   }
 
   // Check that closing edge wouldn't cross existing edges
