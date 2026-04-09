@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import HexHexagon from './HexHexagon.jsx';
 import HexLoopSelector from './HexLoopSelector.jsx';
+import HexThreeDViewer from './HexThreeDViewer.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -40,6 +41,7 @@ function HexApp() {
   const [firstEdgeMode, setFirstEdgeMode] = useState(false);
   const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
   const [showJsonPanel, setShowJsonPanel] = useState(false);
+  const [show3DViewer, setShow3DViewer] = useState(false);
 
   useEffect(() => {
     if (highlightedEdgeIndex !== null) {
@@ -355,6 +357,11 @@ function HexApp() {
                     className="control-btn secondary-btn">
               {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
             </button>
+            <button onClick={() => setShow3DViewer(true)}
+                    disabled={state.edges.length === 0}
+                    className="control-btn primary-btn">
+              Render in 3D
+            </button>
 
             <HexLoopSelector
               onSelectLoop={(loop) => {
@@ -410,6 +417,13 @@ function HexApp() {
           </ol>
         </section>
       </main>
+
+      {show3DViewer && (
+        <HexThreeDViewer
+          edges={floatEdges}
+          onClose={() => setShow3DViewer(false)}
+        />
+      )}
     </div>
   );
 }
