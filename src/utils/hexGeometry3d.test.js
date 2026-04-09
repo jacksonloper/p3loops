@@ -115,7 +115,7 @@ describe('hexBaryTo3D', () => {
     expectClose(p.z, Math.cbrt(1 / 27));
   });
 
-  it('identified vertex X ≡ Y ≡ Z should all map to the centroid at z=0', () => {
+  it('identified vertex X ≡ Y ≡ Z should all map to the centroid at z=-1/3', () => {
     // X = (2/3, 2/3, -1/3)
     const pX = hexBaryTo3D(2 / 3, 2 / 3, -1 / 3);
     // Y = (-1/3, 2/3, 2/3)
@@ -126,7 +126,7 @@ describe('hexBaryTo3D', () => {
     for (const p of [pX, pY, pZ]) {
       expectClose(p.x, 0);
       expectClose(p.y, 0);
-      expectClose(p.z, 0);
+      expectClose(p.z, -1 / 3);
     }
   });
 
@@ -185,21 +185,32 @@ describe('hexBaryTo3D', () => {
     expect(p.z).toBeGreaterThan(0);
   });
 
-  it('ear points should have z ≤ 0', () => {
-    // Ear AXB (c < 0)
+  it('ear points should have z < 0 (not just ≤ 0)', () => {
+    // Ear AXB (c < 0) — point on hexagon boundary side AX
     const bAX = hexSideToBary('AX', 0.5);
     const pAX = hexBaryTo3D(bAX.a, bAX.b, bAX.c);
-    expect(pAX.z).toBeLessThanOrEqual(0);
+    expect(pAX.z).toBeLessThan(0);
 
-    // Ear BYC (a < 0)
+    // Ear BYC (a < 0) — point on hexagon boundary side BY
     const bBY = hexSideToBary('BY', 0.5);
     const pBY = hexBaryTo3D(bBY.a, bBY.b, bBY.c);
-    expect(pBY.z).toBeLessThanOrEqual(0);
+    expect(pBY.z).toBeLessThan(0);
 
-    // Ear CZA (b < 0)
+    // Ear CZA (b < 0) — point on hexagon boundary side CZ
     const bCZ = hexSideToBary('CZ', 0.5);
     const pCZ = hexBaryTo3D(bCZ.a, bCZ.b, bCZ.c);
-    expect(pCZ.z).toBeLessThanOrEqual(0);
+    expect(pCZ.z).toBeLessThan(0);
+  });
+
+  it('hexagon boundary sides should have z ≠ 0 (only triangle edges have z = 0)', () => {
+    // Points on hexagon boundary sides (AX, BX, BY, CY, CZ, AZ) should have z < 0
+    // because they are interior edges of the back face after identification
+    const sides = ['AX', 'AZ', 'BX', 'BY', 'CY', 'CZ'];
+    for (const side of sides) {
+      const b = hexSideToBary(side, 0.5);
+      const p = hexBaryTo3D(b.a, b.b, b.c);
+      expect(p.z).toBeLessThan(0);
+    }
   });
 });
 

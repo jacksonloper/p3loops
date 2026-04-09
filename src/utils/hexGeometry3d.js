@@ -73,14 +73,22 @@ export function hexSideToBary(side, t) {
  * vertex (X, Y, or Z) maps to the centroid of the equilateral triangle.
  * This ensures that X ≡ Y ≡ Z all map to the same 3D point.
  *
- * Ear AXB (c < 0): local coords α = a+2c, ξ = -3c, β = b+2c
- *   (x,y) = α·V_A + β·V_B, z = -(α·ξ·β)^(1/3)
+ * The z formula uses "projected" barycentric coordinates so that z = 0 only
+ * on the triangle edges (where front and back faces meet), NOT on the hexagon
+ * boundary sides (which become interior edges of the back face after
+ * identification).
  *
- * Ear BYC (a < 0): local coords β = b+2a, υ = -3a, γ = c+2a
- *   (x,y) = β·V_B + γ·V_C, z = -(β·υ·γ)^(1/3)
+ * Ear AXB (c < 0): local coords α = a+2c, β = b+2c
+ *   (x,y) = α·V_A + β·V_B
+ *   projected bary: (a+c, b+c, -c), z = -((a+c)·(b+c)·(-c))^(1/3)
  *
- * Ear CZA (b < 0): local coords γ = c+2b, ζ = -3b, α = a+2b
- *   (x,y) = γ·V_C + α·V_A, z = -(γ·ζ·α)^(1/3)
+ * Ear BYC (a < 0): local coords β = b+2a, γ = c+2a
+ *   (x,y) = β·V_B + γ·V_C
+ *   projected bary: (-a, b+a, c+a), z = -((-a)·(b+a)·(c+a))^(1/3)
+ *
+ * Ear CZA (b < 0): local coords γ = c+2b, α = a+2b
+ *   (x,y) = γ·V_C + α·V_A
+ *   projected bary: (a+b, -b, c+b), z = -((a+b)·(-b)·(c+b))^(1/3)
  *
  * @param {number} a - Barycentric coord for A
  * @param {number} b - Barycentric coord for B
@@ -97,29 +105,26 @@ export function hexBaryTo3D(a, b, c) {
   } else if (c < 0) {
     // Ear AXB — X is at centroid on back face
     const alpha = a + 2 * c;
-    const xi = -3 * c;
     const beta = b + 2 * c;
     const x = Math.max(0, alpha) * V_A.x + Math.max(0, beta) * V_B.x;
     const y = Math.max(0, alpha) * V_A.y + Math.max(0, beta) * V_B.y;
-    const z = -Math.cbrt(Math.max(0, alpha) * Math.max(0, xi) * Math.max(0, beta));
+    const z = -Math.cbrt(Math.max(0, a + c) * Math.max(0, b + c) * Math.max(0, -c));
     return { x, y, z };
   } else if (a < 0) {
     // Ear BYC — Y is at centroid on back face
     const beta = b + 2 * a;
-    const upsilon = -3 * a;
     const gamma = c + 2 * a;
     const x = Math.max(0, beta) * V_B.x + Math.max(0, gamma) * V_C.x;
     const y = Math.max(0, beta) * V_B.y + Math.max(0, gamma) * V_C.y;
-    const z = -Math.cbrt(Math.max(0, beta) * Math.max(0, upsilon) * Math.max(0, gamma));
+    const z = -Math.cbrt(Math.max(0, -a) * Math.max(0, b + a) * Math.max(0, c + a));
     return { x, y, z };
   } else {
     // Ear CZA (b < 0) — Z is at centroid on back face
     const gamma = c + 2 * b;
-    const zeta = -3 * b;
     const alpha = a + 2 * b;
     const x = Math.max(0, gamma) * V_C.x + Math.max(0, alpha) * V_A.x;
     const y = Math.max(0, gamma) * V_C.y + Math.max(0, alpha) * V_A.y;
-    const z = -Math.cbrt(Math.max(0, gamma) * Math.max(0, zeta) * Math.max(0, alpha));
+    const z = -Math.cbrt(Math.max(0, a + b) * Math.max(0, -b) * Math.max(0, c + b));
     return { x, y, z };
   }
 }
