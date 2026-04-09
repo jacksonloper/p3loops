@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import HexHexagon from './HexHexagon.jsx';
+import HexLoopSelector from './HexLoopSelector.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -354,6 +355,17 @@ function HexApp() {
                     className="control-btn secondary-btn">
               {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
             </button>
+
+            <HexLoopSelector
+              onSelectLoop={(loop) => {
+                setState(loop.state);
+                setIsLoopClosed(true);
+                setFirstEdgeMode(false);
+                setFirstEdgeFromSegment(null);
+                setSelectedSegment(null);
+                setValidationMessage(`Loaded loop with ${loop.length} edges`);
+              }}
+            />
           </div>
 
           {validationMessage && (
