@@ -1,8 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import P2Square from './P2Square.jsx';
-import P2ThreeDViewer from './P2ThreeDViewer.jsx';
-import P2LoopSelector from './P2LoopSelector.jsx';
-import P2WallpaperViewer from './P2WallpaperViewer.jsx';
+import HexHexagon from './HexHexagon.jsx';
 import {
   createInitialState,
   getAllSegments,
@@ -18,8 +15,8 @@ import {
   canCloseLoop,
   closeLoop,
   pointToFloat,
-  ZONES
-} from '../utils/p2PathLogic.js';
+  SIDES
+} from '../utils/hexPathLogic.js';
 import './CombinatorialApp.css'; // reuse existing styles
 
 function getMessageStyleClass(message) {
@@ -31,9 +28,9 @@ function getMessageStyleClass(message) {
 }
 
 /**
- * P2App - Main app component for the combinatorial p2 loops editor.
+ * HexApp - Main app component for the hexagonal orbifold loops editor.
  */
-function P2App() {
+function HexApp() {
   const [state, setState] = useState(createInitialState());
   const [selectedSegment, setSelectedSegment] = useState(null);
   const [validationMessage, setValidationMessage] = useState('');
@@ -41,10 +38,7 @@ function P2App() {
   const [isLoopClosed, setIsLoopClosed] = useState(false);
   const [firstEdgeMode, setFirstEdgeMode] = useState(false);
   const [firstEdgeFromSegment, setFirstEdgeFromSegment] = useState(null);
-  const [show3DViewer, setShow3DViewer] = useState(false);
-  const [showWallpaperViewer, setShowWallpaperViewer] = useState(false);
   const [showJsonPanel, setShowJsonPanel] = useState(false);
-  const [jsonInputText, setJsonInputText] = useState('');
 
   useEffect(() => {
     if (highlightedEdgeIndex !== null) {
@@ -205,28 +199,26 @@ function P2App() {
     });
   }, [floatEdges]);
 
-  // Group segments by zone for display
-  const segmentsByZone = useMemo(() => {
+  // Group segments by side for display
+  const segmentsBySide = useMemo(() => {
     const result = {};
-    for (const zone of ZONES) {
-      const segs = availableSegments.filter(s => s.zone === zone);
-      if (segs.length > 0) result[zone] = segs;
+    for (const side of SIDES) {
+      const segs = availableSegments.filter(s => s.side === side);
+      if (segs.length > 0) result[side] = segs;
     }
     return result;
   }, [availableSegments]);
 
   const noValidSegments = state.edges.length > 0 && !firstEdgeMode && availableSegments.length === 0;
 
-  // Zone display info for the UI
-  const zoneInfo = {
-    NNW: { label: 'NNW', id: '≡NNE', color: 'side-north' },
-    NNE: { label: 'NNE', id: '≡NNW', color: 'side-north' },
-    ENE: { label: 'ENE', id: '≡ESE', color: 'side-east' },
-    ESE: { label: 'ESE', id: '≡ENE', color: 'side-east' },
-    SSE: { label: 'SSE', id: '≡SSW', color: 'side-south' },
-    SSW: { label: 'SSW', id: '≡SSE', color: 'side-south' },
-    WSW: { label: 'WSW', id: '≡WNW', color: 'side-west' },
-    WNW: { label: 'WNW', id: '≡WSW', color: 'side-west' }
+  // Side display info for the UI
+  const sideInfo = {
+    AX: { label: 'AX', id: '≡AZ', color: 'side-north' },
+    AZ: { label: 'AZ', id: '≡AX', color: 'side-north' },
+    BX: { label: 'BX', id: '≡BY', color: 'side-east' },
+    BY: { label: 'BY', id: '≡BX', color: 'side-east' },
+    CY: { label: 'CY', id: '≡CZ', color: 'side-south' },
+    CZ: { label: 'CZ', id: '≡CY', color: 'side-south' }
   };
 
   // Count points per group for info display
@@ -239,21 +231,21 @@ function P2App() {
   return (
     <div className="combinatorial-app-container">
       <header className="app-header">
-        <h1>P2 Loops Editor</h1>
+        <h1>Hexagonal Orbifold Editor</h1>
         <p className="subtitle">
-          Create non-crossing paths on a square with 180° rotation edge identifications
+          Create non-crossing paths on a hexagonal fundamental domain with 3 cone points
         </p>
         <p className="subtitle">
-          <a href="/" style={{ color: '#667eea', textDecoration: 'none' }}>← Back to P3 Editor</a>
+          <a href="/" style={{ color: '#667eea', textDecoration: 'none' }}>← P3 Editor</a>
           {' | '}
-          <a href="/hex" style={{ color: '#667eea', textDecoration: 'none' }}>→ Hexagonal Orbifold</a>
+          <a href="/p2" style={{ color: '#667eea', textDecoration: 'none' }}>P2 Editor</a>
         </p>
       </header>
 
       <main className="editor-main">
         <div className="layout-row">
           <section className="visualization-section">
-            <P2Square
+            <HexHexagon
               floatEdges={floatEdges}
               allPoints={allPoints}
               selectedSegment={selectedSegment}
@@ -303,21 +295,21 @@ function P2App() {
                 ? 'Loop is closed. Open it to continue editing.'
                 : noValidSegments
                   ? 'No valid segments available. Try removing the last edge or closing the loop.'
-                  : 'Click on the square or select from the list below:'}
+                  : 'Click on the hexagon or select from the list below:'}
             </p>
 
             <div className="sides-grid">
-              {ZONES.map(zone => {
-                const segs = segmentsByZone[zone];
+              {SIDES.map(side => {
+                const segs = segmentsBySide[side];
                 if (!segs) return null;
-                const info = zoneInfo[zone];
+                const info = sideInfo[side];
                 return (
-                  <div key={zone} className={`segment-group ${info.color}`}>
+                  <div key={side} className={`segment-group ${info.color}`}>
                     <h4>
                       {info.label} <span className="side-id">({info.id})</span>
                     </h4>
                     {segs.map((segment, idx) => (
-                      <label key={`${zone}-${idx}`}
+                      <label key={`${side}-${idx}`}
                              className={`segment-radio ${selectedSegment === segment ? 'selected' : ''}`}>
                         <input
                           type="radio"
@@ -362,27 +354,6 @@ function P2App() {
                     className="control-btn secondary-btn">
               {showJsonPanel ? 'Hide JSON Panel' : 'Show JSON Panel'}
             </button>
-            <button onClick={() => setShow3DViewer(true)}
-                    disabled={state.edges.length === 0}
-                    className="control-btn primary-btn">
-              Render in 3D
-            </button>
-            <button onClick={() => setShowWallpaperViewer(true)}
-                    disabled={state.edges.length === 0}
-                    className="control-btn primary-btn">
-              Wallpaper View
-            </button>
-
-            <P2LoopSelector
-              onSelectLoop={(loop) => {
-                setState(loop.state);
-                setIsLoopClosed(true);
-                setFirstEdgeMode(false);
-                setFirstEdgeFromSegment(null);
-                setSelectedSegment(null);
-                setValidationMessage(`Loaded loop with ${loop.length} edges`);
-              }}
-            />
           </div>
 
           {validationMessage && (
@@ -409,39 +380,26 @@ function P2App() {
         )}
 
         <section className="info-section">
-          <h3>About the P2 Square</h3>
+          <h3>About the Hexagonal Orbifold</h3>
           <ul>
-            <li><strong>Shape:</strong> Square fundamental domain with edge identifications</li>
-            <li><strong>8 Zones:</strong> Each side is split at its midpoint into two half-sides</li>
-            <li><strong>Identifications:</strong> NNW≡NNE, ENE≡ESE, SSE≡SSW, WSW≡WNW (adjacent half-sides identified with reversed order)</li>
-            <li><strong>Corners:</strong> All four corners are identified as the same point</li>
+            <li><strong>Shape:</strong> Regular hexagon with vertices A, X, B, Y, C, Z (clockwise from top)</li>
+            <li><strong>Cone points:</strong> A, B, C (3 cone points of the orbifold)</li>
+            <li><strong>Identified vertices:</strong> X ≡ Y ≡ Z (all map to the same point)</li>
+            <li><strong>Side identifications:</strong> AX≡AZ, BX≡BY, CY≡CZ</li>
+            <li><strong>Path starts at X</strong> (which is identified with Y and Z)</li>
+            <li><strong>No same-side edges:</strong> Edges always go between different side groups</li>
           </ul>
           <h3>How to Use</h3>
           <ol>
-            <li>Select a segment from the radio buttons or click on the square</li>
+            <li>Select a segment from the radio buttons or click on the hexagon</li>
             <li>Click &quot;Set as Start&quot; to begin the first edge</li>
             <li>Select a destination segment and complete the first edge</li>
             <li>Continue adding edges — the path chains from edge to edge</li>
           </ol>
         </section>
       </main>
-
-      {show3DViewer && (
-        <P2ThreeDViewer
-          edges={floatEdges}
-          onClose={() => setShow3DViewer(false)}
-        />
-      )}
-
-      {showWallpaperViewer && (
-        <P2WallpaperViewer
-          edges={floatEdges}
-          isLoopClosed={isLoopClosed}
-          onClose={() => setShowWallpaperViewer(false)}
-        />
-      )}
     </div>
   );
 }
 
-export default P2App;
+export default HexApp;
