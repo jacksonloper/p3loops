@@ -372,10 +372,9 @@ export function getValidSegments(state, fromPoint) {
   if (!fromPoint) return allSegments;
 
   return allSegments.filter(segment => {
-    // No same-side edges allowed
+    // No same-side edges allowed (but identified partner side IS allowed —
+    // those are different physical sides of the hexagon)
     if (segment.side === fromPoint.side) return false;
-    // No edges to the identified side either (since from and to must differ)
-    if (sidesAreIdentified(segment.side, fromPoint.side)) return false;
     if (isForbiddenSameSideTouchingSegment(fromPoint, segment)) return false;
     return !wouldSegmentCauseCrossing(state, fromPoint, segment);
   });
