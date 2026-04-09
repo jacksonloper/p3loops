@@ -224,7 +224,8 @@ function diskToHex(u, v) {
     if (i < 5) {
       inSector = angle <= a1 && angle >= a2;
     } else {
-      // Wrap: sector from -150° to 150° going through ±180°
+      // Wrap-around: the sector from -150° to 150° crosses the ±180° boundary,
+      // so we use OR instead of AND (angle is in sector if it's beyond either edge)
       inSector = angle <= a2 || angle >= a1;
     }
 
